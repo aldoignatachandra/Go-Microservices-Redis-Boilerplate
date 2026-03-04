@@ -60,3 +60,20 @@ tmp/
 # Generated files
 **/wire_gen.go
 docs/api/docs.go
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Profiling files
+*.prof
+cpu.out
+mem.out
+
+# Database files (local development)
+*.db
+*.sqlite
+*.sqlite3
+
+# Helm charts dependencies
+**/charts/
+requirements.lock
