@@ -1,0 +1,69 @@
+# Local Development Configuration
+# This file contains development defaults
+# Override with environment variables for production
+
+app:
+  name: "auth-service"
+  version: "1.0.0"
+  env: "local"
+
+server:
+  host: "0.0.0.0"
+  port: 3100
+  read_timeout: "10s"
+  write_timeout: "10s"
+  shutdown_timeout: "10s"
+
+database:
+  host: "localhost"
+  port: 5432
+  name: "auth_db"
+  user: "postgres"
+  password: "postgres"
+  sslmode: "disable"
+  max_open_conns: 25
+  max_idle_conns: 5
+  conn_max_lifetime: "5m"
+
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 0
+  pool_size: 10
+
+streams:
+  max_len: 10000
+  block_ms: 5000
+  batch_size: 10
+  consumer_group: "auth-service"
+  consumer_name: "auth-1"
+
+auth:
+  jwt:
+    secret: "your-super-secret-key-change-in-production"
+    expires_in: "24h"
+    refresh_expires_in: "168h"
+  bcrypt:
+    cost: 12
+
+rate_limit:
+  enabled: true
+  requests: 100
+  duration: "1m"
+
+logging:
+  level: "debug"
+  format: "console" # "json" for production
+
+metrics:
+  enabled: true
+  path: "/metrics"
+
+tracing:
+  enabled: false
+  endpoint: "http://localhost:4317"
+
+services:
+  user_service: "http://localhost:3101"
+  product_service: "http://localhost:3102"

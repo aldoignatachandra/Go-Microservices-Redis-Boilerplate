@@ -1,0 +1,208 @@
+# golangci-lint configuration
+# https://golangci-lint.run/usage/configuration/
+
+run:
+  # Timeout for analysis
+  timeout: 5m
+
+  # Include test files
+  tests: true
+
+  # List of build tags
+  build-tags: []
+
+  # Which dirs to skip
+  skip-dirs:
+    - vendor
+    - test/integration
+    - test/e2e
+    - deployments
+    - docs
+
+  # Which files to skip
+  skip-files:
+    - ".*_gen\\.go$"
+    - ".*_mock\\.go$"
+
+  # Go version to target
+  go: "1.23"
+
+output:
+  # Format: colored-line-number|line-number|json|tab|checkstyle|code-climate
+  format: colored-line-number
+
+  # Print lines of code with issue
+  print-issued-lines: true
+
+  # Print linter name in the end of issue text
+  print-linter-name: true
+
+  # Make issues output unique by line
+  uniq-by-line: true
+
+  # Sort results by: filepath, line and column
+  sort-results: true
+
+linters:
+  enable:
+    # Go's built-in vet
+    - govet
+
+    # Advanced static analysis
+    - staticcheck
+
+    # Check for unused code
+    - unused
+
+    # Simplify code
+    - gosimple
+
+    # Detect inefficient assignments
+    - ineffassign
+
+    # Check code is gofmted
+    - gofmt
+
+    # Check import ordering
+    - goimports
+
+    # Fix spelling mistakes
+    - misspell
+
+    # Go-specific linter
+    - gocritic
+
+    # Fast, configurable linter
+    - revive
+
+    # Check for errors
+    - errcheck
+
+    # Check for SQL injection
+    - sqlclosecheck
+
+    # Check for proper context usage
+    - contextcheck
+
+    # Check for duration checks
+    - durationcheck
+
+    # Check for errors in JSON tags
+    - jsonptr
+
+    # Check for precompiled regex
+    - prealloc
+
+    # Check for exported elements
+    - exportloopref
+
+    # Check for body close
+    - bodyclose
+
+    # Check for noctx
+    - noctx
+
+    # Check for rowserrcheck
+    - rowserrcheck
+
+    # Check for sqlclosecheck
+    - sqlclosecheck
+
+linters-settings:
+  govet:
+    # Report about shadowed variables
+    check-shadowing: true
+
+  gofmt:
+    # Simplify code: gofmt with `-s` option
+    simplify: true
+
+  goimports:
+    # Put imports beginning with prefix after 3rd-party packages
+    local-prefixes: github.com/ignata/go-microservices-boilerplate
+
+  goconst:
+    # Minimal occurrences count to trigger
+    min-occurrences: 3
+
+  misspell:
+    # Correct spellings using locale
+    locale: US
+
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+      - name: superfluous-else
+      - name: unused-parameter
+      - name: unreachable-code
+      - name: redefines-builtin-id
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - dupImport
+      - ifElseChain
+      - octalLiteral
+      - whyNoLint
+      - wrapperFunc
+
+issues:
+  # List of regexps of issue texts to exclude
+  exclude:
+    - "Error return value of .((os\\.)?std(out|err)\\..*|.*Close|.*Flush|os\\.Remove(All)?|.*print(f|ln)?|os\\.(Un)?Setenv). is not checked"
+
+  # Excluding configuration per-path, per-linter, per-text and per-source
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - gocritic
+        - errcheck
+        - revive
+        - contextcheck
+
+    # Exclude known linters from partially hard-vendored code
+    - path: internal/domain/
+      linters:
+        - revive
+
+    # Exclude some staticcheck messages
+    - linters:
+        - staticcheck
+      text: "SA1019:"
+
+  # Maximum issues count per one linter
+  max-issues-per-linter: 50
+
+  # Maximum count of issues with the same text
+  max-same-issues: 10
+
+  # Show only new issues
+  new: false
+
+  # Fix found issues (if it's supported by the linter)
+  fix: false

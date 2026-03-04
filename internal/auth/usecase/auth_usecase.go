@@ -1,0 +1,455 @@
+// Package usecase provides business logic for the auth service.
+package usecase
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/ignata/go-microservices-boilerplate/internal/auth/domain"
+	"github.com/ignata/go-microservices-boilerplate/internal/auth/dto"
+	"github.com/ignata/go-microservices-boilerplate/internal/auth/repository"
+	"github.com/ignata/go-microservices-boilerplate/pkg/eventbus"
+	"github.com/ignata/go-microservices-boilerplate/pkg/utils"
+)
+
+// AuthUseCase defines the interface for auth business logic.
+type AuthUseCase interface {
+	// Register registers a new user
+	Register(ctx context.Context, req *dto.RegisterRequest) (*dto.AuthResponse, error)
+	// Login authenticates a user and returns tokens
+	Login(ctx context.Context, req *dto.LoginRequest, ipAddress, userAgent string) (*dto.AuthResponse, error)
+	// Logout logs out a user by revoking their session
+	Logout(ctx context.Context, userID string) error
+	// RefreshToken refreshes access token using refresh token
+	RefreshToken(ctx context.Context, req *dto.RefreshTokenRequest) (*dto.AuthResponse, error)
+	// GetCurrentUser gets the current authenticated user
+	GetCurrentUser(ctx context.Context, userID string) (*dto.UserResponse, error)
+	// GetUser gets a user by ID
+	GetUser(ctx context.Context, req *dto.GetUserRequest) (*dto.UserResponse, error)
+	// ListUsers lists users with pagination
+	ListUsers(ctx context.Context, req *dto.ListUsersRequest) (*dto.UserListResponse, error)
+	// UpdateUser updates a user
+	UpdateUser(ctx context.Context, userID string, req *dto.UpdateUserRequest) (*dto.UserResponse, error)
+	// ChangePassword changes a user's password
+	ChangePassword(ctx context.Context, userID string, req *dto.ChangePasswordRequest) error
+	// DeleteUser deletes a user
+	DeleteUser(ctx context.Context, req *dto.DeleteUserRequest) error
+	// RestoreUser restores a deleted user
+	RestoreUser(ctx context.Context, req *dto.RestoreUserRequest) (*dto.UserResponse, error)
+}
+
+// Config holds usecase configuration.
+type Config struct {
+	JWTSecret           string
+	JWTExpiresIn        time.Duration
+	RefreshExpiresIn    time.Duration
+	BcryptCost          int
+	ServiceName         string
+}
+
+// authUseCase implements AuthUseCase.
+type authUseCase struct {
+	userRepo    repository.UserRepository
+	sessionRepo repository.SessionRepository
+	eventBus    *eventbus.Producer
+	jwtManager  *utils.JWTManager
+	config      Config
+}
+
+// NewAuthUseCase creates a new auth usecase.
+func NewAuthUseCase(
+	userRepo repository.UserRepository,
+	sessionRepo repository.SessionRepository,
+	eventBus *eventbus.Producer,
+	config Config,
+) AuthUseCase {
+	jwtManager := utils.NewJWTManager(utils.JWTConfig{
+		Secret:           config.JWTSecret,
+		ExpiresIn:        config.JWTExpiresIn,
+		RefreshExpiresIn: config.RefreshExpiresIn,
+	})
+
+	return &authUseCase{
+		userRepo:    userRepo,
+		sessionRepo: sessionRepo,
+		eventBus:    eventBus,
+		jwtManager:  jwtManager,
+		config:      config,
+	}
+}
+
+// Register registers a new user.
+func (uc *authUseCase) Register(ctx context.Context, req *dto.RegisterRequest) (*dto.AuthResponse, error) {
+	// Check if user already exists
+	exists, err := uc.userRepo.ExistsByEmail(ctx, req.Email)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check user existence: %w", err)
+	}
+	if exists {
+		return nil, domain.ErrEmailAlreadyUsed
+	}
+
+	// Hash password
+	passwordHash, err := utils.HashPasswordWithCost(req.Password, uc.config.BcryptCost)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// Create user
+	user := &domain.User{
+		Email:        req.Email,
+		PasswordHash: passwordHash,
+		Role:         req.ToRole(),
+		IsActive:     true,
+	}
+
+	if err := uc.userRepo.Create(ctx, user); err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	// Generate tokens
+	tokenPair, err := uc.jwtManager.GenerateTokenPair(user.ID, user.Email, string(user.Role))
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate tokens: %w", err)
+	}
+
+	// Create session
+	session := &domain.Session{
+		UserID:       user.ID,
+		RefreshToken: tokenPair.RefreshToken,
+		ExpiresAt:    time.Now().UTC().Add(uc.config.RefreshExpiresIn),
+	}
+	if err := uc.sessionRepo.Create(ctx, session); err != nil {
+		return nil, fmt.Errorf("failed to create session: %w", err)
+	}
+
+	// Publish event
+	if uc.eventBus != nil {
+		uc.publishEvent(ctx, domain.NewUserCreatedEvent(user))
+	}
+
+	return &dto.AuthResponse{
+		AccessToken:  tokenPair.AccessToken,
+		RefreshToken: tokenPair.RefreshToken,
+		ExpiresIn:    tokenPair.ExpiresIn,
+		TokenType:    tokenPair.TokenType,
+		User:         dto.FromUser(user),
+	}, nil
+}
+
+// Login authenticates a user.
+func (uc *authUseCase) Login(ctx context.Context, req *dto.LoginRequest, ipAddress, userAgent string) (*dto.AuthResponse, error) {
+	// Find user by email (include deleted to check for deleted users)
+	user, err := uc.userRepo.FindByEmail(ctx, req.Email, &domain.ParanoidOptions{IncludeDeleted: true})
+	if err != nil {
+		if errors.Is(err, domain.ErrUserNotFound) {
+			return nil, domain.ErrInvalidCredentials
+		}
+		return nil, fmt.Errorf("failed to find user: %w", err)
+	}
+
+	// Check if user can login
+	if !user.CanLogin() {
+		if user.DeletedAt.Valid {
+			return nil, domain.ErrUserDeleted
+		}
+		if !user.IsActive {
+			return nil, domain.ErrUserInactive
+		}
+		return nil, domain.ErrInvalidCredentials
+	}
+
+	// Verify password
+	if !utils.CheckPassword(req.Password, user.PasswordHash) {
+		return nil, domain.ErrInvalidCredentials
+	}
+
+	// Generate tokens
+	tokenPair, err := uc.jwtManager.GenerateTokenPair(user.ID, user.Email, string(user.Role))
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate tokens: %w", err)
+	}
+
+	// Create session
+	session := &domain.Session{
+		UserID:       user.ID,
+		RefreshToken: tokenPair.RefreshToken,
+		ExpiresAt:    time.Now().UTC().Add(uc.config.RefreshExpiresIn),
+		IPAddress:    ipAddress,
+		UserAgent:    userAgent,
+	}
+	if err := uc.sessionRepo.Create(ctx, session); err != nil {
+		return nil, fmt.Errorf("failed to create session: %w", err)
+	}
+
+	// Update last login
+	user.TouchLastLogin()
+	_ = uc.userRepo.Update(ctx, user)
+
+	// Publish event
+	if uc.eventBus != nil {
+		uc.publishEvent(ctx, domain.NewUserLoggedInEvent(user, ipAddress, userAgent))
+	}
+
+	return &dto.AuthResponse{
+		AccessToken:  tokenPair.AccessToken,
+		RefreshToken: tokenPair.RefreshToken,
+		ExpiresIn:    tokenPair.ExpiresIn,
+		TokenType:    tokenPair.TokenType,
+		User:         dto.FromUser(user),
+	}, nil
+}
+
+// Logout logs out a user.
+func (uc *authUseCase) Logout(ctx context.Context, userID string) error {
+	if err := uc.sessionRepo.RevokeAllForUser(ctx, userID); err != nil {
+		return fmt.Errorf("failed to logout: %w", err)
+	}
+
+	// Publish event
+	if uc.eventBus != nil {
+		uc.publishEvent(ctx, domain.NewUserLoggedOutEvent(userID))
+	}
+
+	return nil
+}
+
+// RefreshToken refreshes access token.
+func (uc *authUseCase) RefreshToken(ctx context.Context, req *dto.RefreshTokenRequest) (*dto.AuthResponse, error) {
+	// Validate refresh token
+	userID, err := uc.jwtManager.ValidateRefreshToken(req.RefreshToken)
+	if err != nil {
+		return nil, domain.ErrInvalidToken
+	}
+
+	// Find session
+	session, err := uc.sessionRepo.FindByRefreshToken(ctx, req.RefreshToken)
+	if err != nil {
+		return nil, domain.ErrInvalidToken
+	}
+
+	// Check if session is valid
+	if !session.IsValid() || session.UserID != userID {
+		return nil, domain.ErrInvalidToken
+	}
+
+	// Get user
+	user, err := uc.userRepo.FindByID(ctx, userID, domain.DefaultParanoidOptions())
+	if err != nil {
+		return nil, domain.ErrInvalidToken
+	}
+
+	// Check if user can login
+	if !user.CanLogin() {
+		return nil, domain.ErrUserInactive
+	}
+
+	// Revoke old session
+	_ = uc.sessionRepo.Revoke(ctx, session.ID)
+
+	// Generate new tokens
+	tokenPair, err := uc.jwtManager.GenerateTokenPair(user.ID, user.Email, string(user.Role))
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate tokens: %w", err)
+	}
+
+	// Create new session
+	newSession := &domain.Session{
+		UserID:       user.ID,
+		RefreshToken: tokenPair.RefreshToken,
+		ExpiresAt:    time.Now().UTC().Add(uc.config.RefreshExpiresIn),
+	}
+	if err := uc.sessionRepo.Create(ctx, newSession); err != nil {
+		return nil, fmt.Errorf("failed to create session: %w", err)
+	}
+
+	return &dto.AuthResponse{
+		AccessToken:  tokenPair.AccessToken,
+		RefreshToken: tokenPair.RefreshToken,
+		ExpiresIn:    tokenPair.ExpiresIn,
+		TokenType:    tokenPair.TokenType,
+		User:         dto.FromUser(user),
+	}, nil
+}
+
+// GetCurrentUser gets the current authenticated user.
+func (uc *authUseCase) GetCurrentUser(ctx context.Context, userID string) (*dto.UserResponse, error) {
+	user, err := uc.userRepo.FindByID(ctx, userID, domain.DefaultParanoidOptions())
+	if err != nil {
+		return nil, err
+	}
+	return dto.FromUser(user), nil
+}
+
+// GetUser gets a user by ID.
+func (uc *authUseCase) GetUser(ctx context.Context, req *dto.GetUserRequest) (*dto.UserResponse, error) {
+	user, err := uc.userRepo.FindByID(ctx, req.ID, req.GetParanoidOptions())
+	if err != nil {
+		return nil, err
+	}
+	return dto.FromUser(user), nil
+}
+
+// ListUsers lists users with pagination.
+func (uc *authUseCase) ListUsers(ctx context.Context, req *dto.ListUsersRequest) (*dto.UserListResponse, error) {
+	list, err := uc.userRepo.FindAll(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return dto.FromUserList(list), nil
+}
+
+// UpdateUser updates a user.
+func (uc *authUseCase) UpdateUser(ctx context.Context, userID string, req *dto.UpdateUserRequest) (*dto.UserResponse, error) {
+	user, err := uc.userRepo.FindByID(ctx, userID, domain.DefaultParanoidOptions())
+	if err != nil {
+		return nil, err
+	}
+
+	// Update fields
+	if req.Email != "" {
+		// Check if email is already used by another user
+		existingUser, err := uc.userRepo.FindByEmail(ctx, req.Email, domain.DefaultParanoidOptions())
+		if err == nil && existingUser.ID != userID {
+			return nil, domain.ErrEmailAlreadyUsed
+		}
+		user.Email = req.Email
+	}
+
+	if req.Password != "" {
+		passwordHash, err := utils.HashPasswordWithCost(req.Password, uc.config.BcryptCost)
+		if err != nil {
+			return nil, fmt.Errorf("failed to hash password: %w", err)
+		}
+		user.PasswordHash = passwordHash
+	}
+
+	if req.IsActive != nil {
+		user.IsActive = *req.IsActive
+	}
+
+	if err := uc.userRepo.Update(ctx, user); err != nil {
+		return nil, err
+	}
+
+	// Publish event
+	if uc.eventBus != nil {
+		uc.publishEvent(ctx, domain.NewUserUpdatedEvent(user))
+	}
+
+	return dto.FromUser(user), nil
+}
+
+// ChangePassword changes a user's password.
+func (uc *authUseCase) ChangePassword(ctx context.Context, userID string, req *dto.ChangePasswordRequest) error {
+	user, err := uc.userRepo.FindByID(ctx, userID, domain.DefaultParanoidOptions())
+	if err != nil {
+		return err
+	}
+
+	// Verify current password
+	if !utils.CheckPassword(req.CurrentPassword, user.PasswordHash) {
+		return domain.ErrInvalidPassword
+	}
+
+	// Hash new password
+	passwordHash, err := utils.HashPasswordWithCost(req.NewPassword, uc.config.BcryptCost)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	user.PasswordHash = passwordHash
+
+	if err := uc.userRepo.Update(ctx, user); err != nil {
+		return err
+	}
+
+	// Revoke all sessions (force re-login)
+	_ = uc.sessionRepo.RevokeAllForUser(ctx, userID)
+
+	return nil
+}
+
+// DeleteUser deletes a user.
+func (uc *authUseCase) DeleteUser(ctx context.Context, req *dto.DeleteUserRequest) error {
+	// Check if user exists
+	user, err := uc.userRepo.FindByID(ctx, req.ID, &domain.ParanoidOptions{IncludeDeleted: true})
+	if err != nil {
+		return err
+	}
+
+	// Delete user
+	if req.Force {
+		if err := uc.userRepo.HardDelete(ctx, req.ID); err != nil {
+			return err
+		}
+	} else {
+		if err := uc.userRepo.Delete(ctx, req.ID); err != nil {
+			return err
+		}
+	}
+
+	// Revoke all sessions
+	_ = uc.sessionRepo.RevokeAllForUser(ctx, req.ID)
+
+	// Publish event
+	if uc.eventBus != nil {
+		uc.publishEvent(ctx, domain.NewUserDeletedEvent(user.ID))
+	}
+
+	return nil
+}
+
+// RestoreUser restores a deleted user.
+func (uc *authUseCase) RestoreUser(ctx context.Context, req *dto.RestoreUserRequest) (*dto.UserResponse, error) {
+	if err := uc.userRepo.Restore(ctx, req.ID); err != nil {
+		return nil, err
+	}
+
+	// Get restored user
+	user, err := uc.userRepo.FindByID(ctx, req.ID, domain.DefaultParanoidOptions())
+	if err != nil {
+		return nil, err
+	}
+
+	// Publish event
+	if uc.eventBus != nil {
+		uc.publishEvent(ctx, domain.NewUserRestoredEvent(user))
+	}
+
+	return dto.FromUser(user), nil
+}
+
+// publishEvent publishes an event to the event bus.
+func (uc *authUseCase) publishEvent(ctx context.Context, event *domain.UserEvent) {
+	if uc.eventBus == nil {
+		return
+	}
+
+	// Create event bus event
+	ebEvent := eventbus.NewEvent(event.EventType, uc.config.ServiceName, event.ToMap())
+
+	// Add correlation ID from context if available
+	if correlationID, ok := ctx.Value("correlation_id").(string); ok && correlationID != "" {
+		ebEvent.WithCorrelationID(correlationID)
+	}
+
+	// Publish asynchronously
+	go func() {
+		_, _ = uc.eventBus.Publish(context.Background(), eventbus.StreamAuthEvents, ebEvent)
+	}()
+}
+
+// ValidateToken validates a JWT token and returns the claims.
+func (uc *authUseCase) ValidateToken(token string) (*utils.Claims, error) {
+	return uc.jwtManager.ValidateToken(token)
+}
+
+// GenerateUUID generates a new UUID.
+func GenerateUUID() string {
+	return uuid.New().String()
+}

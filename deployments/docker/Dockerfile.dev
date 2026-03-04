@@ -1,0 +1,28 @@
+# Development Dockerfile with Air for hot reload
+# Usage: docker-compose up
+
+FROM golang:1.23-alpine
+
+# Install air for hot reload
+RUN go install github.com/cosmtrek/air@latest
+
+# Install required packages
+RUN apk add --no-cache git ca-certificates tzdata
+
+WORKDIR /app
+
+# Copy go mod files first for caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build argument for service name
+ARG SERVICE=auth-service
+
+# Expose port
+EXPOSE 3100
+
+# Run with air for hot reload
+CMD ["air", "-c", ".air.toml"]

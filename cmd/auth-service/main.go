@@ -1,0 +1,173 @@
+// Package main provides the entry point for the auth service.
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
+	"github.com/ignata/go-microservices-boilerplate/internal/auth/delivery"
+	"github.com/ignata/go-microservices-boilerplate/internal/auth/usecase"
+	"github.com/ignata/go-microservices-boilerplate/pkg/config"
+	"github.com/ignata/go-microservices-boilerplate/pkg/database"
+	"github.com/ignata/go-microservices-boilerplate/pkg/eventbus"
+	"github.com/ignata/go-microservices-boilerplate/pkg/logger"
+	"github.com/ignata/go-microservices-boilerplate/pkg/metrics"
+	"github.com/ignata/go-microservices-boilerplate/pkg/server"
+)
+
+// App holds all application dependencies.
+type App struct {
+	Config       *config.Config
+	Logger       *zap.Logger
+	Postgres     *database.PostgresDB
+	Redis        *database.RedisClient
+	EventBus     *eventbus.Producer
+	AuthUseCase  usecase.AuthUseCase
+	HTTPServer   *http.Server
+}
+
+// NewApp creates a new application.
+func NewApp(
+	cfg *config.Config,
+	log *zap.Logger,
+	pg *database.PostgresDB,
+	redis *database.RedisClient,
+	eventBus *eventbus.Producer,
+	authUseCase usecase.AuthUseCase,
+) *App {
+	return &App{
+		Config:      cfg,
+		Logger:      log,
+		Postgres:    pg,
+		Redis:       redis,
+		EventBus:    eventBus,
+		AuthUseCase: authUseCase,
+	}
+}
+
+func main() {
+	// Load configuration
+	cfg, err := config.Load("")
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+
+	// Initialize logger
+	if err := logger.Init(&logger.Config{
+		Level:  cfg.Logging.Level,
+		Format: cfg.Logging.Format,
+	}); err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer logger.Sync()
+
+	// Initialize application using wire
+	app, err := InitializeApp(cfg)
+	if err != nil {
+		logger.Fatal("Failed to initialize app", zap.Error(err))
+	}
+
+	// Setup HTTP server
+	engine := setupHTTPServer(app)
+
+	// Create HTTP server
+	srv := &http.Server{
+		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
+		Handler:      engine,
+		ReadTimeout:  cfg.Server.ReadTimeout,
+		WriteTimeout: cfg.Server.WriteTimeout,
+	}
+
+	// Start server in goroutine
+	go func() {
+		logger.Info("Starting auth service",
+			zap.String("host", cfg.Server.Host),
+			zap.Int("port", cfg.Server.Port),
+		)
+
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Fatal("Failed to start server", zap.Error(err))
+		}
+	}()
+
+	// Wait for interrupt signal for graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	logger.Info("Shutting down server...")
+
+	// Create shutdown context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
+	defer cancel()
+
+	// Shutdown HTTP server
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Error("Server shutdown error", zap.Error(err))
+	}
+
+	// Close database connection
+	if err := app.Postgres.Close(); err != nil {
+		logger.Error("Database close error", zap.Error(err))
+	}
+
+	// Close Redis connection
+	if err := app.Redis.Close(); err != nil {
+		logger.Error("Redis close error", zap.Error(err))
+	}
+
+	logger.Info("Server stopped")
+}
+
+// setupHTTPServer configures the HTTP server with all routes and middleware.
+func setupHTTPServer(app *App) *gin.Engine {
+	// Set Gin mode
+	if app.Config.App.Env == "production" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	// Create router
+	engine := gin.New()
+
+	// Add recovery middleware
+	engine.Use(gin.Recovery())
+
+	// Add CORS middleware
+	engine.Use(delivery.CORSMiddleware())
+
+	// Add metrics middleware
+	if app.Config.Metrics.Enabled {
+		engine.Use(metrics.MetricsMiddleware(app.Config.App.Name))
+	}
+
+	// Health check handler
+	healthHandler := server.NewHealthHandler(server.HealthHandlerConfig{
+		ServiceName: app.Config.App.Name,
+		Version:     app.Config.App.Version,
+		DB:          app.Postgres,
+		Redis:       app.Redis,
+	})
+
+	// Register health routes
+	engine.GET("/health", healthHandler.PublicHealth)
+	engine.GET("/ready", healthHandler.ReadyProbe)
+	engine.GET("/live", healthHandler.LiveProbe)
+
+	// Metrics endpoint
+	if app.Config.Metrics.Enabled {
+		engine.GET(app.Config.Metrics.Path, metrics.PrometheusHandler())
+	}
+
+	// Register auth routes
+	delivery.RegisterRoutes(engine, app.AuthUseCase, app.Config.Auth.JWT.Secret)
+
+	return engine
+}

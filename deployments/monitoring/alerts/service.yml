@@ -1,0 +1,181 @@
+# Alert rules for Go microservices.
+groups:
+  - name: service_alerts
+    interval: 30s
+    rules:
+      # Service down alerts
+      - alert: ServiceDown
+        expr: up{job=~"auth-service|user-service|product-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} has been down for more than 1 minute."
+
+      # High error rate alerts
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) by (job)
+          /
+          sum(rate(http_requests_total[5m])) by (job) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "High error rate on {{ $labels.job }}"
+          description: "{{ $labels.job }} has an error rate above 5% for 5 minutes."
+
+      - alert: CriticalErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) by (job)
+          /
+          sum(rate(http_requests_total[5m])) by (job) > 0.10
+        for: 2m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "Critical error rate on {{ $labels.job }}"
+          description: "{{ $labels.job }} has an error rate above 10% for 2 minutes."
+
+      # High latency alerts
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (job, le)
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "High latency on {{ $labels.job }}"
+          description: "{{ $labels.job }} p95 latency is above 1 second for 10 minutes."
+
+      - alert: CriticalLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (job, le)
+          ) > 5
+        for: 5m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "Critical latency on {{ $labels.job }}"
+          description: "{{ $labels.job }} p95 latency is above 5 seconds for 5 minutes."
+
+      # Database connection alerts
+      - alert: DatabaseConnectionHigh
+        expr: db_connections_total{state="in_use"} > 80
+        for: 10m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "High database connection usage"
+          description: "Database connection usage is above 80 for 10 minutes."
+
+      - alert: DatabaseConnectionCritical
+        expr: db_connections_total{state="in_use"} > 90
+        for: 5m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "Critical database connection usage"
+          description: "Database connection usage is above 90 for 5 minutes."
+
+  - name: business_alerts
+    interval: 1m
+    rules:
+      # Low user registrations
+      - alert: LowUserRegistrations
+        expr: rate(user_registrations_total[1h]) < 0.1
+        for: 2h
+        labels:
+          severity: warning
+          team: product
+        annotations:
+          summary: "Low user registration rate"
+          description: "User registration rate is below expected threshold."
+
+      # High failed logins
+      - alert: HighFailedLogins
+        expr: |
+          sum(rate(user_logins_total{status="failed"}[5m]))
+          /
+          sum(rate(user_logins_total[5m])) > 0.3
+        for: 10m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "High failed login rate"
+          description: "Failed login rate is above 30% for 10 minutes."
+
+  - name: infrastructure_alerts
+    interval: 30s
+    rules:
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 80% for 10 minutes."
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 85% for 10 minutes."
+
+      # Disk space low
+      - alert: DiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.*"}
+          /
+          node_filesystem_size_bytes{fstype!~"tmpfs|fuse.*"}) * 100 < 15
+        for: 10m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk space is below 15% on mount point {{ $labels.mountpoint }}."
+
+      # Redis down
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: ops
+        annotations:
+          summary: "Redis is down"
+          description: "Redis has been down for more than 1 minute."
+
+      # PostgreSQL down
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: ops
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL has been down for more than 1 minute."
