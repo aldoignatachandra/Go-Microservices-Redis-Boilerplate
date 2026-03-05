@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 
 	"github.com/ignata/go-microservices-boilerplate/internal/product/domain"
 	"github.com/ignata/go-microservices-boilerplate/internal/product/dto"
@@ -42,6 +43,7 @@ type productUseCase struct {
 	productRepo repository.ProductRepository
 	eventBus    *eventbus.Producer
 	config      Config
+	logger      *zap.Logger
 }
 
 // NewProductUseCase creates a new product usecase.
@@ -49,11 +51,13 @@ func NewProductUseCase(
 	productRepo repository.ProductRepository,
 	eventBus *eventbus.Producer,
 	config Config,
+	logger *zap.Logger,
 ) ProductUseCase {
 	return &productUseCase{
 		productRepo: productRepo,
 		eventBus:    eventBus,
 		config:      config,
+		logger:      logger,
 	}
 }
 
@@ -250,9 +254,14 @@ func (uc *productUseCase) publishEvent(ctx context.Context, event *domain.Produc
 		ebEvent.WithCorrelationID(correlationID)
 	}
 
-	// Publish asynchronously
+	// Publish asynchronously with error logging
 	go func() {
-		_, _ = uc.eventBus.Publish(context.Background(), eventbus.StreamProductEvents, ebEvent)
+		if _, err := uc.eventBus.Publish(context.Background(), eventbus.StreamProductEvents, ebEvent); err != nil {
+			uc.logger.Error("failed to publish event",
+				zap.String("event_type", event.EventType),
+				zap.Error(err),
+			)
+		}
 	}()
 }
 

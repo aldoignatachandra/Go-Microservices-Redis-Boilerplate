@@ -1,0 +1,52 @@
+# Product Service Dockerfile
+ARG VERSION=1.0.0
+
+FROM golang:1.23-alpine AS builder
+
+WORKDIR /app
+
+# Install dependencies
+RUN apk add --no-cache git ca-certificates tzdata
+
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source
+COPY . .
+
+# Build binary
+ARG VERSION
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-w -s -X main.Version=${VERSION} -X main.ServiceName=product-service" \
+    -o /app/product-service \
+    ./cmd/product-service
+
+# Production image
+FROM alpine:3.19
+
+# Install ca-certificates for HTTPS
+RUN apk --no-cache add ca-certificates tzdata
+
+# Create non-root user
+RUN adduser -D -S -H -u 1000 appuser
+
+WORKDIR /app
+
+# Copy binary
+COPY --from=builder /app/product-service /app/product-service
+
+# Copy config files
+COPY configs/ /app/configs/
+
+# Set ownership
+RUN chown -R appuser:appuser /app
+
+USER appuser
+
+EXPOSE 3102
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3102/health || exit 1
+
+ENTRYPOINT ["/app/product-service"]

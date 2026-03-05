@@ -4,26 +4,26 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/mock"
-	"github.com/ignata/go-microservices-boilerplate/internal/user/domain"
 	"github.com/ignata/go-microservices-boilerplate/internal/user/dto"
+	"github.com/ignata/go-microservices-boilerplate/internal/user/usecase"
 	mocks "github.com/ignata/go-microservices-boilerplate/internal/user/usecase/mocks"
 	"github.com/ignata/go-microservices-boilerplate/pkg/logger"
+	"github.com/stretchr/testify/mock"
 )
 
 // BenchmarkUpdateProfile benchmarks the profile update operation.
 func BenchmarkUpdateProfile(b *testing.B) {
 	userRepo := new(mocks.MockUserRepository)
 	activityRepo := new(mocks.MockActivityRepository)
-	eventBus := new(MockEventBus)
+	eventBus := new(MockEventPublisher)
 
 	userRepo.On("GetProfile", mock.Anything, mock.Anything).Return(testProfile, nil)
 	userRepo.On("UpdateProfile", mock.Anything, mock.Anything).Return(nil)
-	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 	activityRepo.On("Create", mock.Anything, mock.Anything).Return(nil)
 
-	log := logger.NewLogger("info", "production")
-	usecase := NewUserUseCase(userRepo, activityRepo, eventBus, log)
+	log, _ := logger.New(&logger.Config{Level: "info", Format: "json"})
+	uc := usecase.NewUserUseCase(userRepo, activityRepo, eventBus, log)
 
 	req := &dto.UpdateProfileRequest{
 		UserID:    "test-user-id",
@@ -33,7 +33,7 @@ func BenchmarkUpdateProfile(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = usecase.UpdateProfile(context.Background(), req)
+		_ = uc.UpdateProfile(context.Background(), req)
 	}
 }
 
@@ -41,20 +41,20 @@ func BenchmarkUpdateProfile(b *testing.B) {
 func BenchmarkGetUser(b *testing.B) {
 	userRepo := new(mocks.MockUserRepository)
 	activityRepo := new(mocks.MockActivityRepository)
-	eventBus := new(MockEventBus)
+	eventBus := new(MockEventPublisher)
 
 	userRepo.On("FindByID", mock.Anything, mock.Anything, mock.Anything).Return(testUser, nil)
 
-	log := logger.NewLogger("info", "production")
-	usecase := NewUserUseCase(userRepo, activityRepo, eventBus, log)
+	log, _ := logger.New(&logger.Config{Level: "info", Format: "json"})
+	uc := usecase.NewUserUseCase(userRepo, activityRepo, eventBus, log)
 
 	req := &dto.GetUserRequest{
-		UserID: "test-user-id",
+		ID: "test-user-id",
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = usecase.GetUser(context.Background(), req)
+		_, _ = uc.GetUser(context.Background(), req)
 	}
 }
 
@@ -62,24 +62,24 @@ func BenchmarkGetUser(b *testing.B) {
 func BenchmarkActivateUser(b *testing.B) {
 	userRepo := new(mocks.MockUserRepository)
 	activityRepo := new(mocks.MockActivityRepository)
-	eventBus := new(MockEventBus)
+	eventBus := new(MockEventPublisher)
 
 	inactiveUser := *testUser
 	inactiveUser.IsActive = false
 	userRepo.On("FindByID", mock.Anything, mock.Anything, mock.Anything).Return(&inactiveUser, nil)
 	userRepo.On("Update", mock.Anything, mock.Anything).Return(nil)
-	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 
-	log := logger.NewLogger("info", "production")
-	usecase := NewUserUseCase(userRepo, activityRepo, eventBus, log)
+	log, _ := logger.New(&logger.Config{Level: "info", Format: "json"})
+	uc := usecase.NewUserUseCase(userRepo, activityRepo, eventBus, log)
 
 	req := &dto.ActivateUserRequest{
-		UserID: "test-user-id",
+		ID: "test-user-id",
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = usecase.ActivateUser(context.Background(), req)
+		_ = uc.ActivateUser(context.Background(), req)
 	}
 }
 
@@ -87,22 +87,22 @@ func BenchmarkActivateUser(b *testing.B) {
 func BenchmarkDeactivateUser(b *testing.B) {
 	userRepo := new(mocks.MockUserRepository)
 	activityRepo := new(mocks.MockActivityRepository)
-	eventBus := new(MockEventBus)
+	eventBus := new(MockEventPublisher)
 
 	userRepo.On("FindByID", mock.Anything, mock.Anything, mock.Anything).Return(testUser, nil)
 	userRepo.On("Update", mock.Anything, mock.Anything).Return(nil)
-	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 
-	log := logger.NewLogger("info", "production")
-	usecase := NewUserUseCase(userRepo, activityRepo, eventBus, log)
+	log, _ := logger.New(&logger.Config{Level: "info", Format: "json"})
+	uc := usecase.NewUserUseCase(userRepo, activityRepo, eventBus, log)
 
 	req := &dto.DeactivateUserRequest{
-		UserID: "test-user-id",
+		ID: "test-user-id",
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = usecase.DeactivateUser(context.Background(), req)
+		_ = uc.DeactivateUser(context.Background(), req)
 	}
 }
 
@@ -110,21 +110,21 @@ func BenchmarkDeactivateUser(b *testing.B) {
 func BenchmarkDeleteUser(b *testing.B) {
 	userRepo := new(mocks.MockUserRepository)
 	activityRepo := new(mocks.MockActivityRepository)
-	eventBus := new(MockEventBus)
+	eventBus := new(MockEventPublisher)
 
 	userRepo.On("Delete", mock.Anything, mock.Anything).Return(nil)
-	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 
-	log := logger.NewLogger("info", "production")
-	usecase := NewUserUseCase(userRepo, activityRepo, eventBus, log)
+	log, _ := logger.New(&logger.Config{Level: "info", Format: "json"})
+	uc := usecase.NewUserUseCase(userRepo, activityRepo, eventBus, log)
 
 	req := &dto.DeleteUserRequest{
-		UserID: "test-user-id",
+		ID: "test-user-id",
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = usecase.DeleteUser(context.Background(), req)
+		_ = uc.DeleteUser(context.Background(), req)
 	}
 }
 
@@ -132,21 +132,21 @@ func BenchmarkDeleteUser(b *testing.B) {
 func BenchmarkRestoreUser(b *testing.B) {
 	userRepo := new(mocks.MockUserRepository)
 	activityRepo := new(mocks.MockActivityRepository)
-	eventBus := new(MockEventBus)
+	eventBus := new(MockEventPublisher)
 
 	userRepo.On("Restore", mock.Anything, mock.Anything).Return(nil)
 	userRepo.On("FindByID", mock.Anything, mock.Anything, mock.Anything).Return(testUser, nil)
-	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 
-	log := logger.NewLogger("info", "production")
-	usecase := NewUserUseCase(userRepo, activityRepo, eventBus, log)
+	log, _ := logger.New(&logger.Config{Level: "info", Format: "json"})
+	uc := usecase.NewUserUseCase(userRepo, activityRepo, eventBus, log)
 
 	req := &dto.RestoreUserRequest{
-		UserID: "test-user-id",
+		ID: "test-user-id",
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = usecase.RestoreUser(context.Background(), req)
+		_, _ = uc.RestoreUser(context.Background(), req)
 	}
 }

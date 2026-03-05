@@ -1,4 +1,19 @@
 // Package main provides the entry point for the product service.
+//
+// @title Product Service API
+// @version 1.0
+// @description Product service for Go Microservices Redis Pub/Sub Boilerplate. Manages product CRUD operations and stock management with Redis event publishing.
+//
+// @contact.name API Support
+// @contact.url https://github.com/aldoignatachandra/Go-Microservices-Redis-Boilerplate
+//
+// @host localhost:3102
+// @BasePath /
+//
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Enter your bearer token in the format: Bearer {token}
 package main
 
 import (
@@ -11,8 +26,11 @@ import (
 	"syscall"
 
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.uber.org/zap"
 
+	_ "github.com/ignata/go-microservices-boilerplate/docs"
 	"github.com/ignata/go-microservices-boilerplate/internal/product/delivery"
 	"github.com/ignata/go-microservices-boilerplate/internal/product/usecase"
 	"github.com/ignata/go-microservices-boilerplate/pkg/config"
@@ -25,13 +43,13 @@ import (
 
 // App holds all application dependencies.
 type App struct {
-	Config       *config.Config
-	Logger       *zap.Logger
-	Postgres     *database.PostgresDB
-	Redis        *database.RedisClient
-	EventBus     *eventbus.Producer
+	Config         *config.Config
+	Logger         *zap.Logger
+	Postgres       *database.PostgresDB
+	Redis          *database.RedisClient
+	EventBus       *eventbus.Producer
 	ProductUseCase usecase.ProductUseCase
-	HTTPServer   *http.Server
+	HTTPServer     *http.Server
 }
 
 // NewApp creates a new application.
@@ -44,11 +62,11 @@ func NewApp(
 	productUseCase usecase.ProductUseCase,
 ) *App {
 	return &App{
-		Config:       cfg,
-		Logger:       log,
-		Postgres:     pg,
-		Redis:        redis,
-		EventBus:     eventBus,
+		Config:         cfg,
+		Logger:         log,
+		Postgres:       pg,
+		Redis:          redis,
+		EventBus:       eventBus,
 		ProductUseCase: productUseCase,
 	}
 }
@@ -165,6 +183,9 @@ func setupHTTPServer(app *App) *gin.Engine {
 	if app.Config.Metrics.Enabled {
 		engine.GET(app.Config.Metrics.Path, metrics.PrometheusHandler())
 	}
+
+	// Swagger endpoint
+	engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Register product routes
 	delivery.RegisterRoutes(engine, app.ProductUseCase)

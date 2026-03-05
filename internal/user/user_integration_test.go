@@ -3,27 +3,34 @@ package user_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	gormlogger "gorm.io/gorm/logger"
 
 	"github.com/ignata/go-microservices-boilerplate/internal/user/domain"
 	"github.com/ignata/go-microservices-boilerplate/internal/user/dto"
 	"github.com/ignata/go-microservices-boilerplate/internal/user/repository"
 	"github.com/ignata/go-microservices-boilerplate/internal/user/usecase"
 	"github.com/ignata/go-microservices-boilerplate/pkg/eventbus"
-	pkglogger "github.com/ignata/go-microservices-boilerplate/pkg/logger"
+	"github.com/ignata/go-microservices-boilerplate/pkg/logger"
 )
 
+// noopEventPublisher is a no-op implementation of eventbus.EventPublisher for integration tests.
+type noopEventPublisher struct{}
+
+func (n *noopEventPublisher) Publish(_ context.Context, _ string, _ *eventbus.Event) (string, error) {
+	return "", nil
+}
+
 // setupTestDB creates an in-memory SQLite database for testing.
-func setupTestDB(t *testing.T) *gorm.DB {
+func setupTestDB(t testing.TB) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
+		Logger: gormlogger.Default.LogMode(gormlogger.Silent),
 	})
 	require.NoError(t, err)
 
@@ -35,21 +42,21 @@ func setupTestDB(t *testing.T) *gorm.DB {
 }
 
 // setupTestContext creates a test context with all dependencies.
-func setupTestContext(t *testing.T) (*gorm.DB, *usecase.UserUseCase, func()) {
+func setupTestContext(t testing.TB) (*gorm.DB, usecase.UserUseCase, func()) {
 	db := setupTestDB(t)
 
 	// Create repositories
 	userRepo := repository.NewUserRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
 
-	// Create event bus (using in-memory implementation for tests)
-	eventBus := eventbus.NewInMemoryEventBus()
+	// Create event bus (no-op for tests)
+	eventPub := &noopEventPublisher{}
 
 	// Create logger
-	log := pkglogger.NewLogger("debug", "test")
+	log, _ := logger.New(&logger.Config{Level: "debug", Format: "console"})
 
 	// Create use case
-	uc := usecase.NewUserUseCase(userRepo, activityRepo, eventBus, log)
+	uc := usecase.NewUserUseCase(userRepo, activityRepo, eventPub, log)
 
 	// Cleanup function
 	cleanup := func() {
@@ -58,7 +65,7 @@ func setupTestContext(t *testing.T) (*gorm.DB, *usecase.UserUseCase, func()) {
 		db.Exec("DELETE FROM users")
 	}
 
-	return db, &uc, cleanup
+	return db, uc, cleanup
 }
 
 // TestUserRepository_Integration tests the user repository with real database.
@@ -232,7 +239,7 @@ func TestActivityRepository_Integration(t *testing.T) {
 
 		result, err := repo.FindByUserID(ctx, req)
 		require.NoError(t, err)
-		assert.Equal(t, 2, result.Total)
+		assert.Equal(t, int64(2), result.Total)
 		assert.Len(t, result.Logs, 2)
 	})
 
@@ -259,7 +266,7 @@ func TestActivityRepository_Integration(t *testing.T) {
 
 		result, err := repo.FindByUserID(ctx, req)
 		require.NoError(t, err)
-		assert.Equal(t, 1, result.Total)
+		assert.Equal(t, int64(1), result.Total)
 		assert.Len(t, result.Logs, 1)
 		assert.Equal(t, "login", result.Logs[0].Action)
 	})
@@ -283,6 +290,7 @@ func TestUserUseCase_Integration(t *testing.T) {
 
 		// For now, we'll test that the use case is properly wired
 		assert.NotNil(t, uc)
+		_ = ctx // suppress unused variable
 	})
 }
 
@@ -302,7 +310,7 @@ func TestConcurrentOperations(t *testing.T) {
 		for i := 0; i < numUsers; i++ {
 			go func(index int) {
 				user := &domain.User{
-					Email:        "concurrent" + string(rune(index)) + "@example.com",
+					Email:        fmt.Sprintf("concurrent%d@example.com", index),
 					PasswordHash: "hashed_password",
 					Role:         domain.RoleUser,
 					IsActive:     true,
@@ -341,7 +349,7 @@ func BenchmarkRepositoryOperations(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			user := &domain.User{
-				Email:        "bench@example.com",
+				Email:        fmt.Sprintf("bench%d@example.com", i),
 				PasswordHash: "hashed_password",
 				Role:         domain.RoleUser,
 				IsActive:     true,

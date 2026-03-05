@@ -13,10 +13,10 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	mocks "github.com/ignata/go-microservices-boilerplate/internal/user/delivery/mocks"
 	"github.com/ignata/go-microservices-boilerplate/internal/user/delivery"
-	"github.com/ignata/go-microservices-boilerplate/internal/user/dto"
+	mocks "github.com/ignata/go-microservices-boilerplate/internal/user/delivery/mocks"
 	"github.com/ignata/go-microservices-boilerplate/internal/user/domain"
+	"github.com/ignata/go-microservices-boilerplate/internal/user/dto"
 )
 
 func setupTestRouter(handler *delivery.UserHandler) *gin.Engine {

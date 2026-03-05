@@ -38,17 +38,17 @@ type UserUseCase interface {
 
 // userUseCase implements UserUseCase.
 type userUseCase struct {
-	userRepo       repository.UserRepository
-	activityRepo   repository.ActivityRepository
-	eventBus       *eventbus.Producer
-	logger         *zap.Logger
+	userRepo     repository.UserRepository
+	activityRepo repository.ActivityRepository
+	eventBus     eventbus.EventPublisher
+	logger       *zap.Logger
 }
 
 // NewUserUseCase creates a new user use case.
 func NewUserUseCase(
 	userRepo repository.UserRepository,
 	activityRepo repository.ActivityRepository,
-	eventBus *eventbus.Producer,
+	eventBus eventbus.EventPublisher,
 	log *zap.Logger,
 ) UserUseCase {
 	return &userUseCase{

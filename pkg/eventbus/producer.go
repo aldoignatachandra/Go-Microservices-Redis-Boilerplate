@@ -8,6 +8,12 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// EventPublisher defines the interface for publishing events.
+// This allows mocking the producer in tests.
+type EventPublisher interface {
+	Publish(ctx context.Context, stream string, event *Event) (string, error)
+}
+
 // Producer publishes events to Redis streams.
 type Producer struct {
 	client *redis.Client

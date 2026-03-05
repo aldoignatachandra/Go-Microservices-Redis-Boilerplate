@@ -1,60 +1,86 @@
-// Package main is the entry point for the user service.
+// Package main provides the entry point for the user service.
+//
+// @title User Service API
+// @version 1.0
+// @description User service for Go Microservices Redis Pub/Sub Boilerplate. Manages user profiles, activity logs, and consumes auth events from Redis Streams.
+//
+// @contact.name API Support
+// @contact.url https://github.com/aldoignatachandra/Go-Microservices-Redis-Boilerplate
+//
+// @host localhost:3101
+// @BasePath /
+//
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Enter your bearer token in the format: Bearer {token}
 package main
 
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.uber.org/zap"
 
+	_ "github.com/ignata/go-microservices-boilerplate/docs"
 	"github.com/ignata/go-microservices-boilerplate/internal/user/delivery"
 	"github.com/ignata/go-microservices-boilerplate/pkg/config"
-	pkgserver "github.com/ignata/go-microservices-boilerplate/pkg/server"
+	"github.com/ignata/go-microservices-boilerplate/pkg/logger"
+	"github.com/ignata/go-microservices-boilerplate/pkg/metrics"
+	"github.com/ignata/go-microservices-boilerplate/pkg/server"
 )
 
 func main() {
 	// Load configuration
 	cfg, err := config.Load("")
 	if err != nil {
-		panic(fmt.Sprintf("failed to load config: %v", err))
+		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Initialize application with Wire
+	// Initialize logger
+	if err := logger.Init(&logger.Config{
+		Level:  cfg.Logging.Level,
+		Format: cfg.Logging.Format,
+	}); err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer logger.Sync()
+
+	// Initialize application using Wire
 	app, err := initializeApp(cfg)
 	if err != nil {
-		panic(fmt.Sprintf("failed to initialize application: %v", err))
+		logger.Fatal("Failed to initialize app", zap.Error(err))
 	}
 
-	// Register routes
-	handler := delivery.NewUserHandler(app.UserUseCase)
-	delivery.RegisterRoutes(app.Engine, handler)
+	// Setup HTTP server with proper middleware ordering
+	setupHTTPServer(app, cfg)
 
-	// Add health check endpoints
-	pkgserver.RegisterHealthRoutes(app.Engine, app.PostgresDB.DB, app.RedisClient)
+	// Create HTTP server
+	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
+	srv := &http.Server{
+		Addr:         addr,
+		Handler:      app.Engine,
+		ReadTimeout:  cfg.Server.ReadTimeout,
+		WriteTimeout: cfg.Server.WriteTimeout,
+	}
 
-	// Add recovery middleware
-	app.Engine.Use(gin.Recovery())
-
-	// Start server in a goroutine
+	// Start server in goroutine
 	go func() {
-		addr := fmt.Sprintf(":%d", cfg.Server.Port)
-		app.Log.Info(fmt.Sprintf("Starting user service on %s", addr))
-
-		srv := &http.Server{
-			Addr:         addr,
-			Handler:      app.Engine,
-			ReadTimeout:  cfg.Server.ReadTimeout,
-			WriteTimeout: cfg.Server.WriteTimeout,
-		}
+		logger.Info("Starting user service",
+			zap.String("address", addr),
+			zap.String("env", cfg.App.Env),
+		)
 
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			app.Log.Fatal("Failed to start server", zap.Error(err))
+			logger.Fatal("Failed to start server", zap.Error(err))
 		}
 	}()
 
@@ -63,15 +89,65 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	app.Log.Info("Shutting down server...")
+	logger.Info("Shutting down server...")
 
-	// Graceful shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Create shutdown context with timeout from config
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
 	defer cancel()
 
-	if err := app.Shutdown(ctx); err != nil {
-		app.Log.Error("Server forced to shutdown", zap.Error(err))
+	// Shutdown HTTP server
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Error("Server shutdown error", zap.Error(err))
 	}
 
-	app.Log.Info("Server exited")
+	// Graceful cleanup of all resources
+	if err := app.Shutdown(ctx); err != nil {
+		logger.Error("Application shutdown error", zap.Error(err))
+	}
+
+	logger.Info("Server stopped")
+}
+
+// setupHTTPServer configures the HTTP server with all routes and middleware.
+func setupHTTPServer(app *AppServer, cfg *config.Config) {
+	// Set Gin mode based on environment
+	if cfg.App.Env == "production" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	// Apply middleware in correct order:
+	// 1. Recovery (catch panics first)
+	// 2. CORS (handle preflight requests)
+	// 3. Metrics (record all requests)
+	app.Engine.Use(gin.Recovery())
+	app.Engine.Use(delivery.CORSMiddleware())
+	if cfg.Metrics.Enabled {
+		app.Engine.Use(metrics.MetricsMiddleware(cfg.App.Name))
+	}
+
+	// Health check handler
+	healthHandler := server.NewHealthHandler(server.HealthHandlerConfig{
+		ServiceName: cfg.App.Name,
+		Version:     cfg.App.Version,
+		DB:          app.PostgresDB,
+		Redis:       app.RedisClient,
+	})
+
+	// Register health routes
+	app.Engine.GET("/health", healthHandler.PublicHealth)
+	app.Engine.GET("/ready", healthHandler.ReadyProbe)
+	app.Engine.GET("/live", healthHandler.LiveProbe)
+	app.Engine.GET("/started", healthHandler.StartupProbe)
+
+	// Metrics endpoint
+	if cfg.Metrics.Enabled {
+		app.Engine.GET(cfg.Metrics.Path, metrics.PrometheusHandler())
+	}
+
+	// Register user routes
+	handler := delivery.NewUserHandler(app.UserUseCase)
+	// Swagger endpoint
+	app.Engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
+	delivery.RegisterRoutes(app.Engine, handler)
 }

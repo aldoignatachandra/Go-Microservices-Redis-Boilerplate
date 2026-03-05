@@ -1,4 +1,19 @@
 // Package main provides the entry point for the auth service.
+//
+// @title Auth Service API
+// @version 1.0
+// @description Authentication service for Go Microservices Redis Pub/Sub Boilerplate. Provides user registration, login, JWT token management, and admin user operations.
+//
+// @contact.name API Support
+// @contact.url https://github.com/aldoignatachandra/Go-Microservices-Redis-Boilerplate
+//
+// @host localhost:3100
+// @BasePath /
+//
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Enter your bearer token in the format: Bearer {token}
 package main
 
 import (
@@ -11,8 +26,11 @@ import (
 	"syscall"
 
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.uber.org/zap"
 
+	_ "github.com/ignata/go-microservices-boilerplate/docs"
 	"github.com/ignata/go-microservices-boilerplate/internal/auth/delivery"
 	"github.com/ignata/go-microservices-boilerplate/internal/auth/usecase"
 	"github.com/ignata/go-microservices-boilerplate/pkg/config"
@@ -25,13 +43,13 @@ import (
 
 // App holds all application dependencies.
 type App struct {
-	Config       *config.Config
-	Logger       *zap.Logger
-	Postgres     *database.PostgresDB
-	Redis        *database.RedisClient
-	EventBus     *eventbus.Producer
-	AuthUseCase  usecase.AuthUseCase
-	HTTPServer   *http.Server
+	Config      *config.Config
+	Logger      *zap.Logger
+	Postgres    *database.PostgresDB
+	Redis       *database.RedisClient
+	EventBus    *eventbus.Producer
+	AuthUseCase usecase.AuthUseCase
+	HTTPServer  *http.Server
 }
 
 // NewApp creates a new application.
@@ -165,6 +183,9 @@ func setupHTTPServer(app *App) *gin.Engine {
 	if app.Config.Metrics.Enabled {
 		engine.GET(app.Config.Metrics.Path, metrics.PrometheusHandler())
 	}
+
+	// Swagger endpoint
+	engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Register auth routes
 	delivery.RegisterRoutes(engine, app.AuthUseCase, app.Config.Auth.JWT.Secret)

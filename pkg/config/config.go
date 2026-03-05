@@ -3,22 +3,23 @@
 package config
 
 import (
+	"fmt"
 	"time"
 )
 
 // Config holds all configuration for a microservice.
 type Config struct {
-	App      AppConfig      `mapstructure:"app"`
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	Redis    RedisConfig    `mapstructure:"redis"`
-	Streams  StreamsConfig  `mapstructure:"streams"`
-	Auth     AuthConfig     `mapstructure:"auth"`
+	App       AppConfig       `mapstructure:"app"`
+	Server    ServerConfig    `mapstructure:"server"`
+	Database  DatabaseConfig  `mapstructure:"database"`
+	Redis     RedisConfig     `mapstructure:"redis"`
+	Streams   StreamsConfig   `mapstructure:"streams"`
+	Auth      AuthConfig      `mapstructure:"auth"`
 	RateLimit RateLimitConfig `mapstructure:"rate_limit"`
-	Logging  LoggingConfig  `mapstructure:"logging"`
-	Metrics  MetricsConfig  `mapstructure:"metrics"`
-	Tracing  TracingConfig  `mapstructure:"tracing"`
-	Services ServicesConfig `mapstructure:"services"`
+	Logging   LoggingConfig   `mapstructure:"logging"`
+	Metrics   MetricsConfig   `mapstructure:"metrics"`
+	Tracing   TracingConfig   `mapstructure:"tracing"`
+	Services  ServicesConfig  `mapstructure:"services"`
 }
 
 // AppConfig holds application-level configuration.
@@ -119,40 +120,11 @@ type ServicesConfig struct {
 
 // DSN returns the PostgreSQL connection string.
 func (c *DatabaseConfig) DSN() string {
-	return "host=" + c.Host +
-		" port=" + itoa(c.Port) +
-		" user=" + c.User +
-		" password=" + c.Password +
-		" dbname=" + c.Name +
-		" sslmode=" + c.SSLMode
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		c.Host, c.Port, c.User, c.Password, c.Name, c.SSLMode)
 }
 
 // Addr returns the Redis address in host:port format.
 func (c *RedisConfig) Addr() string {
-	return c.Host + ":" + itoa(c.Port)
-}
-
-// itoa converts int to string without importing strconv.
-func itoa(i int) string {
-	if i == 0 {
-		return "0"
-	}
-
-	var negative bool
-	if i < 0 {
-		negative = true
-		i = -i
-	}
-
-	var digits []byte
-	for i > 0 {
-		digits = append([]byte{byte('0' + i%10)}, digits...)
-		i /= 10
-	}
-
-	if negative {
-		digits = append([]byte{'-'}, digits...)
-	}
-
-	return string(digits)
+	return fmt.Sprintf("%s:%d", c.Host, c.Port)
 }

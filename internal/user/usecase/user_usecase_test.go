@@ -12,29 +12,20 @@ import (
 
 	"github.com/ignata/go-microservices-boilerplate/internal/user/domain"
 	"github.com/ignata/go-microservices-boilerplate/internal/user/dto"
+	"github.com/ignata/go-microservices-boilerplate/internal/user/usecase"
 	mocks "github.com/ignata/go-microservices-boilerplate/internal/user/usecase/mocks"
 	"github.com/ignata/go-microservices-boilerplate/pkg/eventbus"
 	"github.com/ignata/go-microservices-boilerplate/pkg/logger"
 )
 
-// MockEventBus is a mock implementation of EventBus.
-type MockEventBus struct {
+// MockEventPublisher is a mock implementation of eventbus.EventPublisher.
+type MockEventPublisher struct {
 	mock.Mock
 }
 
-func (m *MockEventBus) Publish(ctx context.Context, stream string, event interface{}) error {
+func (m *MockEventPublisher) Publish(ctx context.Context, stream string, event *eventbus.Event) (string, error) {
 	args := m.Called(ctx, stream, event)
-	return args.Error(0)
-}
-
-func (m *MockEventBus) Subscribe(ctx context.Context, stream, consumerGroup string, handler eventbus.Handler) error {
-	args := m.Called(ctx, stream, consumerGroup, handler)
-	return args.Error(0)
-}
-
-func (m *MockEventBus) Close() error {
-	args := m.Called()
-	return args.Error(0)
+	return args.String(0), args.Error(1)
 }
 
 // Test data
@@ -66,7 +57,7 @@ func TestUpdateProfile(t *testing.T) {
 	tests := []struct {
 		name        string
 		req         *dto.UpdateProfileRequest
-		setupMocks  func(*mocks.MockUserRepository, *mocks.MockActivityRepository, *MockEventBus)
+		setupMocks  func(*mocks.MockUserRepository, *mocks.MockActivityRepository, *MockEventPublisher)
 		wantErr     bool
 		expectedErr error
 	}{
@@ -77,10 +68,10 @@ func TestUpdateProfile(t *testing.T) {
 				FirstName: strPtr("Jane"),
 				LastName:  strPtr("Smith"),
 			},
-			setupMocks: func(userRepo *mocks.MockUserRepository, activityRepo *mocks.MockActivityRepository, eventBus *MockEventBus) {
+			setupMocks: func(userRepo *mocks.MockUserRepository, activityRepo *mocks.MockActivityRepository, eventBus *MockEventPublisher) {
 				userRepo.On("GetProfile", mock.Anything, "test-user-id").Return(testProfile, nil)
 				userRepo.On("UpdateProfile", mock.Anything, mock.AnythingOfType("*domain.Profile")).Return(nil)
-				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 				activityRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.ActivityLog")).Return(nil)
 			},
 			wantErr: false,
@@ -92,10 +83,10 @@ func TestUpdateProfile(t *testing.T) {
 				FirstName: strPtr("Jane"),
 				LastName:  strPtr("Smith"),
 			},
-			setupMocks: func(userRepo *mocks.MockUserRepository, activityRepo *mocks.MockActivityRepository, eventBus *MockEventBus) {
+			setupMocks: func(userRepo *mocks.MockUserRepository, activityRepo *mocks.MockActivityRepository, eventBus *MockEventPublisher) {
 				userRepo.On("GetProfile", mock.Anything, "test-user-id").Return(nil, nil)
 				userRepo.On("UpdateProfile", mock.Anything, mock.AnythingOfType("*domain.Profile")).Return(nil)
-				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 				activityRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.ActivityLog")).Return(nil)
 			},
 			wantErr: false,
@@ -105,7 +96,7 @@ func TestUpdateProfile(t *testing.T) {
 			req: &dto.UpdateProfileRequest{
 				FirstName: strPtr("Jane"),
 			},
-			setupMocks: func(userRepo *mocks.MockUserRepository, activityRepo *mocks.MockActivityRepository, eventBus *MockEventBus) {
+			setupMocks: func(userRepo *mocks.MockUserRepository, activityRepo *mocks.MockActivityRepository, eventBus *MockEventPublisher) {
 				// No mocks should be called due to validation error
 			},
 			wantErr:     true,
@@ -117,7 +108,7 @@ func TestUpdateProfile(t *testing.T) {
 				UserID:    "test-user-id",
 				FirstName: strPtr("Jane"),
 			},
-			setupMocks: func(userRepo *mocks.MockUserRepository, activityRepo *mocks.MockActivityRepository, eventBus *MockEventBus) {
+			setupMocks: func(userRepo *mocks.MockUserRepository, activityRepo *mocks.MockActivityRepository, eventBus *MockEventPublisher) {
 				userRepo.On("GetProfile", mock.Anything, "test-user-id").Return(nil, errors.New("database error"))
 			},
 			wantErr: true,
@@ -129,17 +120,17 @@ func TestUpdateProfile(t *testing.T) {
 			// Setup mocks
 			userRepo := new(mocks.MockUserRepository)
 			activityRepo := new(mocks.MockActivityRepository)
-			eventBus := new(MockEventBus)
+			eventBus := new(MockEventPublisher)
 
 			// Setup expectations
 			tt.setupMocks(userRepo, activityRepo, eventBus)
 
 			// Create use case
-			log := logger.NewLogger("debug", "development")
-			usecase := NewUserUseCase(userRepo, activityRepo, eventBus, log)
+			log, _ := logger.New(&logger.Config{Level: "debug", Format: "console"})
+			uc := usecase.NewUserUseCase(userRepo, activityRepo, eventBus, log)
 
 			// Execute
-			err := usecase.UpdateProfile(context.Background(), tt.req)
+			err := uc.UpdateProfile(context.Background(), tt.req)
 
 			// Assert
 			if tt.wantErr {
@@ -172,7 +163,7 @@ func TestGetUser(t *testing.T) {
 		{
 			name: "successful get user",
 			req: &dto.GetUserRequest{
-				UserID: "test-user-id",
+				ID: "test-user-id",
 			},
 			setupMocks: func(userRepo *mocks.MockUserRepository) {
 				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*dto.ParanoidOptions")).Return(testUser, nil)
@@ -186,7 +177,7 @@ func TestGetUser(t *testing.T) {
 		{
 			name: "user not found",
 			req: &dto.GetUserRequest{
-				UserID: "non-existent-id",
+				ID: "non-existent-id",
 			},
 			setupMocks: func(userRepo *mocks.MockUserRepository) {
 				userRepo.On("FindByID", mock.Anything, "non-existent-id", mock.AnythingOfType("*dto.ParanoidOptions")).Return(nil, domain.ErrUserNotFound)
@@ -197,7 +188,7 @@ func TestGetUser(t *testing.T) {
 		{
 			name: "validation error - missing user ID",
 			req: &dto.GetUserRequest{
-				UserID: "",
+				ID: "",
 			},
 			setupMocks: func(userRepo *mocks.MockUserRepository) {
 				// No mocks should be called
@@ -212,16 +203,16 @@ func TestGetUser(t *testing.T) {
 			// Setup mocks
 			userRepo := new(mocks.MockUserRepository)
 			activityRepo := new(mocks.MockActivityRepository)
-			eventBus := new(MockEventBus)
+			eventBus := new(MockEventPublisher)
 
 			tt.setupMocks(userRepo)
 
 			// Create use case
-			log := logger.NewLogger("debug", "development")
-			usecase := NewUserUseCase(userRepo, activityRepo, eventBus, log)
+			log, _ := logger.New(&logger.Config{Level: "debug", Format: "console"})
+			uc := usecase.NewUserUseCase(userRepo, activityRepo, eventBus, log)
 
 			// Execute
-			resp, err := usecase.GetUser(context.Background(), tt.req)
+			resp, err := uc.GetUser(context.Background(), tt.req)
 
 			// Assert
 			if tt.wantErr {
@@ -248,30 +239,30 @@ func TestActivateUser(t *testing.T) {
 	tests := []struct {
 		name        string
 		req         *dto.ActivateUserRequest
-		setupMocks  func(*mocks.MockUserRepository, *MockEventBus)
+		setupMocks  func(*mocks.MockUserRepository, *MockEventPublisher)
 		wantErr     bool
 		expectedErr error
 	}{
 		{
 			name: "successful activation",
 			req: &dto.ActivateUserRequest{
-				UserID: "test-user-id",
+				ID: "test-user-id",
 			},
-			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventBus) {
+			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventPublisher) {
 				inactiveUser := *testUser
 				inactiveUser.IsActive = false
 				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*dto.ParanoidOptions")).Return(&inactiveUser, nil)
 				userRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.User")).Return(nil)
-				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 			},
 			wantErr: false,
 		},
 		{
 			name: "user already active",
 			req: &dto.ActivateUserRequest{
-				UserID: "test-user-id",
+				ID: "test-user-id",
 			},
-			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventBus) {
+			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventPublisher) {
 				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*dto.ParanoidOptions")).Return(testUser, nil)
 			},
 			wantErr: false,
@@ -279,9 +270,9 @@ func TestActivateUser(t *testing.T) {
 		{
 			name: "user not found",
 			req: &dto.ActivateUserRequest{
-				UserID: "non-existent-id",
+				ID: "non-existent-id",
 			},
-			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventBus) {
+			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventPublisher) {
 				userRepo.On("FindByID", mock.Anything, "non-existent-id", mock.AnythingOfType("*dto.ParanoidOptions")).Return(nil, domain.ErrUserNotFound)
 			},
 			wantErr:     true,
@@ -294,16 +285,16 @@ func TestActivateUser(t *testing.T) {
 			// Setup mocks
 			userRepo := new(mocks.MockUserRepository)
 			activityRepo := new(mocks.MockActivityRepository)
-			eventBus := new(MockEventBus)
+			eventBus := new(MockEventPublisher)
 
 			tt.setupMocks(userRepo, eventBus)
 
 			// Create use case
-			log := logger.NewLogger("debug", "development")
-			usecase := NewUserUseCase(userRepo, activityRepo, eventBus, log)
+			log, _ := logger.New(&logger.Config{Level: "debug", Format: "console"})
+			uc := usecase.NewUserUseCase(userRepo, activityRepo, eventBus, log)
 
 			// Execute
-			err := usecase.ActivateUser(context.Background(), tt.req)
+			err := uc.ActivateUser(context.Background(), tt.req)
 
 			// Assert
 			if tt.wantErr {
@@ -327,28 +318,28 @@ func TestDeactivateUser(t *testing.T) {
 	tests := []struct {
 		name        string
 		req         *dto.DeactivateUserRequest
-		setupMocks  func(*mocks.MockUserRepository, *MockEventBus)
+		setupMocks  func(*mocks.MockUserRepository, *MockEventPublisher)
 		wantErr     bool
 		expectedErr error
 	}{
 		{
 			name: "successful deactivation",
 			req: &dto.DeactivateUserRequest{
-				UserID: "test-user-id",
+				ID: "test-user-id",
 			},
-			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventBus) {
+			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventPublisher) {
 				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*dto.ParanoidOptions")).Return(testUser, nil)
 				userRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.User")).Return(nil)
-				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 			},
 			wantErr: false,
 		},
 		{
 			name: "user already inactive",
 			req: &dto.DeactivateUserRequest{
-				UserID: "test-user-id",
+				ID: "test-user-id",
 			},
-			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventBus) {
+			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventPublisher) {
 				inactiveUser := *testUser
 				inactiveUser.IsActive = false
 				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*dto.ParanoidOptions")).Return(&inactiveUser, nil)
@@ -358,9 +349,9 @@ func TestDeactivateUser(t *testing.T) {
 		{
 			name: "user not found",
 			req: &dto.DeactivateUserRequest{
-				UserID: "non-existent-id",
+				ID: "non-existent-id",
 			},
-			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventBus) {
+			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventPublisher) {
 				userRepo.On("FindByID", mock.Anything, "non-existent-id", mock.AnythingOfType("*dto.ParanoidOptions")).Return(nil, domain.ErrUserNotFound)
 			},
 			wantErr:     true,
@@ -373,16 +364,16 @@ func TestDeactivateUser(t *testing.T) {
 			// Setup mocks
 			userRepo := new(mocks.MockUserRepository)
 			activityRepo := new(mocks.MockActivityRepository)
-			eventBus := new(MockEventBus)
+			eventBus := new(MockEventPublisher)
 
 			tt.setupMocks(userRepo, eventBus)
 
 			// Create use case
-			log := logger.NewLogger("debug", "development")
-			usecase := NewUserUseCase(userRepo, activityRepo, eventBus, log)
+			log, _ := logger.New(&logger.Config{Level: "debug", Format: "console"})
+			uc := usecase.NewUserUseCase(userRepo, activityRepo, eventBus, log)
 
 			// Execute
-			err := usecase.DeactivateUser(context.Background(), tt.req)
+			err := uc.DeactivateUser(context.Background(), tt.req)
 
 			// Assert
 			if tt.wantErr {
@@ -406,27 +397,27 @@ func TestDeleteUser(t *testing.T) {
 	tests := []struct {
 		name        string
 		req         *dto.DeleteUserRequest
-		setupMocks  func(*mocks.MockUserRepository, *MockEventBus)
+		setupMocks  func(*mocks.MockUserRepository, *MockEventPublisher)
 		wantErr     bool
 		expectedErr error
 	}{
 		{
 			name: "successful deletion",
 			req: &dto.DeleteUserRequest{
-				UserID: "test-user-id",
+				ID: "test-user-id",
 			},
-			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventBus) {
+			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventPublisher) {
 				userRepo.On("Delete", mock.Anything, "test-user-id").Return(nil)
-				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 			},
 			wantErr: false,
 		},
 		{
 			name: "user not found",
 			req: &dto.DeleteUserRequest{
-				UserID: "non-existent-id",
+				ID: "non-existent-id",
 			},
-			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventBus) {
+			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventPublisher) {
 				userRepo.On("Delete", mock.Anything, "non-existent-id").Return(domain.ErrUserNotFound)
 			},
 			wantErr:     true,
@@ -439,16 +430,16 @@ func TestDeleteUser(t *testing.T) {
 			// Setup mocks
 			userRepo := new(mocks.MockUserRepository)
 			activityRepo := new(mocks.MockActivityRepository)
-			eventBus := new(MockEventBus)
+			eventBus := new(MockEventPublisher)
 
 			tt.setupMocks(userRepo, eventBus)
 
 			// Create use case
-			log := logger.NewLogger("debug", "development")
-			usecase := NewUserUseCase(userRepo, activityRepo, eventBus, log)
+			log, _ := logger.New(&logger.Config{Level: "debug", Format: "console"})
+			uc := usecase.NewUserUseCase(userRepo, activityRepo, eventBus, log)
 
 			// Execute
-			err := usecase.DeleteUser(context.Background(), tt.req)
+			err := uc.DeleteUser(context.Background(), tt.req)
 
 			// Assert
 			if tt.wantErr {
@@ -470,21 +461,21 @@ func TestDeleteUser(t *testing.T) {
 // TestRestoreUser tests the RestoreUser use case.
 func TestRestoreUser(t *testing.T) {
 	tests := []struct {
-		name         string
-		req          *dto.RestoreUserRequest
-		setupMocks   func(*mocks.MockUserRepository, *MockEventBus)
-		wantErr      bool
-		checkResult  func(*testing.T, *dto.RestoreResponse)
+		name        string
+		req         *dto.RestoreUserRequest
+		setupMocks  func(*mocks.MockUserRepository, *MockEventPublisher)
+		wantErr     bool
+		checkResult func(*testing.T, *dto.RestoreResponse)
 	}{
 		{
 			name: "successful restoration",
 			req: &dto.RestoreUserRequest{
-				UserID: "test-user-id",
+				ID: "test-user-id",
 			},
-			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventBus) {
+			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventPublisher) {
 				userRepo.On("Restore", mock.Anything, "test-user-id").Return(nil)
 				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*dto.ParanoidOptions")).Return(testUser, nil)
-				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 			},
 			wantErr: false,
 			checkResult: func(t *testing.T, resp *dto.RestoreResponse) {
@@ -496,16 +487,12 @@ func TestRestoreUser(t *testing.T) {
 		{
 			name: "user not found",
 			req: &dto.RestoreUserRequest{
-				UserID: "non-existent-id",
+				ID: "non-existent-id",
 			},
-			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventBus) {
+			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventPublisher) {
 				userRepo.On("Restore", mock.Anything, "non-existent-id").Return(domain.ErrUserNotFound)
 			},
-			wantErr: false,
-			checkResult: func(t *testing.T, resp *dto.RestoreResponse) {
-				assert.False(t, resp.Success)
-				assert.Nil(t, resp.User)
-			},
+			wantErr: true,
 		},
 	}
 
@@ -514,16 +501,16 @@ func TestRestoreUser(t *testing.T) {
 			// Setup mocks
 			userRepo := new(mocks.MockUserRepository)
 			activityRepo := new(mocks.MockActivityRepository)
-			eventBus := new(MockEventBus)
+			eventBus := new(MockEventPublisher)
 
 			tt.setupMocks(userRepo, eventBus)
 
 			// Create use case
-			log := logger.NewLogger("debug", "development")
-			usecase := NewUserUseCase(userRepo, activityRepo, eventBus, log)
+			log, _ := logger.New(&logger.Config{Level: "debug", Format: "console"})
+			uc := usecase.NewUserUseCase(userRepo, activityRepo, eventBus, log)
 
 			// Execute
-			resp, err := usecase.RestoreUser(context.Background(), tt.req)
+			resp, err := uc.RestoreUser(context.Background(), tt.req)
 
 			// Assert
 			if tt.wantErr {
@@ -556,7 +543,7 @@ func TestGetProfile(t *testing.T) {
 		{
 			name: "successful get profile",
 			req: &dto.GetUserRequest{
-				UserID: "test-user-id",
+				ID: "test-user-id",
 			},
 			setupMocks: func(userRepo *mocks.MockUserRepository) {
 				userRepo.On("GetProfile", mock.Anything, "test-user-id").Return(testProfile, nil)
@@ -571,7 +558,7 @@ func TestGetProfile(t *testing.T) {
 		{
 			name: "profile not found",
 			req: &dto.GetUserRequest{
-				UserID: "test-user-id",
+				ID: "test-user-id",
 			},
 			setupMocks: func(userRepo *mocks.MockUserRepository) {
 				userRepo.On("GetProfile", mock.Anything, "test-user-id").Return(nil, nil)
@@ -582,7 +569,7 @@ func TestGetProfile(t *testing.T) {
 		{
 			name: "validation error - missing user ID",
 			req: &dto.GetUserRequest{
-				UserID: "",
+				ID: "",
 			},
 			setupMocks: func(userRepo *mocks.MockUserRepository) {
 				// No mocks should be called
@@ -597,16 +584,16 @@ func TestGetProfile(t *testing.T) {
 			// Setup mocks
 			userRepo := new(mocks.MockUserRepository)
 			activityRepo := new(mocks.MockActivityRepository)
-			eventBus := new(MockEventBus)
+			eventBus := new(MockEventPublisher)
 
 			tt.setupMocks(userRepo)
 
 			// Create use case
-			log := logger.NewLogger("debug", "development")
-			usecase := NewUserUseCase(userRepo, activityRepo, eventBus, log)
+			log, _ := logger.New(&logger.Config{Level: "debug", Format: "console"})
+			uc := usecase.NewUserUseCase(userRepo, activityRepo, eventBus, log)
 
 			// Execute
-			resp, err := usecase.GetProfile(context.Background(), tt.req)
+			resp, err := uc.GetProfile(context.Background(), tt.req)
 
 			// Assert
 			if tt.wantErr {
@@ -631,19 +618,17 @@ func TestGetProfile(t *testing.T) {
 // TestLogActivity tests the LogActivity use case.
 func TestLogActivity(t *testing.T) {
 	tests := []struct {
-		name        string
-		req         *dto.LogActivityRequest
-		setupMocks  func(*mocks.MockActivityRepository)
-		wantErr     bool
+		name       string
+		req        *dto.LogActivityRequest
+		setupMocks func(*mocks.MockActivityRepository)
+		wantErr    bool
 	}{
 		{
 			name: "successful log activity",
 			req: &dto.LogActivityRequest{
-				UserID:    "test-user-id",
-				Action:    "login",
-				Resource:  "auth",
-				IPAddress: "127.0.0.1",
-				UserAgent: "test-agent",
+				UserID:   "test-user-id",
+				Action:   "login",
+				Resource: "auth",
 			},
 			setupMocks: func(activityRepo *mocks.MockActivityRepository) {
 				activityRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.ActivityLog")).Return(nil)
@@ -668,16 +653,16 @@ func TestLogActivity(t *testing.T) {
 			// Setup mocks
 			userRepo := new(mocks.MockUserRepository)
 			activityRepo := new(mocks.MockActivityRepository)
-			eventBus := new(MockEventBus)
+			eventBus := new(MockEventPublisher)
 
 			tt.setupMocks(activityRepo)
 
 			// Create use case
-			log := logger.NewLogger("debug", "development")
-			usecase := NewUserUseCase(userRepo, activityRepo, eventBus, log)
+			log, _ := logger.New(&logger.Config{Level: "debug", Format: "console"})
+			uc := usecase.NewUserUseCase(userRepo, activityRepo, eventBus, log)
 
 			// Execute
-			err := usecase.LogActivity(context.Background(), tt.req)
+			err := uc.LogActivity(context.Background(), tt.req)
 
 			// Assert
 			if tt.wantErr {
