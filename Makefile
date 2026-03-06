@@ -212,24 +212,26 @@ seed:
 	$(GO) run ./cmd/seed
 
 # ═══════════════════════════════════════════════════════════════════════════
-# KUBERNETES
+# KUBERNETES (Future Development)
 # ═══════════════════════════════════════════════════════════════════════════
+# Note: Kubernetes deployment is planned for future development.
+# The following commands will be enabled when K8s support is added.
 
-# Apply Kubernetes manifests (local)
-k8s-apply-local:
-	kubectl apply -k deployments/k8s/overlays/local
+# # Apply Kubernetes manifests (local)
+# k8s-apply-local:
+# 	kubectl apply -k deployments/k8s/overlays/local
 
-# Apply Kubernetes manifests (staging)
-k8s-apply-staging:
-	kubectl apply -k deployments/k8s/overlays/staging
+# # Apply Kubernetes manifests (staging)
+# k8s-apply-staging:
+# 	kubectl apply -k deployments/k8s/overlays/staging
 
-# Apply Kubernetes manifests (production)
-k8s-apply-production:
-	kubectl apply -k deployments/k8s/overlays/production
+# # Apply Kubernetes manifests (production)
+# k8s-apply-production:
+# 	kubectl apply -k deployments/k8s/overlays/production
 
-# Delete Kubernetes resources
-k8s-delete:
-	kubectl delete -k deployments/k8s/overlays/local
+# # Delete Kubernetes resources
+# k8s-delete:
+# 	kubectl delete -k deployments/k8s/overlays/local
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CLEANUP
@@ -312,10 +314,10 @@ help:
 	@echo "  migrate-down   - Run migrations down"
 	@echo "  seed           - Seed database"
 	@echo ""
-	@echo "Kubernetes:"
-	@echo "  k8s-apply-local - Apply local K8s manifests"
-	@echo "  k8s-apply-staging - Apply staging K8s manifests"
-	@echo "  k8s-apply-production - Apply production K8s manifests"
+	@echo "Kubernetes (Future Development):"
+	@echo "  # k8s-apply-local - Apply local K8s manifests"
+	@echo "  # k8s-apply-staging - Apply staging K8s manifests"
+	@echo "  # k8s-apply-production - Apply production K8s manifests"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean          - Clean build artifacts"

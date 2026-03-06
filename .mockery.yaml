@@ -1,0 +1,118 @@
+# Mockery Configuration for go-microservices-redis-pubsub-boilerplate
+# This configuration file defines how mockery generates mock implementations
+# for interfaces across all services (auth, user, product).
+#
+# Usage:
+#   make mocks        - Generate all mocks
+#   make mock-clean   - Remove generated mock files
+#
+# Mockery Documentation: https://vektra.github.io/mockery/latest/
+
+# Global configuration options
+quiet: False
+dry-run: False
+with-expecter: True
+
+# Logging configuration
+log-level: "info"
+
+# Disable file-level log formatting for cleaner output
+disable-version-string: True
+
+# Address deprecation warnings for v3 compatibility
+resolve-type-alias: False
+issue-845-fix: True
+
+# Package-level configuration for generating mocks
+# Each entry specifies which interfaces to mock and where to place the generated files
+packages:
+
+  # Auth Service - Repository Interface
+  github.com/ignata/go-microservices-redis-pubsub-boilerplate/internal/auth/repository:
+    config:
+      dir: "{{.InterfaceDir}}/mocks"
+      outpkg: "mocks"
+      filename: "mock_{{.InterfaceNameSnake}}.go"
+      mockname: "Mock{{.InterfaceName}}"
+      include-auto-generated: True
+    interfaces:
+      UserRepository:
+        # UserRepository handles user data access including sessions
+        # Used by: AuthUseCase
+        config:
+          with-expecter: True
+
+  # Auth Service - UseCase Interface
+  github.com/ignata/go-microservices-redis-pubsub-boilerplate/internal/auth/usecase:
+    config:
+      dir: "{{.InterfaceDir}}/mocks"
+      outpkg: "mocks"
+      filename: "mock_{{.InterfaceNameSnake}}.go"
+      mockname: "Mock{{.InterfaceName}}"
+      include-auto-generated: True
+    interfaces:
+      AuthUseCase:
+        # AuthUseCase handles authentication business logic
+        # Used by: HTTP handlers
+        config:
+          with-expecter: True
+
+  # User Service - Repository Interface
+  github.com/ignata/go-microservices-redis-pubsub-boilerplate/internal/user/repository:
+    config:
+      dir: "{{.InterfaceDir}}/mocks"
+      outpkg: "mocks"
+      filename: "mock_{{.InterfaceNameSnake}}.go"
+      mockname: "Mock{{.InterfaceName}}"
+      include-auto-generated: True
+    interfaces:
+      UserRepository:
+        # UserRepository handles user data access including activity logs
+        # Used by: UserUseCase
+        config:
+          with-expecter: True
+
+  # User Service - UseCase Interface
+  github.com/ignata/go-microservices-redis-pubsub-boilerplate/internal/user/usecase:
+    config:
+      dir: "{{.InterfaceDir}}/mocks"
+      outpkg: "mocks"
+      filename: "mock_{{.InterfaceNameSnake}}.go"
+      mockname: "Mock{{.InterfaceName}}"
+      include-auto-generated: True
+    interfaces:
+      UserUseCase:
+        # UserUseCase handles user management business logic
+        # Used by: HTTP handlers
+        config:
+          with-expecter: True
+
+  # Product Service - Repository Interface
+  github.com/ignata/go-microservices-redis-pubsub-boilerplate/internal/product/repository:
+    config:
+      dir: "{{.InterfaceDir}}/mocks"
+      outpkg: "mocks"
+      filename: "mock_{{.InterfaceNameSnake}}.go"
+      mockname: "Mock{{.InterfaceName}}"
+      include-auto-generated: True
+    interfaces:
+      ProductRepository:
+        # ProductRepository handles product data access
+        # Used by: ProductUseCase
+        config:
+          with-expecter: True
+
+  # Product Service - UseCase Interface
+  github.com/ignata/go-microservices-redis-pubsub-boilerplate/internal/product/usecase:
+    config:
+      dir: "{{.InterfaceDir}}/mocks"
+      outpkg: "mocks"
+      filename: "mock_{{.InterfaceNameSnake}}.go"
+      mockname: "Mock{{.InterfaceName}}"
+      include-auto-generated: True
+    interfaces:
+      ProductUseCase:
+        # ProductUseCase handles product management business logic
+        # Used by: HTTP handlers
+        config:
+          with-expecter: True

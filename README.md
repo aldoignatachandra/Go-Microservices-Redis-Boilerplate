@@ -9,7 +9,7 @@
 
 A production-ready, high-performance microservices starter kit. Built with **Go 1.23+**, **Gin** web framework, **GORM** (PostgreSQL ORM), and **Redis Streams** for event-driven communication.
 
-This boilerplate implements the **Clean Architecture** pattern with strict layer separation (delivery → usecase → repository → domain), and uses **Redis Streams** for asynchronous inter-service communication.
+This boilerplate implements the **Clean Architecture** pattern with strict layer separation (delivery → usecase → repository → domain), and uses **Redis Streams** for lightweight, high-performance asynchronous inter-service communication.
 
 ---
 
@@ -28,15 +28,19 @@ This boilerplate implements the **Clean Architecture** pattern with strict layer
 - [API Documentation](#-api-documentation)
 - [Development](#-development)
 - [Testing](#-testing)
+- [Redis Streams & Events](#-redis-streams--events)
+- [Monitoring](#-monitoring)
 - [Deployment](#-deployment)
 - [Troubleshooting](#-troubleshooting)
+- [Standards & Best Practices](#-standards--best-practices)
+- [License](#-license)
 
 ---
 
 ## Features
 
 - **Microservices Architecture**: Independent services for Auth, User, and Product domains.
-- **Event-Driven**: Asynchronous communication via Redis Streams (durable log).
+- **Event-Driven**: Asynchronous communication via Redis Streams (durable, in-memory log).
 - **Clean Architecture**: Strict layer separation with dependency inversion.
 - **High Performance**: Built on Go with Gin (ultrafast HTTP framework).
 - **Type Safety**: Full Go type system with compile-time checks.
@@ -44,11 +48,13 @@ This boilerplate implements the **Clean Architecture** pattern with strict layer
 - **Soft Delete**: Paranoid mode for safe data recovery.
 - **Authentication**: JWT (Stateless) for API access with bcrypt password hashing.
 - **Structured Logging**: Zap logger with context-aware logging.
-- **Graceful Shutdown**: Zero-downtime deployments for Kubernetes.
+- **Graceful Shutdown**: Zero-downtime deployments with signal handling.
 - **Health Checks**: Kubernetes-ready liveness and readiness probes.
 - **Metrics**: Prometheus metrics for monitoring.
 - **Rate Limiting**: Redis-backed distributed rate limiting.
 - **Circuit Breaker**: Sony gobreaker for resilience.
+- **Hot Reload**: Air for development with live reload.
+- **Wire DI**: Google Wire for compile-time dependency injection.
 
 ---
 
@@ -64,9 +70,9 @@ graph TB
 
   subgraph API_Services
     direction TB
-    Auth[Auth Service :8080]
-    User[User Service :8081]
-    Prod[Product Service :8082]
+    Auth[Auth Service :3100]
+    User[User Service :3101]
+    Prod[Product Service :3102]
   end
 
   subgraph Infrastructure
@@ -78,18 +84,18 @@ graph TB
   Client -->|HTTP/REST| User
   Client -->|HTTP/REST| Prod
 
-  Auth -->|SQL| PG
-  User -->|SQL| PG
-  Prod -->|SQL| PG
+  Auth -->|SQL/GORM| PG
+  User -->|SQL/GORM| PG
+  Prod -->|SQL/GORM| PG
 
-  Auth <-->|Streams| Redis
-  User <-->|Streams| Redis
-  Prod <-->|Streams| Redis
+  Auth <-->|XADD/XREADGROUP| Redis
+  User <-->|XADD/XREADGROUP| Redis
+  Prod <-->|XADD/XREADGROUP| Redis
 ```
 
 ### Event-Driven Flow
 
-When a user registers, the auth service creates the user synchronously and publishes an event. Other services consume this event asynchronously.
+When a user registers, the auth service creates the user synchronously and publishes an event to Redis Streams. Other services consume this event asynchronously using consumer groups.
 
 ```mermaid
 sequenceDiagram
@@ -101,33 +107,55 @@ sequenceDiagram
 
   Note over C,A: Command Side (Write)
   C->>A: POST /auth/register
+  A->>A: Hash password (bcrypt)
   A->>D: INSERT into users table
-  A->>R: XADD "user.created" event
+  A->>R: XADD "auth:events" user.created
   A-->>C: 201 Created
 
-  Note over R,U: Async Event Processing
-  R->>U: XREADGROUP "user.created"
-  U->>U: Create user profile
-  U->>R: XACK acknowledge
+  Note over R,U: Async Event Processing (Consumer Group)
+  R->>U: XREADGROUP "auth:events"
+  U->>D: Create user profile
+  U->>R: XACK acknowledge message
 ```
 
 ### Clean Architecture Layers
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      DELIVERY LAYER (HTTP)                      │
-│  Gin handlers, middleware, routes, request/response binding     │
-├─────────────────────────────────────────────────────────────────┤
-│                      USECASE LAYER (Business Logic)             │
-│  Application services, orchestration, domain events             │
-├─────────────────────────────────────────────────────────────────┤
-│                      REPOSITORY LAYER (Data Access)             │
-│  Database operations, external API calls, cache access          │
-├─────────────────────────────────────────────────────────────────┤
-│                      DOMAIN LAYER (Core)                        │
-│  Entities, value objects, business rules, domain events         │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      DELIVERY LAYER (HTTP)                              │
+│  Gin handlers, middleware, routes, request/response binding             │
+│  Files: delivery/handler.go, delivery/routes.go                        │
+├─────────────────────────────────────────────────────────────────────────┤
+│                      USECASE LAYER (Business Logic)                     │
+│  Application services, orchestration, domain events                     │
+│  Files: usecase/service.go, usecase/interfaces.go                       │
+├─────────────────────────────────────────────────────────────────────────┤
+│                      REPOSITORY LAYER (Data Access)                     │
+│  Database operations, external API calls, cache access                  │
+│  Files: repository/repository.go, repository/interfaces.go              │
+├─────────────────────────────────────────────────────────────────────────┤
+│                      DOMAIN LAYER (Core)                                │
+│  Entities, value objects, business rules, domain events                 │
+│  Files: domain/entity.go, domain/value_objects.go                       │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Why Redis Streams?
+
+| Feature              | Redis Streams                    | Kafka                          |
+| :------------------- | :------------------------------- | :----------------------------- |
+| **Setup Complexity** | Simple (single container)        | Complex (Zookeeper + Kafka)    |
+| **Latency**          | Sub-millisecond                  | Milliseconds                   |
+| **Memory Usage**     | Low (in-memory)                  | High (disk-based)              |
+| **Persistence**      | Optional (AOF/RDB)               | Strong (log compaction)        |
+| **Consumer Groups**  | Native support                   | Native support                 |
+| **Best For**         | Lighter workloads, simpler setup | High throughput, strong durability |
+
+**Choose this boilerplate if:**
+- You want simpler infrastructure setup
+- Lower latency is critical
+- Your event volume is moderate (< 100K events/sec)
+- You prefer Redis for both caching and messaging
 
 ---
 
@@ -141,41 +169,98 @@ go-microservices-redis-pubsub-boilerplate/
 │   │   ├── wire.go                   # Wire dependency injection
 │   │   └── wire_gen.go               # Generated wire code
 │   ├── user-service/
+│   │   ├── main.go
+│   │   ├── wire.go
+│   │   └── wire_gen.go
 │   └── product-service/
+│       ├── main.go
+│       ├── wire.go
+│       └── wire_gen.go
 ├── internal/                         # Private business logic
 │   ├── auth/                         # Auth bounded context
 │   │   ├── domain/                   # Entities, value objects
+│   │   │   ├── user.go               # User entity
+│   │   │   └── session.go            # Session entity
 │   │   ├── dto/                      # Data Transfer Objects
-│   │   ├── repository/               # Data access interfaces
+│   │   │   ├── request.go            # Request DTOs
+│   │   │   └── response.go           # Response DTOs
+│   │   ├── repository/               # Data access interfaces & implementations
+│   │   │   ├── user_repository.go
+│   │   │   └── session_repository.go
 │   │   ├── usecase/                  # Business logic
+│   │   │   ├── auth_usecase.go       # Auth business logic
+│   │   │   └── interfaces.go         # Interface definitions
 │   │   └── delivery/                 # HTTP handlers
+│   │       ├── handler.go            # Gin handlers
+│   │       └── routes.go             # Route definitions
 │   ├── user/                         # User bounded context
+│   │   ├── domain/
+│   │   ├── dto/
+│   │   ├── repository/
+│   │   ├── usecase/
+│   │   └── delivery/
 │   └── product/                      # Product bounded context
+│       ├── domain/
+│       ├── dto/
+│       ├── repository/
+│       ├── usecase/
+│       └── delivery/
 ├── pkg/                              # Public shared libraries
 │   ├── config/                       # Configuration (Viper)
+│   │   └── config.go                 # Config struct & loader
 │   ├── database/                     # PostgreSQL & Redis connections
+│   │   ├── postgres.go               # GORM connection
+│   │   └── redis.go                  # Redis client
 │   ├── eventbus/                     # Redis Streams abstraction
+│   │   ├── producer.go               # Stream producer (XADD)
+│   │   ├── consumer.go               # Stream consumer (XREADGROUP)
+│   │   └── event.go                  # Event structure
 │   ├── logger/                       # Structured logging (Zap)
+│   │   └── logger.go                 # Zap logger setup
 │   ├── metrics/                      # Prometheus metrics
+│   │   └── metrics.go                # Metrics definitions
 │   ├── middleware/                   # HTTP middleware
+│   │   ├── auth.go                   # JWT middleware
+│   │   ├── ratelimit.go              # Rate limiting (Redis)
+│   │   ├── logging.go                # Request logging
+│   │   └── cors.go                   # CORS handling
 │   ├── resilience/                   # Circuit breaker, retry
+│   │   └── circuit_breaker.go        # Sony gobreaker wrapper
 │   ├── server/                       # HTTP server utilities
+│   │   └── server.go                 # Graceful shutdown
 │   └── utils/                        # Common utilities
+│       ├── hash.go                   # Bcrypt utilities
+│       └── jwt.go                    # JWT utilities
 ├── deployments/                      # Infrastructure
 │   ├── docker/                       # Dockerfiles
+│   │   ├── Dockerfile.auth
+│   │   ├── Dockerfile.user
+│   │   └── Dockerfile.product
 │   ├── docker-compose.yml            # Local development
-│   └── k8s/                          # Kubernetes manifests
+│   └── monitoring/                   # Prometheus/Grafana configs
+│       ├── prometheus.yml
+│       └── grafana/
 ├── configs/                          # Configuration files
+│   ├── local.yaml                    # Auth service config
+│   ├── user-local.yaml               # User service config
+│   └── product-local.yaml            # Product service config
 ├── scripts/                          # Build and utility scripts
-├── test/                             # Integration tests
+│   └── init-db.sql                   # Database initialization
+├── test/                             # Test utilities
+│   ├── mocks/                        # Generated mocks
+│   └── integration/                  # Integration tests
 ├── docs/                             # Documentation
 │   ├── standardization/              # Code style guides
+│   │   ├── CODE_STYLE.md
+│   │   ├── GORM_BEST_PRACTICES.md
+│   │   └── PARANOID_FUNCTIONALITY.md
 │   └── update-code-plan/             # Implementation plans
-├── go.mod
-├── go.sum
-├── Makefile
+├── go.mod                            # Go module definition
+├── go.sum                            # Go module checksums
+├── Makefile                          # Build automation
 ├── .air.toml                         # Hot reload config
 ├── .golangci.yml                     # Linter config
+├── .mockery.yaml                     # Mock generation config
 └── .env.example                      # Environment template
 ```
 
@@ -185,6 +270,8 @@ go-microservices-redis-pubsub-boilerplate/
 
 Before you begin, ensure you have the following installed:
 
+### Required
+
 1. **Go** (v1.23 or later)
    ```bash
    # macOS
@@ -193,20 +280,50 @@ Before you begin, ensure you have the following installed:
    # Linux
    wget https://go.dev/dl/go1.23.0.linux-amd64.tar.gz
    sudo tar -C /usr/local -xzf go1.23.0.linux-amd64.tar.gz
+
+   # Verify
+   go version
    ```
 
 2. **Docker & Docker Compose** (For running Redis and PostgreSQL)
+   ```bash
+   # macOS
+   brew install docker docker-compose
+
+   # Verify
+   docker --version
+   docker-compose --version
+   ```
 
 3. **Make** (For running Makefile commands)
+   ```bash
+   # macOS (usually pre-installed)
+   # Linux
+   sudo apt install build-essential
+   ```
 
-4. **Wire** (For dependency injection code generation)
+4. **PostgreSQL** (local or Docker)
+
+### Optional (Recommended)
+
+5. **Air** (Hot reload for development)
+   ```bash
+   go install github.com/air-verse/air@latest
+   ```
+
+6. **Wire** (Dependency injection code generation)
    ```bash
    go install github.com/google/wire/cmd/wire@latest
    ```
 
-5. **golangci-lint** (For linting)
+7. **golangci-lint** (For linting)
    ```bash
    go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+   ```
+
+8. **Mockery** (For mock generation)
+   ```bash
+   go install github.com/vektra/mockery/v2@latest
    ```
 
 ---
@@ -221,8 +338,16 @@ Follow these steps strictly to get the boilerplate running locally.
 git clone https://github.com/yourusername/go-microservices-redis-pubsub-boilerplate.git
 cd go-microservices-redis-pubsub-boilerplate
 
-# Install dependencies
+# Download dependencies
 make deps
+
+# Generate Wire dependency injection code
+make wire
+
+# Or manually
+go mod download
+go mod tidy
+wire gen ./cmd/...
 ```
 
 ### 2. Environment Configuration
@@ -235,17 +360,24 @@ cp .env.example .env
 
 **Critical Variables Explained:**
 
-| Variable         | Description                        | Default                           |
-| :--------------- | :--------------------------------- | :-------------------------------- |
-| `DB_HOST`        | PostgreSQL host                    | `localhost`                       |
-| `DB_PORT`        | PostgreSQL port                    | `5432`                            |
-| `DB_USER`        | Database user                      | `postgres`                        |
-| `DB_PASSWORD`    | Database password                  | `postgres`                        |
-| `DB_NAME`        | Database name                      | `auth_db` / `user_db` / `product_db` |
-| `REDIS_HOST`     | Redis host                         | `localhost`                       |
-| `REDIS_PORT`     | Redis port                         | `6379`                            |
-| `AUTH_JWT_SECRET`| Secret key for signing JWT tokens  | **Change in production!**         |
-| `LOG_LEVEL`      | Logging level                      | `debug`                           |
+| Variable                | Description                           | Default                          |
+| :---------------------- | :------------------------------------ | :------------------------------- |
+| `APP_NAME`              | Application name                      | `auth-service`                   |
+| `APP_ENV`               | Environment (local, staging, prod)    | `local`                          |
+| `SERVER_PORT`           | HTTP server port                      | `3100` (auth), `3101` (user), `3102` (product) |
+| `DB_HOST`               | PostgreSQL host                       | `localhost`                      |
+| `DB_PORT`               | PostgreSQL port                       | `5432`                           |
+| `DB_USER`               | Database user                         | `postgres`                       |
+| `DB_PASSWORD`           | Database password                     | `postgres`                       |
+| `DB_NAME`               | Database name                         | `auth_db` / `user_db` / `product_db` |
+| `REDIS_HOST`            | Redis host                            | `localhost`                      |
+| `REDIS_PORT`            | Redis port                            | `6379`                           |
+| `REDIS_PASSWORD`        | Redis password (if any)               | *(empty)*                        |
+| `STREAMS_CONSUMER_GROUP`| Consumer group name                   | `auth-service`                   |
+| `JWT_SECRET`            | Secret key for signing JWT tokens     | **Change in production!**        |
+| `JWT_EXPIRES_IN`        | Access token expiration               | `24h`                            |
+| `LOG_LEVEL`             | Logging level (debug, info, warn)     | `debug`                          |
+| `METRICS_ENABLED`       | Enable Prometheus metrics             | `true`                           |
 
 ### 3. Start Infrastructure (Redis & Postgres)
 
@@ -259,9 +391,21 @@ make docker-up
 docker-compose -f deployments/docker-compose.yml up -d postgres redis
 ```
 
-Verify services are running:
+**Verify services are running:**
+
 ```bash
 docker ps
+
+# Expected containers:
+# - postgres
+# - redis
+```
+
+**Test Redis connection:**
+
+```bash
+docker exec -it go-microservices-redis redis-cli ping
+# Expected: PONG
 ```
 
 ### 4. Database Setup
@@ -274,41 +418,41 @@ docker exec -it go-microservices-postgres psql -U postgres -c "CREATE DATABASE a
 docker exec -it go-microservices-postgres psql -U postgres -c "CREATE DATABASE user_db;"
 docker exec -it go-microservices-postgres psql -U postgres -c "CREATE DATABASE product_db;"
 
-# Run auto-migrations (GORM will create tables automatically on first run)
-# Tables are created when each service starts
+# Or use the init script
+make db-init
 ```
+
+**Note:** GORM auto-migration will create tables when each service starts for the first time.
 
 ### 5. Run Services
 
-You can run services individually or all together:
+You can run services individually in separate terminals:
 
-**Option A: Run services individually (recommended for development)**
-
+**Terminal 1 - Auth Service:**
 ```bash
-# Terminal 1 - Auth Service
-make run-auth
+make run-auth-service
 # or: go run ./cmd/auth-service
+# Service runs at http://localhost:3100
+```
 
-# Terminal 2 - User Service
-make run-user
+**Terminal 2 - User Service:**
+```bash
+make run-user-service
 # or: go run ./cmd/user-service
+# Service runs at http://localhost:3101
+```
 
-# Terminal 3 - Product Service
-make run-product
+**Terminal 3 - Product Service:**
+```bash
+make run-product-service
 # or: go run ./cmd/product-service
+# Service runs at http://localhost:3102
 ```
 
-**Option B: Run with Docker Compose**
+**Or run with hot reload (recommended for development):**
 
 ```bash
-# Start all services
-docker-compose -f deployments/docker-compose.yml --profile full up -d
-```
-
-**Option C: Run with hot reload (requires Air)**
-
-```bash
-# Install Air first
+# Install Air first (if not already)
 go install github.com/air-verse/air@latest
 
 # Run with hot reload
@@ -319,43 +463,83 @@ make dev
 
 ## API Documentation
 
-Each service exposes REST API endpoints:
+### Service Endpoints
 
-| Service     | Default Port | Base URL                | Health Check              |
-| :---------- | :----------- | :---------------------- | :------------------------ |
-| **Auth**    | 8080         | `http://localhost:8080` | `/health`, `/ready`, `/live` |
-| **User**    | 8081         | `http://localhost:8081` | `/health`, `/ready`, `/live` |
-| **Product** | 8082         | `http://localhost:8082` | `/health`, `/ready`, `/live` |
+| Service     | Port | Base URL                | Health Check              |
+| :---------- | :--- | :---------------------- | :------------------------ |
+| **Auth**    | 3100 | `http://localhost:3100` | `/health`, `/ready`, `/live` |
+| **User**    | 3101 | `http://localhost:3101` | `/health`, `/ready`, `/live` |
+| **Product** | 3102 | `http://localhost:3102` | `/health`, `/ready`, `/live` |
 
 ### Auth Service Endpoints
 
-| Method | Endpoint          | Description              | Auth |
-| :----- | :---------------- | :----------------------- | :--- |
-| POST   | `/auth/register`  | Register new user        | No   |
-| POST   | `/auth/login`     | Login user               | No   |
-| POST   | `/auth/refresh`   | Refresh access token     | No   |
-| POST   | `/auth/logout`    | Logout user              | Yes  |
-| GET    | `/auth/me`        | Get current user         | Yes  |
+| Method | Endpoint          | Description              | Auth Required |
+| :----- | :---------------- | :----------------------- | :------------ |
+| POST   | `/auth/register`  | Register new user        | No            |
+| POST   | `/auth/login`     | Login user               | No            |
+| POST   | `/auth/refresh`   | Refresh access token     | No            |
+| POST   | `/auth/logout`    | Logout user              | Yes           |
+| GET    | `/auth/me`        | Get current user         | Yes           |
+| GET    | `/health`         | Health check             | No            |
 
 ### User Service Endpoints
 
-| Method | Endpoint              | Description              | Auth |
-| :----- | :-------------------- | :----------------------- | :--- |
-| GET    | `/api/v1/users`       | List users               | Yes  |
-| GET    | `/api/v1/users/:id`   | Get user by ID           | Yes  |
-| PUT    | `/api/v1/users/:id`   | Update user              | Yes  |
-| DELETE | `/api/v1/users/:id`   | Delete user (soft)       | Yes  |
-| POST   | `/api/v1/users/:id/restore` | Restore deleted user | Yes  |
+| Method | Endpoint                | Description              | Auth Required |
+| :----- | :---------------------- | :----------------------- | :------------ |
+| GET    | `/api/v1/users`         | List users (paginated)   | Yes           |
+| GET    | `/api/v1/users/:id`     | Get user by ID           | Yes           |
+| PUT    | `/api/v1/users/:id`     | Update user              | Yes           |
+| DELETE | `/api/v1/users/:id`     | Delete user (soft)       | Yes           |
+| POST   | `/api/v1/users/:id/restore` | Restore deleted user | Yes           |
+| GET    | `/internal/v1/users/:id`| Internal user lookup     | Basic Auth    |
 
 ### Product Service Endpoints
 
-| Method | Endpoint              | Description              | Auth |
-| :----- | :-------------------- | :----------------------- | :--- |
-| GET    | `/products`           | List products            | No   |
-| GET    | `/products/:id`       | Get product by ID        | No   |
-| POST   | `/products`           | Create product           | Yes  |
-| PUT    | `/products/:id`       | Update product           | Yes  |
-| DELETE | `/products/:id`       | Delete product (soft)    | Yes  |
+| Method | Endpoint              | Description              | Auth Required |
+| :----- | :-------------------- | :----------------------- | :------------ |
+| GET    | `/products`           | List products            | No            |
+| GET    | `/products/:id`       | Get product by ID        | No            |
+| POST   | `/products`           | Create product           | Yes           |
+| PUT    | `/products/:id`       | Update product           | Yes           |
+| DELETE | `/products/:id`       | Delete product (soft)    | Yes           |
+| PUT    | `/products/:id/stock` | Update stock quantity    | Yes           |
+
+### Quick API Testing
+
+```bash
+# Register a new user
+curl -X POST http://localhost:3100/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "Password123!",
+    "name": "Test User"
+  }'
+
+# Login
+curl -X POST http://localhost:3100/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "Password123!"
+  }'
+
+# Get current user (replace TOKEN with actual JWT)
+curl http://localhost:3100/auth/me \
+  -H "Authorization: Bearer TOKEN"
+
+# Create a product
+curl -X POST http://localhost:3102/products \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer TOKEN" \
+  -d '{
+    "name": "Product Name",
+    "description": "Product Description",
+    "price": 99.99,
+    "stock": 100,
+    "sku": "SKU-001"
+  }'
+```
 
 ---
 
@@ -365,59 +549,119 @@ Each service exposes REST API endpoints:
 
 ```bash
 make help              # Show all available commands
-
-# Building
-make build             # Build all services
-make build-auth        # Build auth service only
-make build-user        # Build user service only
-make build-product     # Build product service only
-
-# Running
-make run-auth          # Run auth service
-make run-user          # Run user service
-make run-product       # Run product service
-make dev               # Run with hot reload (Air)
-
-# Testing
-make test              # Run all tests
-make test-coverage     # Run tests with coverage report
-make test-integration  # Run integration tests
-
-# Code Quality
-make fmt               # Format code
-make lint              # Run linters
-make lint-fix          # Run linters with auto-fix
-make vet               # Run go vet
-
-# Dependencies
-make deps              # Download dependencies
-make wire              # Generate Wire DI code
-
-# Docker
-make docker-up         # Start Docker containers
-make docker-down       # Stop Docker containers
-make docker-build      # Build Docker images
-
-# Cleanup
-make clean             # Clean build artifacts
 ```
 
-### Code Style
+| Command                | Description                                    |
+| :--------------------- | :--------------------------------------------- |
+| **Building**           |                                                |
+| `make build`           | Build all services                             |
+| `make build-auth-service` | Build auth service only                     |
+| `make build-user-service` | Build user service only                     |
+| `make build-product-service` | Build product service only               |
+| `make build-prod`      | Build for production (optimized)               |
+| **Running**            |                                                |
+| `make run-auth-service` | Run auth service                              |
+| `make run-user-service` | Run user service                              |
+| `make run-product-service` | Run product service                         |
+| `make dev`             | Run with hot reload (Air)                      |
+| **Testing**            |                                                |
+| `make test`            | Run all tests with race detector               |
+| `make test-coverage`   | Run tests with coverage report (business logic) |
+| `make test-integration`| Run integration tests                          |
+| **Code Quality**       |                                                |
+| `make fmt`             | Format Go code                                 |
+| `make vet`             | Run go vet                                     |
+| `make lint`            | Run golangci-lint                              |
+| `make lint-fix`        | Run linters with auto-fix                      |
+| `make security`        | Check for vulnerabilities (govulncheck)        |
+| **Dependencies**       |                                                |
+| `make deps`            | Download and tidy dependencies                 |
+| `make update-deps`     | Update all dependencies                        |
+| `make verify-deps`     | Verify dependencies                            |
+| **Code Generation**    |                                                |
+| `make wire`            | Generate Wire dependency injection             |
+| `make mocks`           | Generate mock files using mockery              |
+| `make swagger`         | Generate Swagger documentation                 |
+| **Docker**             |                                                |
+| `make docker-up`       | Start Docker containers                        |
+| `make docker-down`     | Stop Docker containers                         |
+| `make docker-build`    | Build Docker images                            |
+| `make docker-build-prod` | Build production Docker images               |
+| `make docker-logs`     | View Docker container logs                     |
+| **Database**           |                                                |
+| `make db-init`         | Initialize databases                           |
+| `make db-drop`         | Drop all databases                             |
+| `make db-reset`        | Reset all databases                            |
+| **Cleanup**            |                                                |
+| `make clean`           | Clean build artifacts                          |
+| `make clean-coverage`  | Clean only coverage files                      |
+| `make deep-clean`      | Deep clean (including cache)                   |
 
-This project follows Go's standard formatting conventions:
+### Hot Reload with Air
 
-- **Indentation**: Tabs (not spaces)
-- **Naming**: PascalCase for exported, camelCase for private
-- **Comments**: GoDoc style for exported items
-- **Error Handling**: Always handle errors explicitly
+The project includes Air configuration (`.air.toml`) for development:
 
-Run formatters and linters:
 ```bash
-make fmt               # Format code
-make lint              # Run all linters
+# Install Air
+go install github.com/air-verse/air@latest
+
+# Run with hot reload
+make dev
+
+# Air will:
+# - Watch for file changes
+# - Rebuild on changes
+# - Restart the service automatically
 ```
 
-See [docs/standardization/CODE_STYLE.md](docs/standardization/CODE_STYLE.md) for detailed guidelines.
+### Wire Dependency Injection
+
+This project uses Google Wire for compile-time dependency injection:
+
+```bash
+# Generate Wire code
+make wire
+
+# Wire generates wire_gen.go files in each cmd/*/ directory
+```
+
+**Example wire.go:**
+
+```go
+//go:build wireinject
+
+package main
+
+import (
+    "github.com/google/wire"
+)
+
+func InitializeAuthService() (*AuthService, error) {
+    wire.Build(
+        NewConfig,
+        NewDatabase,
+        NewRedisClient,
+        NewUserRepository,
+        NewAuthUsecase,
+        NewAuthHandler,
+        NewAuthService,
+    )
+    return nil, nil
+}
+```
+
+### Code Generation
+
+```bash
+# Generate mocks for testing
+make mocks
+
+# Generate Swagger documentation
+make swagger
+
+# Generate Wire DI code
+make wire
+```
 
 ---
 
@@ -426,44 +670,236 @@ See [docs/standardization/CODE_STYLE.md](docs/standardization/CODE_STYLE.md) for
 ### Run Tests
 
 ```bash
-# Run all unit tests
+# Run all unit tests with race detector
 make test
 
-# Run with coverage
+# Run with coverage (filtered for business logic)
 make test-coverage
 
 # Run specific package tests
 go test -v ./internal/auth/...
 
-# Run with race detector
-go test -race ./...
+# Run integration tests
+make test-integration
 ```
 
-### Test Structure
+### Test Coverage
 
-Tests follow the table-driven pattern:
+The `make test-coverage` command automatically filters out mocks, domain structs, and DTOs to give a true reflection of your business logic test coverage:
+
+```bash
+make test-coverage
+
+# Output:
+# total: (statements) 85.2%
+# Coverage report generated: coverage.html (Business Logic Only)
+```
+
+### Table-Driven Tests
+
+This project follows Go's table-driven test pattern:
 
 ```go
-func TestUserService_Create(t *testing.T) {
+func TestAuthService_Register(t *testing.T) {
     tests := []struct {
         name    string
-        input   CreateUserInput
+        input   dto.RegisterRequest
         wantErr bool
+        errMsg  string
     }{
         {
-            name:    "successful creation",
-            input:   CreateUserInput{Email: "test@example.com"},
+            name: "successful registration",
+            input: dto.RegisterRequest{
+                Email:    "test@example.com",
+                Password: "Password123!",
+                Name:     "Test User",
+            },
             wantErr: false,
         },
-        // more test cases...
+        {
+            name: "duplicate email",
+            input: dto.RegisterRequest{
+                Email:    "existing@example.com",
+                Password: "Password123!",
+                Name:     "Test User",
+            },
+            wantErr: true,
+            errMsg:  "email already exists",
+        },
+        {
+            name: "invalid email format",
+            input: dto.RegisterRequest{
+                Email:    "invalid-email",
+                Password: "Password123!",
+                Name:     "Test User",
+            },
+            wantErr: true,
+            errMsg:  "invalid email format",
+        },
     }
 
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
-            // test implementation
+            // Arrange
+            mockRepo := mocks.NewUserRepository(t)
+            svc := NewAuthService(mockRepo)
+
+            // Act
+            result, err := svc.Register(context.Background(), tt.input)
+
+            // Assert
+            if tt.wantErr {
+                assert.Error(t, err)
+                assert.Contains(t, err.Error(), tt.errMsg)
+            } else {
+                assert.NoError(t, err)
+                assert.NotNil(t, result)
+            }
         })
     }
 }
+```
+
+### Test Structure
+
+```
+internal/
+├── auth/
+│   ├── repository/
+│   │   ├── user_repository_test.go
+│   │   └── mocks/
+│   │       └── UserRepository.go
+│   └── usecase/
+│       └── auth_usecase_test.go
+├── user/
+│   └── usecase/
+│       └── user_usecase_test.go
+└── product/
+    └── usecase/
+        └── product_usecase_test.go
+```
+
+---
+
+## Redis Streams & Events
+
+### Stream Names
+
+| Stream             | Description                          | Producer      | Consumer      |
+| :----------------- | :----------------------------------- | :------------ | :------------ |
+| `auth:events`      | Authentication events                | Auth Service  | User Service  |
+| `users:events`     | User profile events                  | User Service  | All Services  |
+| `products:events`  | Product catalog events               | Product Service | All Services |
+| `activity:log`     | User activity tracking               | All Services  | Analytics     |
+
+### Event Structure
+
+```json
+{
+  "id": "1700000000000-0",
+  "type": "user.created",
+  "source": "auth-service",
+  "timestamp": 1699999999,
+  "payload": {
+    "user_id": "123",
+    "email": "user@example.com",
+    "name": "Test User"
+  },
+  "correlation_id": "abc-123-def"
+}
+```
+
+### Event Types
+
+| Event Type          | Stream          | Description                    |
+| :------------------ | :-------------- | :----------------------------- |
+| `user.created`      | auth:events     | New user registered            |
+| `user.login`        | auth:events     | User logged in                 |
+| `user.logout`       | auth:events     | User logged out                |
+| `profile.updated`   | users:events    | User profile updated           |
+| `product.created`   | products:events | New product added              |
+| `product.updated`   | products:events | Product details updated        |
+| `stock.updated`     | products:events | Product stock changed          |
+
+### Redis Streams Commands
+
+```bash
+# Connect to Redis CLI
+docker exec -it go-microservices-redis redis-cli
+
+# List all streams
+XRANGE auth:events - +
+
+# Read from stream (consumer group)
+XREADGROUP GROUP auth-service auth-1 STREAMS auth:events >
+
+# Acknowledge message
+XACK auth:events auth-service 1700000000000-0
+
+# Get stream info
+XINFO STREAM auth:events
+
+# Get consumer group info
+XINFO GROUPS auth:events
+```
+
+### Consumer Groups
+
+Redis Streams consumer groups provide:
+- **Message tracking**: Each message is delivered to only one consumer in the group
+- **Acknowledgment**: Messages must be explicitly acknowledged (XACK)
+- **Pending entries**: Unacknowledged messages can be reclaimed
+- **Fault tolerance**: If a consumer fails, another can claim its pending messages
+
+---
+
+## Monitoring
+
+### Prometheus Metrics
+
+Each service exposes Prometheus metrics at `/metrics`:
+
+```bash
+# Auth service metrics
+curl http://localhost:3100/metrics
+
+# Available metrics:
+# - http_requests_total
+# - http_request_duration_seconds
+# - redis_stream_messages_produced_total
+# - redis_stream_messages_consumed_total
+# - db_connections_active
+```
+
+### Grafana Dashboards
+
+Start the monitoring stack:
+
+```bash
+make docker-monitoring-up
+
+# Grafana available at http://localhost:3000
+# Default credentials: admin/admin
+```
+
+Pre-configured dashboards:
+- **Service Overview**: Request rate, latency, error rate
+- **Redis Metrics**: Stream length, consumer lag, memory usage
+- **Database Metrics**: Connection pool, query performance
+
+### Health Checks
+
+Each service provides multiple health endpoints:
+
+```bash
+# Liveness probe (is the service running?)
+curl http://localhost:3100/live
+
+# Readiness probe (is the service ready to accept traffic?)
+curl http://localhost:3100/ready
+
+# General health
+curl http://localhost:3100/health
 ```
 
 ---
@@ -473,35 +909,67 @@ func TestUserService_Create(t *testing.T) {
 ### Docker Build
 
 ```bash
-# Build all service images
+# Build all services
+make build
+
+# Build production images
+make build-prod
+
+# Build Docker images
 make docker-build
 
-# Or build specific service
-docker build -f deployments/docker/Dockerfile.auth -t auth-service:latest .
-docker build -f deployments/docker/Dockerfile.user -t user-service:latest .
-docker build -f deployments/docker/Dockerfile.product -t product-service:latest .
+# Binary outputs in bin/
+ls bin/
+# auth-service
+# user-service
+# product-service
 ```
 
-### Kubernetes Deployment
+### Docker Compose (Full Stack)
 
 ```bash
-# Apply Kubernetes manifests
-kubectl apply -f deployments/k8s/base/namespace.yaml
-kubectl apply -f deployments/k8s/base/configmap.yaml
-kubectl apply -f deployments/k8s/base/secrets.yaml
-kubectl apply -f deployments/k8s/base/
+# Start all services with Docker Compose
+docker-compose -f deployments/docker-compose.yml --profile full up -d
 ```
 
 ### Production Checklist
 
-- [ ] Change `AUTH_JWT_SECRET` to a secure random string
+- [ ] Change `JWT_SECRET` to a secure random string (256+ bits)
 - [ ] Set `LOG_FORMAT=json` for structured logging
 - [ ] Set `LOG_LEVEL=info` or `warn`
 - [ ] Configure proper database credentials
-- [ ] Enable TLS/SSL
+- [ ] Enable TLS/SSL for all services
 - [ ] Set up proper secret management (Vault, AWS Secrets Manager)
-- [ ] Configure resource limits in Kubernetes
+- [ ] Configure Redis persistence (AOF or RDB)
+- [ ] Set up database connection pooling
+- [ ] Configure resource limits
 - [ ] Set up monitoring and alerting
+- [ ] Enable distributed tracing
+
+### Environment-Specific Configuration
+
+```bash
+# Local development
+APP_ENV=local
+
+# Staging
+APP_ENV=staging
+
+# Production
+APP_ENV=production
+```
+
+### Kubernetes (Future Development)
+
+> **Note:** Kubernetes deployment is planned for future development. The following is a reference for when K8s support is added.
+
+```bash
+# Future: Apply Kubernetes manifests
+# kubectl apply -f deployments/k8s/
+
+# Future: Kustomize overlays
+# kubectl apply -k deployments/k8s/overlays/production
+```
 
 ---
 
@@ -509,28 +977,69 @@ kubectl apply -f deployments/k8s/base/
 
 | Issue                               | Possible Cause                          | Solution                                              |
 | :---------------------------------- | :-------------------------------------- | :---------------------------------------------------- |
-| **Connection Refused (PostgreSQL)** | PostgreSQL not running                  | Run `make docker-up` and check `docker ps`            |
 | **Connection Refused (Redis)**      | Redis container not running             | Run `make docker-up` and check `docker ps`            |
-| **Relation does not exist**         | Database not created                    | Create database manually or restart service           |
+| **Connection Refused (PostgreSQL)** | PostgreSQL not running                  | Start PostgreSQL or run via Docker                    |
+| **Relation does not exist**         | Database not created                    | Run `make db-init` to create databases                |
 | **401 Unauthorized**                | Invalid or expired JWT token            | Refresh token or login again                          |
-| **Wire generation failed**          | Wire not installed                      | Run `go install github.com/google/wire/cmd/wire@latest` |
+| **Consumer group not found**        | Stream doesn't exist yet                | Publish first event or create group manually          |
+| **Slow API response**               | Database connection pool exhausted      | Increase `DB_MAX_OPEN_CONNS`                          |
+| **Rate limit exceeded**             | Too many requests                       | Wait or increase `RATE_LIMIT_REQUESTS`                |
 | **Module not found**                | Dependencies not downloaded             | Run `make deps` or `go mod download`                  |
+| **Wire generation failed**          | Wire not installed                      | Run `go install github.com/google/wire/cmd/wire@latest` |
+| **Hot reload not working**          | Air not installed                       | Run `go install github.com/air-verse/air@latest`      |
 
----
+### Debug Mode
 
-## Service-Specific Documentation
+Enable debug logging:
 
-- [Auth Service README](cmd/auth-service/README.md)
-- [User Service README](cmd/user-service/README.md)
-- [Product Service README](cmd/product-service/README.md)
+```bash
+# In .env
+LOG_LEVEL=debug
+LOG_FORMAT=console
+```
+
+### Check Redis Status
+
+```bash
+# Check Redis is running
+docker ps | grep redis
+
+# Test connection
+docker exec -it go-microservices-redis redis-cli ping
+
+# Check streams
+docker exec -it go-microservices-redis redis-cli KEYS "*:events"
+
+# Monitor Redis commands (real-time)
+docker exec -it go-microservices-redis redis-cli MONITOR
+```
+
+### Reset Redis Streams
+
+```bash
+# Delete all streams (development only!)
+docker exec -it go-microservices-redis redis-cli DEL auth:events users:events products:events
+```
 
 ---
 
 ## Standards & Best Practices
 
-- [Code Style Guide](docs/standardization/CODE_STYLE.md)
-- [GORM Best Practices](docs/standardization/GORM_BEST_PRACTICES.md)
-- [Paranoid (Soft Delete) Functionality](docs/standardization/PARANOID_FUNCTIONALITY.md)
+This project follows Go best practices and includes detailed documentation:
+
+- [Code Style Guide](docs/standardization/CODE_STYLE.md) - Go formatting conventions
+- [GORM Best Practices](docs/standardization/GORM_BEST_PRACTICES.md) - Database patterns
+- [Paranoid (Soft Delete) Functionality](docs/standardization/PARANOID_FUNCTIONALITY.md) - Soft delete implementation
+
+### Go Best Practices Applied
+
+- **Error Handling**: Explicit error handling with wrapped errors (`fmt.Errorf("%w", err)`)
+- **Context Propagation**: All blocking operations accept `context.Context`
+- **Interface Segregation**: Small, focused interfaces
+- **Dependency Injection**: Wire for compile-time DI
+- **Table-Driven Tests**: Standard Go testing pattern
+- **Structured Logging**: Zap logger with context fields
+- **Graceful Shutdown**: Signal handling for clean termination
 
 ---
 
