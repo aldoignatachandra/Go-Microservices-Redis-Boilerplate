@@ -57,7 +57,10 @@ func (r *gormProductRepository) Create(ctx context.Context, product *domain.Prod
 
 // Update updates an existing product.
 func (r *gormProductRepository) Update(ctx context.Context, product *domain.Product) error {
-	result := r.db.WithContext(ctx).Save(product)
+	result := r.db.WithContext(ctx).
+		Model(&domain.Product{}).
+		Where("id = ?", product.ID).
+		Updates(product)
 	if result.Error != nil {
 		return fmt.Errorf("failed to update product: %w", result.Error)
 	}
@@ -160,7 +163,8 @@ func (r *gormProductRepository) FindAll(ctx context.Context, req *dto.ListProduc
 		query = query.Where("status = ?", req.Status)
 	}
 	if req.Search != "" {
-		query = query.Where("name ILIKE ?", "%"+req.Search+"%")
+		// Use LIKE for SQLite compatibility (case-insensitive for ASCII)
+		query = query.Where("name LIKE ?", "%"+req.Search+"%")
 	}
 
 	// Count total

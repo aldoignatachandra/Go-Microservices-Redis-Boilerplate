@@ -214,15 +214,30 @@ func (h *Handler) RestoreProduct(c *gin.Context) {
 // @Failure 404 {object} utils.Response
 // @Router /products/{id}/stock [put]
 func (h *Handler) UpdateStock(c *gin.Context) {
-	var req dto.UpdateStockRequest
-	if err := c.ShouldBindUri(&req); err != nil {
+	// Extract ID from URI params
+	type URIParams struct {
+		ID string `uri:"id" binding:"required,uuid"`
+	}
+	var uriParams URIParams
+	if err := c.ShouldBindUri(&uriParams); err != nil {
 		utils.BadRequest(c, "Invalid product ID", err.Error())
 		return
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	// Bind JSON body - use a separate struct without ID for JSON binding
+	type JSONBody struct {
+		Stock int `json:"stock" binding:"required,gt=-1"`
+	}
+	var jsonBody JSONBody
+	if err := c.ShouldBindJSON(&jsonBody); err != nil {
 		utils.BadRequest(c, "Invalid request body", err.Error())
 		return
+	}
+
+	// Create the request with both ID from URI and stock from JSON
+	req := dto.UpdateStockRequest{
+		ID:    uriParams.ID,
+		Stock: jsonBody.Stock,
 	}
 
 	response, err := h.productUseCase.UpdateStock(c.Request.Context(), &req)
@@ -237,12 +252,13 @@ func (h *Handler) UpdateStock(c *gin.Context) {
 // handleError handles errors and sends appropriate responses.
 func (h *Handler) handleError(c *gin.Context, err error) {
 	switch {
+	case err == domain.ErrProductNameAlreadyUsed:
+		// Check for conflict first, before validation error
+		utils.Conflict(c, "Product name already in use")
 	case domain.IsNotFoundError(err):
 		utils.NotFound(c, "Product")
 	case domain.IsValidationError(err):
 		utils.ValidationError(c, err.Error())
-	case err == domain.ErrProductNameAlreadyUsed:
-		utils.Conflict(c, "Product name already in use")
 	default:
 		utils.InternalError(c, "An unexpected error occurred")
 	}

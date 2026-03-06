@@ -3,7 +3,6 @@ package delivery
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
 	"github.com/ignata/go-microservices-boilerplate/internal/auth/dto"
 	"github.com/ignata/go-microservices-boilerplate/internal/auth/domain"
@@ -340,13 +339,9 @@ func (h *Handler) handleError(c *gin.Context, err error) {
 		utils.Conflict(c, "Email already in use")
 	case err == domain.ErrUserDeleted:
 		utils.Gone(c, "User")
+	case err == domain.ErrUserInactive:
+		utils.Unauthorized(c, "User account is inactive")
 	default:
 		utils.InternalError(c, "An unexpected error occurred")
 	}
-}
-
-// isValidUUID checks if a string is a valid UUID.
-func isValidUUID(s string) bool {
-	_, err := uuid.Parse(s)
-	return err == nil
 }

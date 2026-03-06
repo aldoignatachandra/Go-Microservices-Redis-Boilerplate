@@ -84,6 +84,10 @@ func (p *Product) IncreaseStock(amount int) error {
 
 // BeforeCreate is a GORM hook that runs before creating a product.
 func (p *Product) BeforeCreate(tx *gorm.DB) error {
+	// Generate ID if empty (this handles cases where Model.BeforeCreate might not be called)
+	if p.ID == "" {
+		p.ID = uuid.New().String()
+	}
 	now := time.Now().UTC()
 	p.CreatedAt = now
 	p.UpdatedAt = now

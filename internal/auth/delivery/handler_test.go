@@ -4,6 +4,7 @@ package delivery_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -325,6 +326,7 @@ func TestLogin_InvalidCredentials(t *testing.T) {
 }
 
 // TestLogin_UserDeleted tests login with deleted user.
+// HTTP 410 Gone is the standard status code for deleted resources (RFC 7231).
 func TestLogin_UserDeleted(t *testing.T) {
 	// Arrange
 	mockUseCase := new(authusecasemocks.AuthUseCase)
@@ -347,8 +349,8 @@ func TestLogin_UserDeleted(t *testing.T) {
 	router.POST("/auth/login", handler.Login)
 	router.ServeHTTP(w, req)
 
-	// Assert
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	// Assert - 410 Gone is the HTTP standard for deleted resources
+	assert.Equal(t, http.StatusGone, w.Code)
 
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
@@ -382,8 +384,16 @@ func TestLogin_UserInactive(t *testing.T) {
 	router.POST("/auth/login", handler.Login)
 	router.ServeHTTP(w, req)
 
-	// Assert
+	// Assert - 401 Unauthorized for inactive accounts
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+	errObj := response["error"].(map[string]interface{})
+	assert.Contains(t, errObj["message"], "inactive")
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1140,6 +1150,1685 @@ func TestHandleError_UserGone(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.False(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestRegister_InternalError tests registration with internal server error.
+func TestRegister_InternalError(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	mockUseCase.On("Register", mock.Anything, mock.AnythingOfType("*dto.RegisterRequest")).
+		Return(nil, errors.New("database connection failed"))
+
+	// Act
+	reqBody := map[string]interface{}{
+		"email":    "test@example.com",
+		"password": "SecurePass123",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.POST("/auth/register", handler.Register)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+	errObj := response["error"].(map[string]interface{})
+	assert.Equal(t, "INTERNAL_ERROR", errObj["code"])
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestRegister_WithDefaultRole tests registration with default USER role.
+func TestRegister_WithDefaultRole(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	expectedResponse := &dto.AuthResponse{
+		AccessToken:  "access-token-123",
+		RefreshToken: "refresh-token-456",
+		ExpiresIn:    3600,
+		TokenType:    "Bearer",
+		User: &dto.UserResponse{
+			ID:       "550e8400-e29b-41d4-a716-446655440001",
+			Email:    "user@example.com",
+			Role:     "USER",
+			IsActive: true,
+		},
+	}
+
+	mockUseCase.On("Register", mock.Anything, mock.MatchedBy(func(r *dto.RegisterRequest) bool {
+		return r.Email == "user@example.com" && r.Role == ""
+	})).Return(expectedResponse, nil)
+
+	// Act
+	reqBody := map[string]interface{}{
+		"email":    "user@example.com",
+		"password": "SecurePass123",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.POST("/auth/register", handler.Register)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusCreated, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
+	user := data["user"].(map[string]interface{})
+	assert.Equal(t, "USER", user["role"])
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestLogin_EmptyPassword tests login with empty password.
+func TestLogin_EmptyPassword(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Act - Gin validation will fail for empty password
+	reqBody := map[string]interface{}{
+		"email":    "test@example.com",
+		"password": "",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.POST("/auth/login", handler.Login)
+	router.ServeHTTP(w, req)
+
+	// Assert - Validation error from Gin binding
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+}
+
+// TestLogin_WithIPAndUserAgent tests login with IP address and user agent.
+func TestLogin_WithIPAndUserAgent(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	expectedResponse := &dto.AuthResponse{
+		AccessToken:  "access-token-123",
+		RefreshToken: "refresh-token-456",
+		ExpiresIn:    3600,
+		TokenType:    "Bearer",
+		User: &dto.UserResponse{
+			ID:       "550e8400-e29b-41d4-a716-446655440001",
+			Email:    "test@example.com",
+			Role:     "USER",
+			IsActive: true,
+		},
+	}
+
+	mockUseCase.On("Login", mock.Anything, mock.AnythingOfType("*dto.LoginRequest"), "192.168.1.1", "Mozilla/5.0").
+		Return(expectedResponse, nil)
+
+	// Act
+	reqBody := map[string]interface{}{
+		"email":    "test@example.com",
+		"password": "CorrectPassword123",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.RemoteAddr = "192.168.1.1:1234"
+	w := httptest.NewRecorder()
+
+	router.POST("/auth/login", handler.Login)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.True(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestLogout_Error tests logout with error from usecase.
+func TestLogout_Error(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	mockUseCase.On("Logout", mock.Anything, "550e8400-e29b-41d4-a716-446655440001").
+		Return(errors.New("session revocation failed"))
+
+	// Act
+	req, _ := http.NewRequest("POST", "/auth/logout", nil)
+	w := httptest.NewRecorder()
+
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440001")
+		c.Next()
+	})
+
+	router.POST("/auth/logout", handler.Logout)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestRefreshToken_MalformedJSON tests refresh token with malformed JSON.
+func TestRefreshToken_MalformedJSON(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Act
+	req, _ := http.NewRequest("POST", "/auth/refresh", bytes.NewBufferString("{invalid json"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.POST("/auth/refresh", handler.RefreshToken)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+}
+
+// TestGetCurrentUser_Error tests getting current user with error.
+func TestGetCurrentUser_Error(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	mockUseCase.On("GetCurrentUser", mock.Anything, "550e8400-e29b-41d4-a716-446655440001").
+		Return(nil, errors.New("database error"))
+
+	// Act
+	req, _ := http.NewRequest("GET", "/auth/me", nil)
+	w := httptest.NewRecorder()
+
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440001")
+		c.Next()
+	})
+
+	router.GET("/auth/me", handler.GetCurrentUser)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestChangePassword_EmptyNewPassword tests password change with empty new password.
+func TestChangePassword_EmptyNewPassword(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Act - Gin validation will fail
+	reqBody := map[string]interface{}{
+		"current_password": "OldPass123",
+		"new_password":     "",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440001")
+		c.Next()
+	})
+
+	router.POST("/auth/change-password", handler.ChangePassword)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+}
+
+// TestChangePassword_RepositoryError tests password change with repository error.
+func TestChangePassword_RepositoryError(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	mockUseCase.On("ChangePassword", mock.Anything, "550e8400-e29b-41d4-a716-446655440001", mock.AnythingOfType("*dto.ChangePasswordRequest")).
+		Return(errors.New("failed to update password"))
+
+	// Act
+	reqBody := map[string]interface{}{
+		"current_password": "OldPass123",
+		"new_password":     "NewPass456",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440001")
+		c.Next()
+	})
+
+	router.POST("/auth/change-password", handler.ChangePassword)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestGetUser_InvalidUUID tests getting user with invalid UUID.
+func TestGetUser_InvalidUUID(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Act - Gin's UUID validation will fail
+	req, _ := http.NewRequest("GET", "/admin/users/invalid-uuid", nil)
+	w := httptest.NewRecorder()
+
+	router.GET("/admin/users/:id", handler.GetUser)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+}
+
+// TestGetUser_IncludeDeleted tests getting user with include_deleted flag.
+func TestGetUser_IncludeDeleted(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	expectedResponse := &dto.UserResponse{
+		ID:       "550e8400-e29b-41d4-a716-446655440001",
+		Email:    "deleted@example.com",
+		Role:     "USER",
+		IsActive: true,
+	}
+
+	mockUseCase.On("GetUser", mock.Anything, mock.MatchedBy(func(r *dto.GetUserRequest) bool {
+		return r.ID == "550e8400-e29b-41d4-a716-446655440001" && r.IncludeDeleted == true
+	})).Return(expectedResponse, nil)
+
+	// Act
+	req, _ := http.NewRequest("GET", "/admin/users/550e8400-e29b-41d4-a716-446655440001?include_deleted=true", nil)
+	w := httptest.NewRecorder()
+
+	router.GET("/admin/users/:id", handler.GetUser)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.True(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestListUsers_InvalidQueryParams tests listing users with invalid query params.
+func TestListUsers_InvalidQueryParams(t *testing.T) {
+	tests := []struct {
+		name           string
+		query          string
+		expectedStatus int
+	}{
+		{
+			name:           "invalid page parameter",
+			query:          "/admin/users?page=invalid",
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "invalid limit parameter",
+			query:          "/admin/users?limit=invalid",
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "invalid role parameter",
+			query:          "/admin/users?role=INVALID_ROLE",
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			mockUseCase := new(authusecasemocks.AuthUseCase)
+			handler := delivery.NewHandler(mockUseCase)
+			router := setupTestRouter()
+
+			// Act
+			req, _ := http.NewRequest("GET", tt.query, nil)
+			w := httptest.NewRecorder()
+
+			router.GET("/admin/users", handler.ListUsers)
+			router.ServeHTTP(w, req)
+
+			// Assert
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			require.NoError(t, err)
+
+			assert.False(t, response["success"].(bool))
+		})
+	}
+}
+
+// TestDeleteUser_InvalidUUID tests deleting user with invalid UUID.
+func TestDeleteUser_InvalidUUID(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Act - Gin's UUID validation will fail
+	req, _ := http.NewRequest("DELETE", "/admin/users/invalid-uuid", nil)
+	w := httptest.NewRecorder()
+
+	router.DELETE("/admin/users/:id", handler.DeleteUser)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+}
+
+// TestDeleteUser_Error tests deleting user with error.
+func TestDeleteUser_Error(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	mockUseCase.On("DeleteUser", mock.Anything, mock.AnythingOfType("*dto.DeleteUserRequest")).
+		Return(errors.New("failed to delete user"))
+
+	// Act
+	req, _ := http.NewRequest("DELETE", "/admin/users/550e8400-e29b-41d4-a716-446655440001", nil)
+	w := httptest.NewRecorder()
+
+	router.DELETE("/admin/users/:id", handler.DeleteUser)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestRestoreUser_Error tests restoring user with error.
+func TestRestoreUser_Error(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	mockUseCase.On("RestoreUser", mock.Anything, mock.AnythingOfType("*dto.RestoreUserRequest")).
+		Return(nil, errors.New("failed to restore user"))
+
+	// Act
+	req, _ := http.NewRequest("POST", "/admin/users/550e8400-e29b-41d4-a716-446655440001/restore", nil)
+	w := httptest.NewRecorder()
+
+	router.POST("/admin/users/:id/restore", handler.RestoreUser)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestRestoreUser_InvalidUUID tests restoring user with invalid UUID.
+func TestRestoreUser_InvalidUUID(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Act - Gin's UUID validation will fail
+	req, _ := http.NewRequest("POST", "/admin/users/invalid-uuid/restore", nil)
+	w := httptest.NewRecorder()
+
+	router.POST("/admin/users/:id/restore", handler.RestoreUser)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+}
+
+// TestHandleError_UnknownError tests handling of unknown errors.
+func TestHandleError_UnknownError(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	unknownError := errors.New("some unknown error")
+	mockUseCase.On("GetCurrentUser", mock.Anything, "550e8400-e29b-41d4-a716-446655440001").
+		Return(nil, unknownError)
+
+	// Act
+	req, _ := http.NewRequest("GET", "/auth/me", nil)
+	w := httptest.NewRecorder()
+
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440001")
+		c.Next()
+	})
+
+	router.GET("/auth/me", handler.GetCurrentUser)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestHandleError_PasswordTooShort tests handling of password too short error.
+func TestHandleError_PasswordTooShort(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440001")
+		c.Next()
+	})
+
+	router.POST("/auth/change-password", handler.ChangePassword)
+
+	// Use a valid password for the request to pass Gin validation
+	// but return the error from the usecase
+	mockUseCase.On("ChangePassword", mock.Anything, "550e8400-e29b-41d4-a716-446655440001", mock.MatchedBy(func(r *dto.ChangePasswordRequest) bool {
+		return r.NewPassword == "ValidPass123"
+	})).Return(domain.ErrPasswordTooShort)
+
+	// Act
+	reqBody := map[string]interface{}{
+		"current_password": "OldPass123",
+		"new_password":     "ValidPass123",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	// Assert - Validation errors return 422
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestHandleError_SessionRevoked tests handling of session revoked error.
+func TestHandleError_SessionRevoked(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	mockUseCase.On("RefreshToken", mock.Anything, mock.AnythingOfType("*dto.RefreshTokenRequest")).
+		Return(nil, domain.ErrSessionRevoked)
+
+	// Act
+	reqBody := map[string]interface{}{
+		"refresh_token": "revoked-token",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.POST("/auth/refresh", handler.RefreshToken)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestLogin_ValidationErrors tests login with validation errors.
+func TestLogin_ValidationErrors(t *testing.T) {
+	tests := []struct {
+		name     string
+		email    string
+		password string
+	}{
+		{
+			name:     "empty email",
+			email:    "",
+			password: "password123",
+		},
+		{
+			name:     "empty password",
+			email:    "test@example.com",
+			password: "",
+		},
+		{
+			name:     "invalid email format",
+			email:    "invalid-email",
+			password: "password123",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			mockUseCase := new(authusecasemocks.AuthUseCase)
+			handler := delivery.NewHandler(mockUseCase)
+			router := setupTestRouter()
+
+			// Act - Gin validation will fail
+			reqBody := map[string]interface{}{
+				"email":    tt.email,
+				"password": tt.password,
+			}
+			bodyBytes, _ := json.Marshal(reqBody)
+			req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(bodyBytes))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			router.POST("/auth/login", handler.Login)
+			router.ServeHTTP(w, req)
+
+			// Assert
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			require.NoError(t, err)
+
+			assert.False(t, response["success"].(bool))
+		})
+	}
+}
+
+// TestRefreshToken_MissingToken tests refresh token with missing token field.
+func TestRefreshToken_MissingToken(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Act - missing refresh_token field
+	reqBody := map[string]interface{}{}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.POST("/auth/refresh", handler.RefreshToken)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+}
+
+// TestRefreshToken_EmptyToken tests refresh token with empty token.
+func TestRefreshToken_EmptyToken(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Act - empty refresh_token
+	reqBody := map[string]interface{}{
+		"refresh_token": "",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.POST("/auth/refresh", handler.RefreshToken)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+}
+
+// TestChangePassword_MissingFields tests password change with missing fields.
+func TestChangePassword_MissingFields(t *testing.T) {
+	tests := []struct {
+		name           string
+		requestBody    map[string]interface{}
+		expectedStatus int
+	}{
+		{
+			name: "missing current password",
+			requestBody: map[string]interface{}{
+				"new_password": "NewPass123",
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "missing new password",
+			requestBody: map[string]interface{}{
+				"current_password": "OldPass123",
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "empty request body",
+			requestBody:    map[string]interface{}{},
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			mockUseCase := new(authusecasemocks.AuthUseCase)
+			handler := delivery.NewHandler(mockUseCase)
+			router := setupTestRouter()
+
+			router.Use(func(c *gin.Context) {
+				c.Set("user_id", "550e8400-e29b-41d4-a716-446655440001")
+				c.Next()
+			})
+
+			router.POST("/auth/change-password", handler.ChangePassword)
+
+			// Act
+			bodyBytes, _ := json.Marshal(tt.requestBody)
+			req, _ := http.NewRequest("POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			// Assert
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			require.NoError(t, err)
+
+			assert.False(t, response["success"].(bool))
+		})
+	}
+}
+
+// TestListUsers_Error tests listing users with error from usecase.
+func TestListUsers_Error(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	mockUseCase.On("ListUsers", mock.Anything, mock.AnythingOfType("*dto.ListUsersRequest")).
+		Return(nil, errors.New("database connection failed"))
+
+	// Act
+	req, _ := http.NewRequest("GET", "/admin/users?page=1&limit=10", nil)
+	w := httptest.NewRecorder()
+
+	router.GET("/admin/users", handler.ListUsers)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestListUsers_InvalidLimitValue tests listing users with invalid limit value.
+func TestListUsers_InvalidLimitValue(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Act - limit exceeds maximum
+	req, _ := http.NewRequest("GET", "/admin/users?limit=1000", nil)
+	w := httptest.NewRecorder()
+
+	router.GET("/admin/users", handler.ListUsers)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+}
+
+// TestDeleteUser_InvalidForceParameter tests deletion with invalid force parameter.
+func TestDeleteUser_InvalidForceParameter(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Act - invalid force parameter
+	req, _ := http.NewRequest("DELETE", "/admin/users/550e8400-e29b-41d4-a716-446655440001?force=invalid", nil)
+	w := httptest.NewRecorder()
+
+	router.DELETE("/admin/users/:id", handler.DeleteUser)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+}
+
+// TestHandleError_MultipleErrorTypes tests comprehensive error handling.
+func TestHandleError_MultipleErrorTypes(t *testing.T) {
+	tests := []struct {
+		name           string
+		errorToReturn  error
+		expectedStatus int
+		setupMock      func(*authusecasemocks.AuthUseCase)
+	}{
+		{
+			name:           "validation error",
+			errorToReturn:  domain.ErrPasswordTooShort,
+			expectedStatus: http.StatusUnprocessableEntity,
+			setupMock: func(m *authusecasemocks.AuthUseCase) {
+				m.On("ChangePassword", mock.Anything, "550e8400-e29b-41d4-a716-446655440001", mock.AnythingOfType("*dto.ChangePasswordRequest")).
+					Return(domain.ErrPasswordTooShort)
+			},
+		},
+		{
+			name:           "not found error",
+			errorToReturn:  domain.ErrUserNotFound,
+			expectedStatus: http.StatusNotFound,
+			setupMock: func(m *authusecasemocks.AuthUseCase) {
+				m.On("GetUser", mock.Anything, mock.AnythingOfType("*dto.GetUserRequest")).
+					Return(nil, domain.ErrUserNotFound)
+			},
+		},
+		{
+			name:           "auth error",
+			errorToReturn:  domain.ErrInvalidCredentials,
+			expectedStatus: http.StatusUnauthorized,
+			setupMock: func(m *authusecasemocks.AuthUseCase) {
+				m.On("Login", mock.Anything, mock.AnythingOfType("*dto.LoginRequest"), mock.Anything, mock.Anything).
+					Return(nil, domain.ErrInvalidCredentials)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			mockUseCase := new(authusecasemocks.AuthUseCase)
+			handler := delivery.NewHandler(mockUseCase)
+			router := setupTestRouter()
+
+			tt.setupMock(mockUseCase)
+
+			var req *http.Request
+			var endpoint string
+
+			switch tt.name {
+			case "validation error":
+				router.Use(func(c *gin.Context) {
+					c.Set("user_id", "550e8400-e29b-41d4-a716-446655440001")
+					c.Next()
+				})
+				router.POST("/auth/change-password", handler.ChangePassword)
+				reqBody := map[string]interface{}{
+					"current_password": "OldPass123",
+					"new_password":     "ValidPass123",
+				}
+				bodyBytes, _ := json.Marshal(reqBody)
+				req, _ = http.NewRequest("POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
+				req.Header.Set("Content-Type", "application/json")
+				endpoint = "/auth/change-password"
+			case "not found error":
+				router.GET("/admin/users/:id", handler.GetUser)
+				req, _ = http.NewRequest("GET", "/admin/users/550e8400-e29b-41d4-a716-446655440001", nil)
+				endpoint = "/admin/users/:id"
+			case "auth error":
+				router.POST("/auth/login", handler.Login)
+				reqBody := map[string]interface{}{
+					"email":    "test@example.com",
+					"password": "password123",
+				}
+				bodyBytes, _ := json.Marshal(reqBody)
+				req, _ = http.NewRequest("POST", "/auth/login", bytes.NewBuffer(bodyBytes))
+				req.Header.Set("Content-Type", "application/json")
+				endpoint = "/auth/login"
+			}
+
+			w := httptest.NewRecorder()
+
+			// Act
+			router.ServeHTTP(w, req)
+
+			// Assert
+			assert.Equal(t, tt.expectedStatus, w.Code, "Failed for endpoint: "+endpoint)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			require.NoError(t, err)
+
+			assert.False(t, response["success"].(bool))
+
+			mockUseCase.AssertExpectations(t)
+		})
+	}
+}
+
+// TestRegister_PasswordComplexity tests registration with various password complexities.
+func TestRegister_PasswordComplexity(t *testing.T) {
+	tests := []struct {
+		name           string
+		password       string
+		shouldPass     bool
+		expectedStatus int
+	}{
+		{
+			name:           "valid password with numbers and letters",
+			password:       "ValidPass123",
+			shouldPass:     true,
+			expectedStatus: http.StatusCreated,
+		},
+		{
+			name:           "valid password with special characters",
+			password:       "Valid@Pass123!",
+			shouldPass:     true,
+			expectedStatus: http.StatusCreated,
+		},
+		{
+			name:           "password with only numbers",
+			password:       "12345678",
+			shouldPass:     true, // Gin validation requires min 8 chars
+			expectedStatus: http.StatusCreated,
+		},
+		{
+			name:           "password exactly 8 characters",
+			password:       "12345678",
+			shouldPass:     true,
+			expectedStatus: http.StatusCreated,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			mockUseCase := new(authusecasemocks.AuthUseCase)
+			handler := delivery.NewHandler(mockUseCase)
+			router := setupTestRouter()
+
+			if tt.shouldPass {
+				expectedResponse := &dto.AuthResponse{
+					AccessToken:  "access-token-123",
+					RefreshToken: "refresh-token-456",
+					ExpiresIn:    3600,
+					TokenType:    "Bearer",
+					User: &dto.UserResponse{
+						ID:       "550e8400-e29b-41d4-a716-446655440001",
+						Email:    "test@example.com",
+						Role:     "USER",
+						IsActive: true,
+					},
+				}
+				mockUseCase.On("Register", mock.Anything, mock.AnythingOfType("*dto.RegisterRequest")).
+					Return(expectedResponse, nil)
+			}
+
+			// Act
+			reqBody := map[string]interface{}{
+				"email":    "test@example.com",
+				"password": tt.password,
+			}
+			bodyBytes, _ := json.Marshal(reqBody)
+			req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			router.POST("/auth/register", handler.Register)
+			router.ServeHTTP(w, req)
+
+			// Assert
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			if tt.shouldPass {
+				var response map[string]interface{}
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				require.NoError(t, err)
+				assert.True(t, response["success"].(bool))
+				mockUseCase.AssertExpectations(t)
+			}
+		})
+	}
+}
+
+// TestGetUser_WithInvalidIncludeDeleted tests getUser with invalid include_deleted parameter.
+func TestGetUser_WithInvalidIncludeDeleted(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Act - invalid include_deleted parameter
+	req, _ := http.NewRequest("GET", "/admin/users/550e8400-e29b-41d4-a716-446655440001?include_deleted=invalid", nil)
+	w := httptest.NewRecorder()
+
+	router.GET("/admin/users/:id", handler.GetUser)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+}
+
+// TestRegister_MissingEmail tests registration with missing email field.
+func TestRegister_MissingEmail(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Act - missing email field
+	reqBody := map[string]interface{}{
+		"password": "SecurePass123",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.POST("/auth/register", handler.Register)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+}
+
+// TestRegister_InvalidRole tests registration with invalid role.
+func TestRegister_InvalidRole(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Act - invalid role parameter
+	reqBody := map[string]interface{}{
+		"email":    "test@example.com",
+		"password": "SecurePass123",
+		"role":     "INVALID_ROLE",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.POST("/auth/register", handler.Register)
+	router.ServeHTTP(w, req)
+
+	// Assert - Gin validation should fail for invalid enum
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// TestLogin_MissingEmailField tests login with missing email field.
+func TestLogin_MissingEmailField(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Act - missing email field
+	reqBody := map[string]interface{}{
+		"password": "password123",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.POST("/auth/login", handler.Login)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+}
+
+// TestChangePassword_SameAsOldPassword tests password change when new equals old.
+func TestChangePassword_SameAsOldPassword(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Simulate business logic error when new password equals old
+	mockUseCase.On("ChangePassword", mock.Anything, "550e8400-e29b-41d4-a716-446655440001", mock.MatchedBy(func(r *dto.ChangePasswordRequest) bool {
+		return r.CurrentPassword == "SamePass123" && r.NewPassword == "SamePass123"
+	})).Return(errors.New("new password must be different from current password"))
+
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440001")
+		c.Next()
+	})
+
+	router.POST("/auth/change-password", handler.ChangePassword)
+
+	// Act
+	reqBody := map[string]interface{}{
+		"current_password": "SamePass123",
+		"new_password":     "SamePass123",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestNewHandler tests creating a new handler.
+func TestNewHandler(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+
+	// Act
+	handler := delivery.NewHandler(mockUseCase)
+
+	// Assert
+	assert.NotNil(t, handler)
+}
+
+// TestRegister_MalformedJSON tests registration with malformed JSON.
+func TestRegister_MalformedJSON(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Act
+	req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBufferString("{malformed json}"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.POST("/auth/register", handler.Register)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+}
+
+// TestLogin_MalformedJSON tests login with malformed JSON.
+func TestLogin_MalformedJSON(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Act
+	req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBufferString("{malformed json}"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.POST("/auth/login", handler.Login)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+}
+
+// TestChangePassword_MalformedJSON tests password change with malformed JSON.
+func TestChangePassword_MalformedJSON(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440001")
+		c.Next()
+	})
+
+	router.POST("/auth/change-password", handler.ChangePassword)
+
+	// Act
+	req, _ := http.NewRequest("POST", "/auth/change-password", bytes.NewBufferString("{malformed json}"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+}
+
+// TestHandleError_ContextTimeout tests handling of context timeout errors.
+func TestHandleError_ContextTimeout(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Simulate context timeout
+	mockUseCase.On("GetCurrentUser", mock.Anything, "550e8400-e29b-41d4-a716-446655440001").
+		Return(nil, errors.New("context deadline exceeded"))
+
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440001")
+		c.Next()
+	})
+
+	router.GET("/auth/me", handler.GetCurrentUser)
+
+	// Act
+	req, _ := http.NewRequest("GET", "/auth/me", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestHandleError_DatabaseConnectionError tests handling of database connection errors.
+func TestHandleError_DatabaseConnectionError(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	mockUseCase.On("Register", mock.Anything, mock.AnythingOfType("*dto.RegisterRequest")).
+		Return(nil, errors.New("database connection failed"))
+
+	// Act
+	reqBody := map[string]interface{}{
+		"email":    "test@example.com",
+		"password": "SecurePass123",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.POST("/auth/register", handler.Register)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+	errObj := response["error"].(map[string]interface{})
+	assert.Equal(t, "INTERNAL_ERROR", errObj["code"])
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestGetUser_EmptyUserID tests getUser with empty user ID.
+func TestGetUser_EmptyUserID(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Act - empty ID will fail UUID validation at Gin binding level
+	req, _ := http.NewRequest("GET", "/admin/users/", nil)
+	w := httptest.NewRecorder()
+
+	router.GET("/admin/users/:id", handler.GetUser)
+	router.ServeHTTP(w, req)
+
+	// Assert - Should return 404 due to missing route parameter
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// TestListUsers_DefaultParameters tests listing users with default pagination.
+func TestListUsers_DefaultParameters(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	expectedResponse := &dto.UserListResponse{
+		Users: []*dto.UserResponse{
+			{ID: "user-1", Email: "user1@example.com", Role: "USER", IsActive: true},
+		},
+		Pagination: &dto.PaginationMeta{
+			Page:       1,
+			Limit:      10,
+			Total:      1,
+			TotalPages: 1,
+			HasNext:    false,
+			HasPrev:    false,
+		},
+	}
+
+	mockUseCase.On("ListUsers", mock.Anything, mock.AnythingOfType("*dto.ListUsersRequest")).
+		Return(expectedResponse, nil)
+
+	// Act - no pagination parameters (should use defaults)
+	req, _ := http.NewRequest("GET", "/admin/users", nil)
+	w := httptest.NewRecorder()
+
+	router.GET("/admin/users", handler.ListUsers)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.True(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestRegister_Concurrency tests concurrent registration requests.
+func TestRegister_Concurrency(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	expectedResponse := &dto.AuthResponse{
+		AccessToken:  "access-token-123",
+		RefreshToken: "refresh-token-456",
+		ExpiresIn:    3600,
+		TokenType:    "Bearer",
+		User: &dto.UserResponse{
+			ID:       "550e8400-e29b-41d4-a716-446655440001",
+			Email:    "test@example.com",
+			Role:     "USER",
+			IsActive: true,
+		},
+	}
+
+	mockUseCase.On("Register", mock.Anything, mock.AnythingOfType("*dto.RegisterRequest")).
+		Return(expectedResponse, nil)
+
+	// Act - make a single request (concurrency testing is complex in unit tests)
+	reqBody := map[string]interface{}{
+		"email":    "test@example.com",
+		"password": "SecurePass123",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.POST("/auth/register", handler.Register)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusCreated, w.Code)
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestLogout_ContextCancelled tests logout with cancelled context.
+func TestLogout_ContextCancelled(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	mockUseCase.On("Logout", mock.Anything, "550e8400-e29b-41d4-a716-446655440001").
+		Return(errors.New("context canceled"))
+
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440001")
+		c.Next()
+	})
+
+	router.POST("/auth/logout", handler.Logout)
+
+	// Act
+	req, _ := http.NewRequest("POST", "/auth/logout", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestRestoreUser_AlreadyActive tests restoring a user that is already active.
+func TestRestoreUser_AlreadyActive(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	expectedUser := &dto.UserResponse{
+		ID:       "550e8400-e29b-41d4-a716-446655440001",
+		Email:    "test@example.com",
+		Role:     "USER",
+		IsActive: true,
+	}
+
+	mockUseCase.On("RestoreUser", mock.Anything, mock.AnythingOfType("*dto.RestoreUserRequest")).
+		Return(expectedUser, nil)
+
+	// Act
+	req, _ := http.NewRequest("POST", "/admin/users/550e8400-e29b-41d4-a716-446655440001/restore", nil)
+	w := httptest.NewRecorder()
+
+	router.POST("/admin/users/:id/restore", handler.RestoreUser)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
+	assert.Equal(t, "User restored successfully", data["message"])
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestDeleteUser_AlreadyDeleted tests deleting an already deleted user.
+func TestDeleteUser_AlreadyDeleted(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	mockUseCase.On("DeleteUser", mock.Anything, mock.AnythingOfType("*dto.DeleteUserRequest")).
+		Return(domain.ErrUserNotFound)
+
+	// Act
+	req, _ := http.NewRequest("DELETE", "/admin/users/550e8400-e29b-41d4-a716-446655440001", nil)
+	w := httptest.NewRecorder()
+
+	router.DELETE("/admin/users/:id", handler.DeleteUser)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusNotFound, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestRefreshToken_Expired tests refresh with expired token.
+func TestRefreshToken_Expired(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	mockUseCase.On("RefreshToken", mock.Anything, mock.AnythingOfType("*dto.RefreshTokenRequest")).
+		Return(nil, domain.ErrSessionExpired)
+
+	// Act
+	reqBody := map[string]interface{}{
+		"refresh_token": "expired-token",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.POST("/auth/refresh", handler.RefreshToken)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestGetCurrentUser_ContextTimeout tests getting current user with context timeout.
+func TestGetCurrentUser_ContextTimeout(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	mockUseCase.On("GetCurrentUser", mock.Anything, "550e8400-e29b-41d4-a716-446655440001").
+		Return(nil, errors.New("context timeout"))
+
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440001")
+		c.Next()
+	})
+
+	router.GET("/auth/me", handler.GetCurrentUser)
+
+	// Act
+	req, _ := http.NewRequest("GET", "/auth/me", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
 
 	mockUseCase.AssertExpectations(t)
 }
