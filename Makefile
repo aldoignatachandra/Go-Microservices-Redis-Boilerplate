@@ -64,11 +64,15 @@ dev:
 test:
 	$(GO) test -v -race ./...
 
-# Run tests with coverage
+# Run tests with coverage (focused on business logic)
+# This target filters out mocks, domain structs, and DTOs to give a true reflection of logic coverage.
 test-coverage:
-	$(GO) test -v -race -coverprofile=coverage.out ./...
+	$(GO) test -v -race -coverprofile=internal.out ./internal/...
+	@cat internal.out | grep -v "/mocks/" | grep -v "/domain/" | grep -v "/dto/" | grep -v "/common/" > coverage.out
 	$(GO) tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report generated: coverage.html"
+	$(GO) tool cover -func=coverage.out | grep total
+	@echo "Coverage report generated: coverage.html (Business Logic Only)"
+	@rm -f internal.out
 
 # Run tests for a specific package
 test-%:
@@ -231,11 +235,18 @@ k8s-delete:
 # CLEANUP
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Clean build artifacts
+# Clean build artifacts and coverage files
 clean:
 	rm -rf $(BINARY_DIR)
-	rm -f coverage.out coverage.html
+	rm -f coverage.out coverage.html internal.out clean.out
+	@find . -name "*.out" -delete
 	@echo "Clean complete!"
+
+# Clean only coverage files
+clean-coverage:
+	rm -f coverage.out coverage.html internal.out clean.out
+	@find . -name "*.out" -delete
+	@echo "Coverage files cleaned!"
 
 # Deep clean (including vendor and cache)
 deep-clean: clean
