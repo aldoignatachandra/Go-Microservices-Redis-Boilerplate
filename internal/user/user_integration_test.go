@@ -29,7 +29,7 @@ func (n *noopEventPublisher) Publish(_ context.Context, _ string, _ *eventbus.Ev
 
 // setupTestDB creates an in-memory SQLite database for testing.
 func setupTestDB(t testing.TB) *gorm.DB {
-	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared&_busy_timeout=5000"), &gorm.Config{
 		Logger: gormlogger.Default.LogMode(gormlogger.Silent),
 	})
 	require.NoError(t, err)
@@ -37,6 +37,10 @@ func setupTestDB(t testing.TB) *gorm.DB {
 	// Migrate tables
 	err = db.AutoMigrate(&domain.User{}, &domain.Profile{}, &domain.ActivityLog{})
 	require.NoError(t, err)
+
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
 
 	return db
 }

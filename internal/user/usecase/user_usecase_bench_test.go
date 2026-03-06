@@ -17,7 +17,7 @@ func BenchmarkUpdateProfile(b *testing.B) {
 	activityRepo := new(mocks.MockActivityRepository)
 	eventBus := new(MockEventPublisher)
 
-	userRepo.On("GetProfile", mock.Anything, mock.Anything).Return(testProfile, nil)
+	userRepo.On("GetProfile", mock.Anything, mock.Anything).Return(getTestProfile(), nil)
 	userRepo.On("UpdateProfile", mock.Anything, mock.Anything).Return(nil)
 	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 	activityRepo.On("Create", mock.Anything, mock.Anything).Return(nil)
@@ -43,7 +43,7 @@ func BenchmarkGetUser(b *testing.B) {
 	activityRepo := new(mocks.MockActivityRepository)
 	eventBus := new(MockEventPublisher)
 
-	userRepo.On("FindByID", mock.Anything, mock.Anything, mock.Anything).Return(testUser, nil)
+	userRepo.On("FindByID", mock.Anything, mock.Anything, mock.Anything).Return(getTestUser(), nil)
 
 	log, _ := logger.New(&logger.Config{Level: "info", Format: "json"})
 	uc := usecase.NewUserUseCase(userRepo, activityRepo, eventBus, log)
@@ -64,7 +64,7 @@ func BenchmarkActivateUser(b *testing.B) {
 	activityRepo := new(mocks.MockActivityRepository)
 	eventBus := new(MockEventPublisher)
 
-	inactiveUser := *testUser
+	inactiveUser := *getTestUser()
 	inactiveUser.IsActive = false
 	userRepo.On("FindByID", mock.Anything, mock.Anything, mock.Anything).Return(&inactiveUser, nil)
 	userRepo.On("Update", mock.Anything, mock.Anything).Return(nil)
@@ -89,7 +89,7 @@ func BenchmarkDeactivateUser(b *testing.B) {
 	activityRepo := new(mocks.MockActivityRepository)
 	eventBus := new(MockEventPublisher)
 
-	userRepo.On("FindByID", mock.Anything, mock.Anything, mock.Anything).Return(testUser, nil)
+	userRepo.On("FindByID", mock.Anything, mock.Anything, mock.Anything).Return(getTestUser(), nil)
 	userRepo.On("Update", mock.Anything, mock.Anything).Return(nil)
 	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 
@@ -135,7 +135,7 @@ func BenchmarkRestoreUser(b *testing.B) {
 	eventBus := new(MockEventPublisher)
 
 	userRepo.On("Restore", mock.Anything, mock.Anything).Return(nil)
-	userRepo.On("FindByID", mock.Anything, mock.Anything, mock.Anything).Return(testUser, nil)
+	userRepo.On("FindByID", mock.Anything, mock.Anything, mock.Anything).Return(getTestUser(), nil)
 	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 
 	log, _ := logger.New(&logger.Config{Level: "info", Format: "json"})

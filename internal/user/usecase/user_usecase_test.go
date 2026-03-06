@@ -29,27 +29,31 @@ func (m *MockEventPublisher) Publish(ctx context.Context, stream string, event *
 }
 
 // Test data
-var testUser = &domain.User{
-	Model: domain.Model{
-		ID:        "test-user-id",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	},
-	Email:    "test@example.com",
-	Role:     domain.RoleUser,
-	IsActive: true,
+func getTestUser() *domain.User {
+	return &domain.User{
+		Model: domain.Model{
+			ID:        "test-user-id",
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
+		Email:    "test@example.com",
+		Role:     domain.RoleUser,
+		IsActive: true,
+	}
 }
 
-var testProfile = &domain.Profile{
-	Model: domain.Model{
-		ID:        "test-profile-id",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	},
-	UserID:    "test-user-id",
-	FirstName: "John",
-	LastName:  "Doe",
-	Bio:       "Test user",
+func getTestProfile() *domain.Profile {
+	return &domain.Profile{
+		Model: domain.Model{
+			ID:        "test-profile-id",
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
+		UserID:    "test-user-id",
+		FirstName: "John",
+		LastName:  "Doe",
+		Bio:       "Test user",
+	}
 }
 
 // TestUpdateProfile tests the UpdateProfile use case.
@@ -69,7 +73,7 @@ func TestUpdateProfile(t *testing.T) {
 				LastName:  strPtr("Smith"),
 			},
 			setupMocks: func(userRepo *mocks.MockUserRepository, activityRepo *mocks.MockActivityRepository, eventBus *MockEventPublisher) {
-				userRepo.On("GetProfile", mock.Anything, "test-user-id").Return(testProfile, nil)
+				userRepo.On("GetProfile", mock.Anything, "test-user-id").Return(getTestProfile(), nil)
 				userRepo.On("UpdateProfile", mock.Anything, mock.AnythingOfType("*domain.Profile")).Return(nil)
 				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 				activityRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.ActivityLog")).Return(nil)
@@ -166,7 +170,7 @@ func TestGetUser(t *testing.T) {
 				ID: "test-user-id",
 			},
 			setupMocks: func(userRepo *mocks.MockUserRepository) {
-				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*dto.ParanoidOptions")).Return(testUser, nil)
+				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*dto.ParanoidOptions")).Return(getTestUser(), nil)
 			},
 			wantErr: false,
 			checkResult: func(t *testing.T, resp *dto.UserResponse) {
@@ -249,7 +253,7 @@ func TestActivateUser(t *testing.T) {
 				ID: "test-user-id",
 			},
 			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventPublisher) {
-				inactiveUser := *testUser
+				inactiveUser := *getTestUser()
 				inactiveUser.IsActive = false
 				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*dto.ParanoidOptions")).Return(&inactiveUser, nil)
 				userRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.User")).Return(nil)
@@ -263,7 +267,7 @@ func TestActivateUser(t *testing.T) {
 				ID: "test-user-id",
 			},
 			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventPublisher) {
-				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*dto.ParanoidOptions")).Return(testUser, nil)
+				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*dto.ParanoidOptions")).Return(getTestUser(), nil)
 			},
 			wantErr: false,
 		},
@@ -328,7 +332,7 @@ func TestDeactivateUser(t *testing.T) {
 				ID: "test-user-id",
 			},
 			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventPublisher) {
-				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*dto.ParanoidOptions")).Return(testUser, nil)
+				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*dto.ParanoidOptions")).Return(getTestUser(), nil)
 				userRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.User")).Return(nil)
 				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 			},
@@ -340,7 +344,7 @@ func TestDeactivateUser(t *testing.T) {
 				ID: "test-user-id",
 			},
 			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventPublisher) {
-				inactiveUser := *testUser
+				inactiveUser := *getTestUser()
 				inactiveUser.IsActive = false
 				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*dto.ParanoidOptions")).Return(&inactiveUser, nil)
 			},
@@ -474,7 +478,7 @@ func TestRestoreUser(t *testing.T) {
 			},
 			setupMocks: func(userRepo *mocks.MockUserRepository, eventBus *MockEventPublisher) {
 				userRepo.On("Restore", mock.Anything, "test-user-id").Return(nil)
-				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*dto.ParanoidOptions")).Return(testUser, nil)
+				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*dto.ParanoidOptions")).Return(getTestUser(), nil)
 				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 			},
 			wantErr: false,
@@ -546,7 +550,7 @@ func TestGetProfile(t *testing.T) {
 				ID: "test-user-id",
 			},
 			setupMocks: func(userRepo *mocks.MockUserRepository) {
-				userRepo.On("GetProfile", mock.Anything, "test-user-id").Return(testProfile, nil)
+				userRepo.On("GetProfile", mock.Anything, "test-user-id").Return(getTestProfile(), nil)
 			},
 			wantErr: false,
 			checkResult: func(t *testing.T, resp *dto.ProfileResponse) {

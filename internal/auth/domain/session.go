@@ -4,12 +4,13 @@ package domain
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 // Session represents a user session.
 type Session struct {
-	ID           string     `gorm:"type:uuid;primary_key;default:uuid_generate_v4()" json:"id"`
+	ID           string     `gorm:"type:uuid;primary_key;" json:"id"`
 	UserID       string     `gorm:"type:uuid;not null;index" json:"user_id"`
 	RefreshToken string     `gorm:"type:text;not null" json:"-"`
 	ExpiresAt    time.Time  `gorm:"not null" json:"expires_at"`
@@ -47,6 +48,9 @@ func (s *Session) Revoke() {
 
 // BeforeCreate is a GORM hook that runs before creating a session.
 func (s *Session) BeforeCreate(tx *gorm.DB) error {
+	if s.ID == "" {
+		s.ID = uuid.New().String()
+	}
 	s.CreatedAt = time.Now().UTC()
 	return nil
 }

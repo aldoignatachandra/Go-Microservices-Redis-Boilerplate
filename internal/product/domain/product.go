@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -15,7 +16,7 @@ type ProductStatus string
 const (
 	ProductStatusActive   ProductStatus = "ACTIVE"
 	ProductStatusInactive ProductStatus = "INACTIVE"
-	ProductStatusDeleted ProductStatus = "DELETED"
+	ProductStatusDeleted  ProductStatus = "DELETED"
 )
 
 // IsValid checks if the status is valid.
@@ -25,10 +26,18 @@ func (s ProductStatus) IsValid() bool {
 
 // Model is the base model for all entities.
 type Model struct {
-	ID        string         `gorm:"type:uuid;primary_key;default:uuid_generate_v4()" json:"id"`
+	ID        string         `gorm:"type:uuid;primary_key;" json:"id"`
 	CreatedAt time.Time      `gorm:"not null" json:"created_at"`
 	UpdatedAt time.Time      `gorm:"not null" json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
+}
+
+// BeforeCreate is a GORM hook that sets the UUID.
+func (m *Model) BeforeCreate(tx *gorm.DB) error {
+	if m.ID == "" {
+		m.ID = uuid.New().String()
+	}
+	return nil
 }
 
 // Product represents a product entity.
@@ -109,7 +118,7 @@ type SafeProduct struct {
 	Description string        `json:"description"`
 	Price       float64       `json:"price"`
 	Stock       int           `json:"stock"`
-	Status      ProductStatus  `json:"status"`
+	Status      ProductStatus `json:"status"`
 	CategoryID  string        `json:"category_id"`
 	CreatedAt   time.Time     `json:"created_at"`
 	UpdatedAt   time.Time     `json:"updated_at"`
@@ -159,7 +168,7 @@ func (p *ParanoidOptions) ShouldOnlyDeleted() bool {
 
 // Error definitions
 var (
-	ErrProductNotFound       = errors.New("product not found")
+	ErrProductNotFound        = errors.New("product not found")
 	ErrProductNameAlreadyUsed = errors.New("product name already used")
 )
 

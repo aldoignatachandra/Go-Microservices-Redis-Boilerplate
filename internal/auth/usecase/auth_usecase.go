@@ -44,18 +44,18 @@ type AuthUseCase interface {
 
 // Config holds usecase configuration.
 type Config struct {
-	JWTSecret           string
-	JWTExpiresIn        time.Duration
-	RefreshExpiresIn    time.Duration
-	BcryptCost          int
-	ServiceName         string
+	JWTSecret        string
+	JWTExpiresIn     time.Duration
+	RefreshExpiresIn time.Duration
+	BcryptCost       int
+	ServiceName      string
 }
 
 // authUseCase implements AuthUseCase.
 type authUseCase struct {
 	userRepo    repository.UserRepository
 	sessionRepo repository.SessionRepository
-	eventBus    *eventbus.Producer
+	eventBus    eventbus.EventPublisher
 	jwtManager  *utils.JWTManager
 	config      Config
 }
@@ -64,7 +64,7 @@ type authUseCase struct {
 func NewAuthUseCase(
 	userRepo repository.UserRepository,
 	sessionRepo repository.SessionRepository,
-	eventBus *eventbus.Producer,
+	eventBus eventbus.EventPublisher,
 	config Config,
 ) AuthUseCase {
 	jwtManager := utils.NewJWTManager(utils.JWTConfig{

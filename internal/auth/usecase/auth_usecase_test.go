@@ -3,11 +3,13 @@ package usecase_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ignata/go-microservices-boilerplate/internal/auth/domain"
 	"github.com/ignata/go-microservices-boilerplate/internal/auth/dto"
@@ -117,13 +119,23 @@ func (m *MockSessionRepository) DeleteExpired(ctx context.Context) error {
 	return args.Error(0)
 }
 
+// MockEventPublisher is a mock for eventbus.EventPublisher.
+type MockEventPublisher struct {
+	mock.Mock
+}
+
+func (m *MockEventPublisher) Publish(ctx context.Context, stream string, event *eventbus.Event) (string, error) {
+	args := m.Called(ctx, stream, event)
+	return args.String(0), args.Error(1)
+}
+
 // --- Helper ---
 
-func newTestAuthUseCase(userRepo *MockUserRepository, sessionRepo *MockSessionRepository) usecase.AuthUseCase {
+func newTestAuthUseCase(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) usecase.AuthUseCase {
 	return usecase.NewAuthUseCase(
 		userRepo,
 		sessionRepo,
-		(*eventbus.Producer)(nil), // nil event bus for unit tests
+		eventBus,
 		usecase.Config{
 			JWTSecret:        "test-secret-key-at-least-32-chars-long!!",
 			JWTExpiresIn:     time.Hour,
@@ -134,272 +146,910 @@ func newTestAuthUseCase(userRepo *MockUserRepository, sessionRepo *MockSessionRe
 	)
 }
 
-// --- Tests ---
-
-func TestRegister_Success(t *testing.T) {
-	userRepo := new(MockUserRepository)
-	sessionRepo := new(MockSessionRepository)
-	uc := newTestAuthUseCase(userRepo, sessionRepo)
-
-	req := &dto.RegisterRequest{
-		Email:    "test@example.com",
-		Password: "SecureP@ss123",
-	}
-
-	// Email does not exist
-	userRepo.On("ExistsByEmail", mock.Anything, req.Email).Return(false, nil)
-	// User creation succeeds
-	userRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.User")).Return(nil)
-	// Session creation succeeds
-	sessionRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Session")).Return(nil)
-
-	response, err := uc.Register(context.Background(), req)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, response)
-	assert.NotEmpty(t, response.AccessToken)
-	assert.NotEmpty(t, response.RefreshToken)
-	assert.Equal(t, "Bearer", response.TokenType)
-	assert.NotNil(t, response.User)
-
-	userRepo.AssertExpectations(t)
-	sessionRepo.AssertExpectations(t)
-}
-
-func TestRegister_EmailAlreadyExists(t *testing.T) {
-	userRepo := new(MockUserRepository)
-	sessionRepo := new(MockSessionRepository)
-	uc := newTestAuthUseCase(userRepo, sessionRepo)
-
-	req := &dto.RegisterRequest{
-		Email:    "existing@example.com",
-		Password: "SecureP@ss123",
-	}
-
-	// Email already exists
-	userRepo.On("ExistsByEmail", mock.Anything, req.Email).Return(true, nil)
-
-	response, err := uc.Register(context.Background(), req)
-
-	assert.Error(t, err)
-	assert.Nil(t, response)
-	assert.Equal(t, domain.ErrEmailAlreadyUsed, err)
-
-	userRepo.AssertExpectations(t)
-}
-
-func TestLogin_Success(t *testing.T) {
-	userRepo := new(MockUserRepository)
-	sessionRepo := new(MockSessionRepository)
-	uc := newTestAuthUseCase(userRepo, sessionRepo)
-
-	// We need a real bcrypt hash to test password verification
-	// Using cost 4 for fast test
-	testUser := &domain.User{
+// Test data builders
+func buildTestUser(opts ...func(*domain.User)) *domain.User {
+	user := &domain.User{
 		Model: domain.Model{
-			ID: "test-user-id",
+			ID:        "test-user-id",
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		},
 		Email:        "test@example.com",
-		PasswordHash: "$2a$04$test", // Will not match; test structure only
+		PasswordHash: "$2a$04$test", // Will be replaced in tests
 		Role:         domain.RoleUser,
 		IsActive:     true,
 	}
-
-	req := &dto.LoginRequest{
-		Email:    "test@example.com",
-		Password: "wrong-password",
+	for _, opt := range opts {
+		opt(user)
 	}
-
-	userRepo.On("FindByEmail", mock.Anything, req.Email, mock.Anything).Return(testUser, nil)
-
-	_, err := uc.Login(context.Background(), req, "127.0.0.1", "test-agent")
-
-	// This should fail because the password hash doesn't match
-	assert.Error(t, err)
-	assert.Equal(t, domain.ErrInvalidCredentials, err)
-
-	userRepo.AssertExpectations(t)
+	return user
 }
 
-func TestLogin_UserNotFound(t *testing.T) {
-	userRepo := new(MockUserRepository)
-	sessionRepo := new(MockSessionRepository)
-	uc := newTestAuthUseCase(userRepo, sessionRepo)
-
-	req := &dto.LoginRequest{
-		Email:    "nonexistent@example.com",
-		Password: "password",
-	}
-
-	userRepo.On("FindByEmail", mock.Anything, req.Email, mock.Anything).Return((*domain.User)(nil), domain.ErrUserNotFound)
-
-	_, err := uc.Login(context.Background(), req, "127.0.0.1", "test-agent")
-
-	assert.Error(t, err)
-	assert.Equal(t, domain.ErrInvalidCredentials, err) // Should map to invalid credentials
-
-	userRepo.AssertExpectations(t)
+func withEmail(email string) func(*domain.User) {
+	return func(u *domain.User) { u.Email = email }
 }
 
-func TestLogin_InactiveUser(t *testing.T) {
-	userRepo := new(MockUserRepository)
-	sessionRepo := new(MockSessionRepository)
-	uc := newTestAuthUseCase(userRepo, sessionRepo)
-
-	testUser := &domain.User{
-		Model:    domain.Model{ID: "test-inactive-user"},
-		Email:    "inactive@example.com",
-		IsActive: false, // Inactive
-		Role:     domain.RoleUser,
-	}
-
-	req := &dto.LoginRequest{
-		Email:    "inactive@example.com",
-		Password: "password",
-	}
-
-	userRepo.On("FindByEmail", mock.Anything, req.Email, mock.Anything).Return(testUser, nil)
-
-	_, err := uc.Login(context.Background(), req, "127.0.0.1", "test-agent")
-
-	assert.Error(t, err)
-	assert.Equal(t, domain.ErrUserInactive, err)
-
-	userRepo.AssertExpectations(t)
+func withRole(role domain.Role) func(*domain.User) {
+	return func(u *domain.User) { u.Role = role }
 }
 
-func TestLogout_Success(t *testing.T) {
-	userRepo := new(MockUserRepository)
-	sessionRepo := new(MockSessionRepository)
-	uc := newTestAuthUseCase(userRepo, sessionRepo)
-
-	userID := "test-user-id"
-
-	sessionRepo.On("RevokeAllForUser", mock.Anything, userID).Return(nil)
-
-	err := uc.Logout(context.Background(), userID)
-
-	assert.NoError(t, err)
-	sessionRepo.AssertExpectations(t)
+func withActive(active bool) func(*domain.User) {
+	return func(u *domain.User) { u.IsActive = active }
 }
 
-func TestGetCurrentUser_Success(t *testing.T) {
-	userRepo := new(MockUserRepository)
-	sessionRepo := new(MockSessionRepository)
-	uc := newTestAuthUseCase(userRepo, sessionRepo)
-
-	testUser := &domain.User{
-		Model:    domain.Model{ID: "test-user-id"},
-		Email:    "test@example.com",
-		Role:     domain.RoleUser,
-		IsActive: true,
-	}
-
-	userRepo.On("FindByID", mock.Anything, "test-user-id", mock.Anything).Return(testUser, nil)
-
-	response, err := uc.GetCurrentUser(context.Background(), "test-user-id")
-
-	assert.NoError(t, err)
-	assert.NotNil(t, response)
-
-	userRepo.AssertExpectations(t)
+func withID(id string) func(*domain.User) {
+	return func(u *domain.User) { u.ID = id }
 }
 
-func TestGetCurrentUser_NotFound(t *testing.T) {
-	userRepo := new(MockUserRepository)
-	sessionRepo := new(MockSessionRepository)
-	uc := newTestAuthUseCase(userRepo, sessionRepo)
-
-	userRepo.On("FindByID", mock.Anything, "nonexistent-id", mock.Anything).Return((*domain.User)(nil), domain.ErrUserNotFound)
-
-	response, err := uc.GetCurrentUser(context.Background(), "nonexistent-id")
-
-	assert.Error(t, err)
-	assert.Nil(t, response)
-	assert.Equal(t, domain.ErrUserNotFound, err)
-
-	userRepo.AssertExpectations(t)
+func withDeleted(deleted bool) func(*domain.User) {
+	return func(u *domain.User) {
+		if deleted {
+			now := time.Now()
+			u.DeletedAt.Valid = true
+			u.DeletedAt.Time = now
+		}
+	}
 }
 
-func TestDeleteUser_SoftDelete(t *testing.T) {
-	userRepo := new(MockUserRepository)
-	sessionRepo := new(MockSessionRepository)
-	uc := newTestAuthUseCase(userRepo, sessionRepo)
+// --- Tests ---
 
-	testUser := &domain.User{
-		Model:    domain.Model{ID: "delete-me"},
-		Email:    "delete@example.com",
-		Role:     domain.RoleUser,
-		IsActive: true,
+// TestRegister tests the Register use case with table-driven approach.
+func TestRegister(t *testing.T) {
+	tests := []struct {
+		name        string
+		req         *dto.RegisterRequest
+		setupMocks  func(*MockUserRepository, *MockSessionRepository, *MockEventPublisher)
+		wantErr     bool
+		expectedErr error
+		checkResp   func(*testing.T, *dto.AuthResponse)
+	}{
+		{
+			name: "successful registration",
+			req: &dto.RegisterRequest{
+				Email:    "test@example.com",
+				Password: "SecureP@ss123",
+				Role:     "USER",
+			},
+			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
+				userRepo.On("ExistsByEmail", mock.Anything, "test@example.com").Return(false, nil)
+				userRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.User")).Return(nil)
+				sessionRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Session")).Return(nil)
+				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil).Maybe()
+			},
+			wantErr: false,
+			checkResp: func(t *testing.T, resp *dto.AuthResponse) {
+				assert.NotEmpty(t, resp.AccessToken)
+				assert.NotEmpty(t, resp.RefreshToken)
+				assert.Equal(t, "Bearer", resp.TokenType)
+				assert.NotNil(t, resp.User)
+				assert.Equal(t, "test@example.com", resp.User.Email)
+			},
+		},
+		{
+			name: "email already exists",
+			req: &dto.RegisterRequest{
+				Email:    "existing@example.com",
+				Password: "SecureP@ss123",
+			},
+			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
+				userRepo.On("ExistsByEmail", mock.Anything, "existing@example.com").Return(true, nil)
+			},
+			wantErr:     true,
+			expectedErr: domain.ErrEmailAlreadyUsed,
+		},
+		{
+			name: "repository error on exists check",
+			req: &dto.RegisterRequest{
+				Email:    "test@example.com",
+				Password: "SecureP@ss123",
+			},
+			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
+				userRepo.On("ExistsByEmail", mock.Anything, "test@example.com").Return(false, errors.New("database error"))
+			},
+			wantErr: true,
+		},
+		{
+			name: "repository error on create",
+			req: &dto.RegisterRequest{
+				Email:    "test@example.com",
+				Password: "SecureP@ss123",
+			},
+			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
+				userRepo.On("ExistsByEmail", mock.Anything, "test@example.com").Return(false, nil)
+				userRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.User")).Return(errors.New("create failed"))
+			},
+			wantErr: true,
+		},
 	}
 
-	req := &dto.DeleteUserRequest{
-		ID:    "delete-me",
-		Force: false,
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			userRepo := new(MockUserRepository)
+			sessionRepo := new(MockSessionRepository)
+			eventBus := new(MockEventPublisher)
+
+			tt.setupMocks(userRepo, sessionRepo, eventBus)
+			uc := newTestAuthUseCase(userRepo, sessionRepo, eventBus)
+
+			// Act
+			resp, err := uc.Register(context.Background(), tt.req)
+
+			// Assert
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.expectedErr != nil {
+					assert.True(t, errors.Is(err, tt.expectedErr))
+				}
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+				if tt.checkResp != nil {
+					tt.checkResp(t, resp)
+				}
+			}
+
+			userRepo.AssertExpectations(t)
+			sessionRepo.AssertExpectations(t)
+			eventBus.AssertExpectations(t)
+		})
 	}
-
-	userRepo.On("FindByID", mock.Anything, req.ID, mock.Anything).Return(testUser, nil)
-	userRepo.On("Delete", mock.Anything, req.ID).Return(nil)
-	sessionRepo.On("RevokeAllForUser", mock.Anything, req.ID).Return(nil)
-
-	err := uc.DeleteUser(context.Background(), req)
-
-	assert.NoError(t, err)
-	userRepo.AssertExpectations(t)
-	sessionRepo.AssertExpectations(t)
 }
 
-func TestDeleteUser_HardDelete(t *testing.T) {
-	userRepo := new(MockUserRepository)
-	sessionRepo := new(MockSessionRepository)
-	uc := newTestAuthUseCase(userRepo, sessionRepo)
-
-	testUser := &domain.User{
-		Model:    domain.Model{ID: "hard-delete-me"},
-		Email:    "hard-delete@example.com",
-		Role:     domain.RoleUser,
-		IsActive: true,
+// TestLogin tests the Login use case with table-driven approach.
+func TestLogin(t *testing.T) {
+	tests := []struct {
+		name        string
+		req         *dto.LoginRequest
+		setupMocks  func(*MockUserRepository, *MockSessionRepository, *MockEventPublisher)
+		wantErr     bool
+		expectedErr error
+	}{
+		{
+			name: "user not found",
+			req: &dto.LoginRequest{
+				Email:    "nonexistent@example.com",
+				Password: "password",
+			},
+			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
+				userRepo.On("FindByEmail", mock.Anything, "nonexistent@example.com", mock.AnythingOfType("*domain.ParanoidOptions")).Return((*domain.User)(nil), domain.ErrUserNotFound)
+			},
+			wantErr:     true,
+			expectedErr: domain.ErrInvalidCredentials,
+		},
+		{
+			name: "inactive user",
+			req: &dto.LoginRequest{
+				Email:    "inactive@example.com",
+				Password: "password",
+			},
+			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
+				user := buildTestUser(withEmail("inactive@example.com"), withActive(false))
+				userRepo.On("FindByEmail", mock.Anything, "inactive@example.com", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
+			},
+			wantErr:     true,
+			expectedErr: domain.ErrUserInactive,
+		},
+		{
+			name: "deleted user",
+			req: &dto.LoginRequest{
+				Email:    "deleted@example.com",
+				Password: "password",
+			},
+			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
+				user := buildTestUser(withEmail("deleted@example.com"), withDeleted(true))
+				userRepo.On("FindByEmail", mock.Anything, "deleted@example.com", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
+			},
+			wantErr:     true,
+			expectedErr: domain.ErrUserDeleted,
+		},
 	}
 
-	req := &dto.DeleteUserRequest{
-		ID:    "hard-delete-me",
-		Force: true,
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			userRepo := new(MockUserRepository)
+			sessionRepo := new(MockSessionRepository)
+			eventBus := new(MockEventPublisher)
+
+			tt.setupMocks(userRepo, sessionRepo, eventBus)
+			uc := newTestAuthUseCase(userRepo, sessionRepo, eventBus)
+
+			// Act
+			_, err := uc.Login(context.Background(), tt.req, "127.0.0.1", "test-agent")
+
+			// Assert
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.expectedErr != nil {
+					assert.True(t, errors.Is(err, tt.expectedErr))
+				}
+			} else {
+				require.NoError(t, err)
+			}
+
+			userRepo.AssertExpectations(t)
+		})
 	}
-
-	userRepo.On("FindByID", mock.Anything, req.ID, mock.Anything).Return(testUser, nil)
-	userRepo.On("HardDelete", mock.Anything, req.ID).Return(nil)
-	sessionRepo.On("RevokeAllForUser", mock.Anything, req.ID).Return(nil)
-
-	err := uc.DeleteUser(context.Background(), req)
-
-	assert.NoError(t, err)
-	userRepo.AssertExpectations(t)
-	sessionRepo.AssertExpectations(t)
 }
 
-func TestRestoreUser_Success(t *testing.T) {
+// TestLogout tests the Logout use case.
+func TestLogout(t *testing.T) {
+	tests := []struct {
+		name       string
+		userID     string
+		setupMocks func(*MockSessionRepository, *MockEventPublisher)
+		wantErr    bool
+	}{
+		{
+			name:   "successful logout",
+			userID: "test-user-id",
+			setupMocks: func(sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
+				sessionRepo.On("RevokeAllForUser", mock.Anything, "test-user-id").Return(nil)
+				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil).Maybe()
+			},
+			wantErr: false,
+		},
+		{
+			name:   "repository error",
+			userID: "test-user-id",
+			setupMocks: func(sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
+				sessionRepo.On("RevokeAllForUser", mock.Anything, "test-user-id").Return(errors.New("database error"))
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			userRepo := new(MockUserRepository)
+			sessionRepo := new(MockSessionRepository)
+			eventBus := new(MockEventPublisher)
+
+			tt.setupMocks(sessionRepo, eventBus)
+			uc := newTestAuthUseCase(userRepo, sessionRepo, eventBus)
+
+			// Act
+			err := uc.Logout(context.Background(), tt.userID)
+
+			// Assert
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			sessionRepo.AssertExpectations(t)
+			eventBus.AssertExpectations(t)
+		})
+	}
+}
+
+// TestRefreshToken tests the RefreshToken use case.
+func TestRefreshToken(t *testing.T) {
+	// Create a valid use case to generate a real refresh token
 	userRepo := new(MockUserRepository)
 	sessionRepo := new(MockSessionRepository)
-	uc := newTestAuthUseCase(userRepo, sessionRepo)
+	eventBus := new(MockEventPublisher)
+	uc := newTestAuthUseCase(userRepo, sessionRepo, eventBus)
 
-	restoredUser := &domain.User{
-		Model:    domain.Model{ID: "restored-user"},
-		Email:    "restored@example.com",
-		Role:     domain.RoleUser,
-		IsActive: true,
+	// First register a user to get valid tokens
+	registerReq := &dto.RegisterRequest{
+		Email:    "refresh@example.com",
+		Password: "TestP@ss123",
+	}
+	userRepo.On("ExistsByEmail", mock.Anything, "refresh@example.com").Return(false, nil)
+	userRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.User")).Return(nil)
+	sessionRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Session")).Return(nil)
+	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil).Maybe()
+
+	authResp, err := uc.Register(context.Background(), registerReq)
+	require.NoError(t, err)
+	require.NotNil(t, authResp)
+	validRefreshToken := authResp.RefreshToken
+
+	tests := []struct {
+		name        string
+		req         *dto.RefreshTokenRequest
+		setupMocks  func(*MockUserRepository, *MockSessionRepository, *MockEventPublisher)
+		wantErr     bool
+		expectedErr error
+	}{
+		{
+			name: "invalid refresh token",
+			req: &dto.RefreshTokenRequest{
+				RefreshToken: "invalid-refresh-token",
+			},
+			setupMocks:  func(*MockUserRepository, *MockSessionRepository, *MockEventPublisher) {},
+			wantErr:     true,
+			expectedErr: domain.ErrInvalidToken,
+		},
+		{
+			name: "valid refresh token with session not found",
+			req: &dto.RefreshTokenRequest{
+				RefreshToken: validRefreshToken,
+			},
+			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
+				sessionRepo.On("FindByRefreshToken", mock.Anything, validRefreshToken).Return((*domain.Session)(nil), errors.New("session not found"))
+			},
+			wantErr:     true,
+			expectedErr: domain.ErrInvalidToken,
+		},
 	}
 
-	req := &dto.RestoreUserRequest{
-		ID: "restored-user",
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange - create fresh mocks for each test
+			userRepo := new(MockUserRepository)
+			sessionRepo := new(MockSessionRepository)
+			eventBus := new(MockEventPublisher)
+
+			tt.setupMocks(userRepo, sessionRepo, eventBus)
+			uc := newTestAuthUseCase(userRepo, sessionRepo, eventBus)
+
+			// Act
+			_, err := uc.RefreshToken(context.Background(), tt.req)
+
+			// Assert
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.expectedErr != nil {
+					assert.True(t, errors.Is(err, tt.expectedErr) || err.Error() == "invalid token")
+				}
+			} else {
+				require.NoError(t, err)
+			}
+
+			userRepo.AssertExpectations(t)
+			sessionRepo.AssertExpectations(t)
+		})
+	}
+}
+
+// TestGetCurrentUser tests the GetCurrentUser use case.
+func TestGetCurrentUser(t *testing.T) {
+	tests := []struct {
+		name        string
+		userID      string
+		setupMocks  func(*MockUserRepository)
+		wantErr     bool
+		expectedErr error
+		checkResp   func(*testing.T, *dto.UserResponse)
+	}{
+		{
+			name:   "successful get current user",
+			userID: "test-user-id",
+			setupMocks: func(userRepo *MockUserRepository) {
+				user := buildTestUser(withID("test-user-id"))
+				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
+			},
+			wantErr: false,
+			checkResp: func(t *testing.T, resp *dto.UserResponse) {
+				assert.Equal(t, "test-user-id", resp.ID)
+				assert.Equal(t, "test@example.com", resp.Email)
+			},
+		},
+		{
+			name:   "user not found",
+			userID: "nonexistent-id",
+			setupMocks: func(userRepo *MockUserRepository) {
+				userRepo.On("FindByID", mock.Anything, "nonexistent-id", mock.AnythingOfType("*domain.ParanoidOptions")).Return((*domain.User)(nil), domain.ErrUserNotFound)
+			},
+			wantErr:     true,
+			expectedErr: domain.ErrUserNotFound,
+		},
 	}
 
-	userRepo.On("Restore", mock.Anything, req.ID).Return(nil)
-	userRepo.On("FindByID", mock.Anything, req.ID, mock.Anything).Return(restoredUser, nil)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			userRepo := new(MockUserRepository)
+			sessionRepo := new(MockSessionRepository)
+			eventBus := new(MockEventPublisher)
 
-	response, err := uc.RestoreUser(context.Background(), req)
+			tt.setupMocks(userRepo)
+			uc := newTestAuthUseCase(userRepo, sessionRepo, eventBus)
 
-	assert.NoError(t, err)
-	assert.NotNil(t, response)
+			// Act
+			resp, err := uc.GetCurrentUser(context.Background(), tt.userID)
 
-	userRepo.AssertExpectations(t)
+			// Assert
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.expectedErr != nil {
+					assert.True(t, errors.Is(err, tt.expectedErr))
+				}
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+				if tt.checkResp != nil {
+					tt.checkResp(t, resp)
+				}
+			}
+
+			userRepo.AssertExpectations(t)
+		})
+	}
+}
+
+// TestGetUser tests the GetUser use case.
+func TestGetUser(t *testing.T) {
+	tests := []struct {
+		name        string
+		req         *dto.GetUserRequest
+		setupMocks  func(*MockUserRepository)
+		wantErr     bool
+		expectedErr error
+	}{
+		{
+			name: "successful get user",
+			req: &dto.GetUserRequest{
+				ID: "test-user-id",
+			},
+			setupMocks: func(userRepo *MockUserRepository) {
+				user := buildTestUser(withID("test-user-id"))
+				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
+			},
+			wantErr: false,
+		},
+		{
+			name: "user not found",
+			req: &dto.GetUserRequest{
+				ID: "nonexistent-id",
+			},
+			setupMocks: func(userRepo *MockUserRepository) {
+				userRepo.On("FindByID", mock.Anything, "nonexistent-id", mock.AnythingOfType("*domain.ParanoidOptions")).Return((*domain.User)(nil), domain.ErrUserNotFound)
+			},
+			wantErr:     true,
+			expectedErr: domain.ErrUserNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			userRepo := new(MockUserRepository)
+			sessionRepo := new(MockSessionRepository)
+			eventBus := new(MockEventPublisher)
+
+			tt.setupMocks(userRepo)
+			uc := newTestAuthUseCase(userRepo, sessionRepo, eventBus)
+
+			// Act
+			resp, err := uc.GetUser(context.Background(), tt.req)
+
+			// Assert
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.expectedErr != nil {
+					assert.True(t, errors.Is(err, tt.expectedErr))
+				}
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+			}
+
+			userRepo.AssertExpectations(t)
+		})
+	}
+}
+
+// TestListUsers tests the ListUsers use case.
+func TestListUsers(t *testing.T) {
+	tests := []struct {
+		name       string
+		req        *dto.ListUsersRequest
+		setupMocks func(*MockUserRepository)
+		wantErr    bool
+		checkResp  func(*testing.T, *dto.UserListResponse)
+	}{
+		{
+			name: "successful list users",
+			req: &dto.ListUsersRequest{
+				Page:  1,
+				Limit: 10,
+			},
+			setupMocks: func(userRepo *MockUserRepository) {
+				list := &domain.UserList{
+					Users: []*domain.User{
+						buildTestUser(withID("user-1")),
+						buildTestUser(withID("user-2")),
+					},
+					Total:      2,
+					Page:       1,
+					Limit:      10,
+					TotalPages: 1,
+				}
+				userRepo.On("FindAll", mock.Anything, mock.AnythingOfType("*dto.ListUsersRequest")).Return(list, nil)
+			},
+			wantErr: false,
+			checkResp: func(t *testing.T, resp *dto.UserListResponse) {
+				assert.Len(t, resp.Users, 2)
+				assert.NotNil(t, resp.Pagination)
+				assert.Equal(t, int64(2), resp.Pagination.Total)
+			},
+		},
+		{
+			name: "repository error",
+			req: &dto.ListUsersRequest{
+				Page:  1,
+				Limit: 10,
+			},
+			setupMocks: func(userRepo *MockUserRepository) {
+				userRepo.On("FindAll", mock.Anything, mock.AnythingOfType("*dto.ListUsersRequest")).Return((*domain.UserList)(nil), errors.New("database error"))
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			userRepo := new(MockUserRepository)
+			sessionRepo := new(MockSessionRepository)
+			eventBus := new(MockEventPublisher)
+
+			tt.setupMocks(userRepo)
+			uc := newTestAuthUseCase(userRepo, sessionRepo, eventBus)
+
+			// Act
+			resp, err := uc.ListUsers(context.Background(), tt.req)
+
+			// Assert
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+				if tt.checkResp != nil {
+					tt.checkResp(t, resp)
+				}
+			}
+
+			userRepo.AssertExpectations(t)
+		})
+	}
+}
+
+// TestUpdateUser tests the UpdateUser use case.
+func TestUpdateUser(t *testing.T) {
+	tests := []struct {
+		name        string
+		userID      string
+		req         *dto.UpdateUserRequest
+		setupMocks  func(*MockUserRepository, *MockEventPublisher)
+		wantErr     bool
+		expectedErr error
+	}{
+		{
+			name:   "successful update email",
+			userID: "test-user-id",
+			req: &dto.UpdateUserRequest{
+				Email: "newemail@example.com",
+			},
+			setupMocks: func(userRepo *MockUserRepository, eventBus *MockEventPublisher) {
+				user := buildTestUser(withID("test-user-id"))
+				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
+				userRepo.On("FindByEmail", mock.Anything, "newemail@example.com", mock.AnythingOfType("*domain.ParanoidOptions")).Return((*domain.User)(nil), domain.ErrUserNotFound)
+				userRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.User")).Return(nil)
+				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil).Maybe()
+			},
+			wantErr: false,
+		},
+		{
+			name:   "email already used by another user",
+			userID: "test-user-id",
+			req: &dto.UpdateUserRequest{
+				Email: "other@example.com",
+			},
+			setupMocks: func(userRepo *MockUserRepository, eventBus *MockEventPublisher) {
+				user := buildTestUser(withID("test-user-id"))
+				otherUser := buildTestUser(withID("other-user-id"))
+				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
+				userRepo.On("FindByEmail", mock.Anything, "other@example.com", mock.AnythingOfType("*domain.ParanoidOptions")).Return(otherUser, nil)
+			},
+			wantErr:     true,
+			expectedErr: domain.ErrEmailAlreadyUsed,
+		},
+		{
+			name:   "successful update password",
+			userID: "test-user-id",
+			req: &dto.UpdateUserRequest{
+				Password: "NewSecureP@ss123",
+			},
+			setupMocks: func(userRepo *MockUserRepository, eventBus *MockEventPublisher) {
+				user := buildTestUser(withID("test-user-id"))
+				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
+				userRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.User")).Return(nil)
+				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil).Maybe()
+			},
+			wantErr: false,
+		},
+		{
+			name:   "successful update is active",
+			userID: "test-user-id",
+			req: &dto.UpdateUserRequest{
+				IsActive: boolPtr(false),
+			},
+			setupMocks: func(userRepo *MockUserRepository, eventBus *MockEventPublisher) {
+				user := buildTestUser(withID("test-user-id"))
+				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
+				userRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.User")).Return(nil)
+				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil).Maybe()
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			userRepo := new(MockUserRepository)
+			sessionRepo := new(MockSessionRepository)
+			eventBus := new(MockEventPublisher)
+
+			tt.setupMocks(userRepo, eventBus)
+			uc := newTestAuthUseCase(userRepo, sessionRepo, eventBus)
+
+			// Act
+			resp, err := uc.UpdateUser(context.Background(), tt.userID, tt.req)
+
+			// Assert
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.expectedErr != nil {
+					assert.True(t, errors.Is(err, tt.expectedErr))
+				}
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+			}
+
+			userRepo.AssertExpectations(t)
+			eventBus.AssertExpectations(t)
+		})
+	}
+}
+
+// TestChangePassword tests the ChangePassword use case.
+func TestChangePassword(t *testing.T) {
+	tests := []struct {
+		name        string
+		userID      string
+		req         *dto.ChangePasswordRequest
+		setupMocks  func(*MockUserRepository, *MockSessionRepository)
+		wantErr     bool
+		expectedErr error
+	}{
+		{
+			name:   "invalid current password",
+			userID: "test-user-id",
+			req: &dto.ChangePasswordRequest{
+				CurrentPassword: "WrongP@ss123",
+				NewPassword:     "NewP@ss123",
+			},
+			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository) {
+				user := buildTestUser(withID("test-user-id"))
+				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
+			},
+			wantErr:     true,
+			expectedErr: domain.ErrInvalidPassword,
+		},
+		{
+			name:   "user not found",
+			userID: "nonexistent-id",
+			req: &dto.ChangePasswordRequest{
+				CurrentPassword: "OldP@ss123",
+				NewPassword:     "NewP@ss123",
+			},
+			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository) {
+				userRepo.On("FindByID", mock.Anything, "nonexistent-id", mock.AnythingOfType("*domain.ParanoidOptions")).Return((*domain.User)(nil), domain.ErrUserNotFound)
+			},
+			wantErr:     true,
+			expectedErr: domain.ErrUserNotFound,
+		},
+		{
+			name:   "invalid current password",
+			userID: "test-user-id",
+			req: &dto.ChangePasswordRequest{
+				CurrentPassword: "WrongP@ss123",
+				NewPassword:     "NewP@ss123",
+			},
+			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository) {
+				user := buildTestUser(withID("test-user-id"))
+				userRepo.On("FindByID", mock.Anything, "test-user-id", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
+			},
+			wantErr:     true,
+			expectedErr: domain.ErrInvalidPassword,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			userRepo := new(MockUserRepository)
+			sessionRepo := new(MockSessionRepository)
+			eventBus := new(MockEventPublisher)
+
+			tt.setupMocks(userRepo, sessionRepo)
+			uc := newTestAuthUseCase(userRepo, sessionRepo, eventBus)
+
+			// Act
+			err := uc.ChangePassword(context.Background(), tt.userID, tt.req)
+
+			// Assert
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.expectedErr != nil {
+					assert.True(t, errors.Is(err, tt.expectedErr))
+				}
+			} else {
+				require.NoError(t, err)
+			}
+
+			userRepo.AssertExpectations(t)
+			sessionRepo.AssertExpectations(t)
+		})
+	}
+}
+
+// TestDeleteUser tests the DeleteUser use case.
+func TestDeleteUser(t *testing.T) {
+	tests := []struct {
+		name        string
+		req         *dto.DeleteUserRequest
+		setupMocks  func(*MockUserRepository, *MockSessionRepository, *MockEventPublisher)
+		wantErr     bool
+		expectedErr error
+	}{
+		{
+			name: "successful soft delete",
+			req: &dto.DeleteUserRequest{
+				ID:    "delete-me",
+				Force: false,
+			},
+			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
+				user := buildTestUser(withID("delete-me"))
+				userRepo.On("FindByID", mock.Anything, "delete-me", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
+				userRepo.On("Delete", mock.Anything, "delete-me").Return(nil)
+				sessionRepo.On("RevokeAllForUser", mock.Anything, "delete-me").Return(nil)
+				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil).Maybe()
+			},
+			wantErr: false,
+		},
+		{
+			name: "successful hard delete",
+			req: &dto.DeleteUserRequest{
+				ID:    "hard-delete-me",
+				Force: true,
+			},
+			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
+				user := buildTestUser(withID("hard-delete-me"))
+				userRepo.On("FindByID", mock.Anything, "hard-delete-me", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
+				userRepo.On("HardDelete", mock.Anything, "hard-delete-me").Return(nil)
+				sessionRepo.On("RevokeAllForUser", mock.Anything, "hard-delete-me").Return(nil)
+				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil).Maybe()
+			},
+			wantErr: false,
+		},
+		{
+			name: "user not found",
+			req: &dto.DeleteUserRequest{
+				ID:    "nonexistent-id",
+				Force: false,
+			},
+			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
+				userRepo.On("FindByID", mock.Anything, "nonexistent-id", mock.AnythingOfType("*domain.ParanoidOptions")).Return((*domain.User)(nil), domain.ErrUserNotFound)
+			},
+			wantErr:     true,
+			expectedErr: domain.ErrUserNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			userRepo := new(MockUserRepository)
+			sessionRepo := new(MockSessionRepository)
+			eventBus := new(MockEventPublisher)
+
+			tt.setupMocks(userRepo, sessionRepo, eventBus)
+			uc := newTestAuthUseCase(userRepo, sessionRepo, eventBus)
+
+			// Act
+			err := uc.DeleteUser(context.Background(), tt.req)
+
+			// Assert
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.expectedErr != nil {
+					assert.True(t, errors.Is(err, tt.expectedErr))
+				}
+			} else {
+				require.NoError(t, err)
+			}
+
+			userRepo.AssertExpectations(t)
+			sessionRepo.AssertExpectations(t)
+			eventBus.AssertExpectations(t)
+		})
+	}
+}
+
+// TestRestoreUser tests the RestoreUser use case.
+func TestRestoreUser(t *testing.T) {
+	tests := []struct {
+		name        string
+		req         *dto.RestoreUserRequest
+		setupMocks  func(*MockUserRepository, *MockEventPublisher)
+		wantErr     bool
+		expectedErr error
+		checkResp   func(*testing.T, *dto.UserResponse)
+	}{
+		{
+			name: "successful restore",
+			req: &dto.RestoreUserRequest{
+				ID: "restored-user",
+			},
+			setupMocks: func(userRepo *MockUserRepository, eventBus *MockEventPublisher) {
+				user := buildTestUser(withID("restored-user"))
+				userRepo.On("Restore", mock.Anything, "restored-user").Return(nil)
+				userRepo.On("FindByID", mock.Anything, "restored-user", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
+				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil).Maybe()
+			},
+			wantErr: false,
+			checkResp: func(t *testing.T, resp *dto.UserResponse) {
+				assert.Equal(t, "restored-user", resp.ID)
+			},
+		},
+		{
+			name: "restore error",
+			req: &dto.RestoreUserRequest{
+				ID: "nonexistent-id",
+			},
+			setupMocks: func(userRepo *MockUserRepository, eventBus *MockEventPublisher) {
+				userRepo.On("Restore", mock.Anything, "nonexistent-id").Return(domain.ErrUserNotFound)
+			},
+			wantErr:     true,
+			expectedErr: domain.ErrUserNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			userRepo := new(MockUserRepository)
+			sessionRepo := new(MockSessionRepository)
+			eventBus := new(MockEventPublisher)
+
+			tt.setupMocks(userRepo, eventBus)
+			uc := newTestAuthUseCase(userRepo, sessionRepo, eventBus)
+
+			// Act
+			resp, err := uc.RestoreUser(context.Background(), tt.req)
+
+			// Assert
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.expectedErr != nil {
+					assert.True(t, errors.Is(err, tt.expectedErr))
+				}
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+				if tt.checkResp != nil {
+					tt.checkResp(t, resp)
+				}
+			}
+
+			userRepo.AssertExpectations(t)
+			eventBus.AssertExpectations(t)
+		})
+	}
+}
+
+// Helper function
+func boolPtr(b bool) *bool {
+	return &b
 }

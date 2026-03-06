@@ -41,7 +41,7 @@ type Config struct {
 // productUseCase implements ProductUseCase.
 type productUseCase struct {
 	productRepo repository.ProductRepository
-	eventBus    *eventbus.Producer
+	eventBus    eventbus.EventPublisher
 	config      Config
 	logger      *zap.Logger
 }
@@ -49,7 +49,7 @@ type productUseCase struct {
 // NewProductUseCase creates a new product usecase.
 func NewProductUseCase(
 	productRepo repository.ProductRepository,
-	eventBus *eventbus.Producer,
+	eventBus eventbus.EventPublisher,
 	config Config,
 	logger *zap.Logger,
 ) ProductUseCase {

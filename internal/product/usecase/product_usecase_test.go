@@ -72,13 +72,31 @@ func (m *MockProductRepository) UpdateStock(ctx context.Context, id string, stoc
 	return args.Error(0)
 }
 
+// --- Mock Event Publisher ---
+
+type MockEventPublisher struct {
+	mock.Mock
+}
+
+func (m *MockEventPublisher) Publish(ctx context.Context, topic string, event *eventbus.Event) (string, error) {
+	args := m.Called(ctx, topic, event)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockEventPublisher) Close() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
 // --- Helper ---
 
 func newTestProductUseCase(repo *MockProductRepository) usecase.ProductUseCase {
 	logger, _ := zap.NewDevelopment()
+	eb := new(MockEventPublisher)
+	eb.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("mock-event-id", nil).Maybe()
 	return usecase.NewProductUseCase(
 		repo,
-		(*eventbus.Producer)(nil),
+		eb,
 		usecase.Config{ServiceName: "product-service-test"},
 		logger,
 	)

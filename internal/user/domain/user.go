@@ -4,6 +4,7 @@ package domain
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -17,10 +18,18 @@ const (
 
 // Model is the base model for all entities.
 type Model struct {
-	ID        string         `gorm:"type:uuid;primary_key;default:uuid_generate_v4()" json:"id"`
+	ID        string         `gorm:"type:uuid;primary_key;" json:"id"`
 	CreatedAt time.Time      `gorm:"not null" json:"created_at"`
 	UpdatedAt time.Time      `gorm:"not null" json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
+}
+
+// BeforeCreate is a GORM hook that sets the UUID.
+func (m *Model) BeforeCreate(tx *gorm.DB) error {
+	if m.ID == "" {
+		m.ID = uuid.New().String()
+	}
+	return nil
 }
 
 // User represents a user entity.
@@ -81,13 +90,13 @@ func (p *Profile) FullName() string {
 // ActivityLog represents an activity log entry.
 type ActivityLog struct {
 	Model
-	UserID      string                 `gorm:"type:uuid;not null;index" json:"user_id"`
-	Action      string                 `gorm:"type:varchar(100);not null" json:"action"`
-	Resource    string                 `gorm:"type:varchar(100)" json:"resource,omitempty"`
-	ResourceID  string                 `gorm:"type:uuid" json:"resource_id,omitempty"`
-	IPAddress   string                 `gorm:"type:varchar(45)" json:"ip_address,omitempty"`
-	UserAgent   string                 `gorm:"type:text" json:"user_agent,omitempty"`
-	Metadata    map[string]interface{} `gorm:"type:jsonb" json:"metadata,omitempty"`
+	UserID     string                 `gorm:"type:uuid;not null;index" json:"user_id"`
+	Action     string                 `gorm:"type:varchar(100);not null" json:"action"`
+	Resource   string                 `gorm:"type:varchar(100)" json:"resource,omitempty"`
+	ResourceID string                 `gorm:"type:uuid" json:"resource_id,omitempty"`
+	IPAddress  string                 `gorm:"type:varchar(45)" json:"ip_address,omitempty"`
+	UserAgent  string                 `gorm:"type:text" json:"user_agent,omitempty"`
+	Metadata   map[string]interface{} `gorm:"type:jsonb;serializer:json" json:"metadata,omitempty"`
 }
 
 // TableName specifies the table name for ActivityLog.
