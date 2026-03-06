@@ -1,0 +1,802 @@
+// Package repository_test provides tests for the product repository.
+package repository_test
+
+import (
+	"context"
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/twinj/uuid"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+
+	"github.com/ignata/go-microservices-boilerplate/internal/product/domain"
+	"github.com/ignata/go-microservices-boilerplate/internal/product/dto"
+	"github.com/ignata/go-microservices-boilerplate/internal/product/repository"
+)
+
+// setupTestDB creates an in-memory SQLite database for testing.
+func setupTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+
+	// Use a unique database for each test to avoid conflicts
+	dbName := fmt.Sprintf("file:test_%s.db?mode=memory&cache=shared", uuid.NewV4().String())
+	db, err := gorm.Open(sqlite.Open(dbName), &gorm.Config{})
+	require.NoError(t, err, "Failed to open test database")
+
+	// Migrate the schema
+	err = db.AutoMigrate(&domain.Product{})
+	require.NoError(t, err, "Failed to migrate test database")
+
+	return db
+}
+
+// teardownTestDB closes the database connection.
+func teardownTestDB(t *testing.T, db *gorm.DB) {
+	t.Helper()
+
+	sqlDB, err := db.DB()
+	require.NoError(t, err, "Failed to get sql.DB")
+	err = sqlDB.Close()
+	require.NoError(t, err, "Failed to close test database")
+}
+
+// createTestProduct creates a test product with a unique name.
+func createTestProduct(t *testing.T, db *gorm.DB) *domain.Product {
+	t.Helper()
+	product := &domain.Product{
+		Model: domain.Model{
+			ID:        uuid.NewV4().String(),
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
+		},
+		Name:        fmt.Sprintf("Product_%s", uuid.NewV4().String()),
+		Description: "A test product",
+		Price:       29.99,
+		Stock:       100,
+		Status:      domain.ProductStatusActive,
+		CategoryID:  uuid.NewV4().String(),
+	}
+	err := db.Create(product).Error
+	require.NoError(t, err)
+	return product
+}
+
+// TestCreate tests the Create method.
+func TestCreate(t *testing.T) {
+	db := setupTestDB(t)
+	defer teardownTestDB(t, db)
+
+	repo := repository.NewProductRepository(db)
+	ctx := context.Background()
+
+	t.Run("successful create product", func(t *testing.T) {
+		product := &domain.Product{
+			Name:        fmt.Sprintf("Product_%s", uuid.NewV4().String()),
+			Description: "A test product",
+			Price:       19.99,
+			Stock:       50,
+			Status:      domain.ProductStatusActive,
+			CategoryID:  uuid.NewV4().String(),
+		}
+
+		err := repo.Create(ctx, product)
+		require.NoError(t, err)
+		assert.NotEmpty(t, product.ID)
+
+		// Verify product was created
+		var found domain.Product
+		err = db.Where("id = ?", product.ID).First(&found).Error
+		require.NoError(t, err)
+		assert.Equal(t, product.Name, found.Name)
+	})
+
+	t.Run("successful create product with all fields", func(t *testing.T) {
+		product := &domain.Product{
+			Name:        fmt.Sprintf("Full Product_%s", uuid.NewV4().String()),
+			Description: "A complete product with all details",
+			Price:       99.99,
+			Stock:       200,
+			Status:      domain.ProductStatusActive,
+			CategoryID:  uuid.NewV4().String(),
+		}
+
+		err := repo.Create(ctx, product)
+		require.NoError(t, err)
+	})
+
+	t.Run("successful create inactive product", func(t *testing.T) {
+		product := &domain.Product{
+			Name:        fmt.Sprintf("Inactive Product_%s", uuid.NewV4().String()),
+			Description: "An inactive product",
+			Price:       49.99,
+			Stock:       30,
+			Status:      domain.ProductStatusInactive,
+			CategoryID:  uuid.NewV4().String(),
+		}
+
+		err := repo.Create(ctx, product)
+		require.NoError(t, err)
+		assert.Equal(t, domain.ProductStatusInactive, product.Status)
+	})
+
+	t.Run("successful create product with zero stock", func(t *testing.T) {
+		product := &domain.Product{
+			Name:        fmt.Sprintf("Zero Stock Product_%s", uuid.NewV4().String()),
+			Description: "Out of stock product",
+			Price:       29.99,
+			Stock:       0,
+			Status:      domain.ProductStatusActive,
+			CategoryID:  uuid.NewV4().String(),
+		}
+
+		err := repo.Create(ctx, product)
+		require.NoError(t, err)
+		assert.Equal(t, 0, product.Stock)
+	})
+}
+
+// TestUpdate tests the Update method.
+func TestUpdate(t *testing.T) {
+	db := setupTestDB(t)
+	defer teardownTestDB(t, db)
+
+	repo := repository.NewProductRepository(db)
+	ctx := context.Background()
+
+	t.Run("successful update product name", func(t *testing.T) {
+		product := createTestProduct(t, db)
+		originalName := product.Name
+		product.Name = fmt.Sprintf("Updated Product_%s", uuid.NewV4().String())
+
+		err := repo.Update(ctx, product)
+		require.NoError(t, err)
+
+		var found domain.Product
+		err = db.Where("id = ?", product.ID).First(&found).Error
+		require.NoError(t, err)
+		assert.NotEqual(t, originalName, found.Name)
+		assert.Equal(t, product.Name, found.Name)
+	})
+
+	t.Run("successful update product price", func(t *testing.T) {
+		product := createTestProduct(t, db)
+		product.Price = 39.99
+
+		err := repo.Update(ctx, product)
+		require.NoError(t, err)
+
+		var found domain.Product
+		err = db.Where("id = ?", product.ID).First(&found).Error
+		require.NoError(t, err)
+		assert.Equal(t, 39.99, found.Price)
+	})
+
+	t.Run("successful update product stock", func(t *testing.T) {
+		product := createTestProduct(t, db)
+		product.Stock = 150
+
+		err := repo.Update(ctx, product)
+		require.NoError(t, err)
+
+		var found domain.Product
+		err = db.Where("id = ?", product.ID).First(&found).Error
+		require.NoError(t, err)
+		assert.Equal(t, 150, found.Stock)
+	})
+
+	t.Run("successful update product status", func(t *testing.T) {
+		product := createTestProduct(t, db)
+		product.Status = domain.ProductStatusInactive
+
+		err := repo.Update(ctx, product)
+		require.NoError(t, err)
+
+		var found domain.Product
+		err = db.Where("id = ?", product.ID).First(&found).Error
+		require.NoError(t, err)
+		assert.Equal(t, domain.ProductStatusInactive, found.Status)
+	})
+
+	t.Run("successful update multiple fields", func(t *testing.T) {
+		product := createTestProduct(t, db)
+		product.Description = "Updated description"
+		product.Price = 59.99
+		product.Stock = 75
+
+		err := repo.Update(ctx, product)
+		require.NoError(t, err)
+
+		var found domain.Product
+		err = db.Where("id = ?", product.ID).First(&found).Error
+		require.NoError(t, err)
+		assert.Equal(t, "Updated description", found.Description)
+		assert.Equal(t, 59.99, found.Price)
+		assert.Equal(t, 75, found.Stock)
+	})
+
+	t.Run("fail - product not found", func(t *testing.T) {
+		product := &domain.Product{
+			Model:      domain.Model{ID: uuid.NewV4().String()},
+			Name:       "Non-existent Product",
+			Price:      19.99,
+			Stock:      50,
+			Status:     domain.ProductStatusActive,
+			CategoryID: uuid.NewV4().String(),
+		}
+
+		err := repo.Update(ctx, product)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrProductNotFound)
+	})
+}
+
+// TestDelete tests the Delete (soft delete) method.
+func TestDelete(t *testing.T) {
+	db := setupTestDB(t)
+	defer teardownTestDB(t, db)
+
+	repo := repository.NewProductRepository(db)
+	ctx := context.Background()
+
+	t.Run("successful soft delete product", func(t *testing.T) {
+		product := createTestProduct(t, db)
+
+		err := repo.Delete(ctx, product.ID)
+		require.NoError(t, err)
+
+		// Product should not be found in normal queries
+		var found domain.Product
+		err = db.Where("id = ?", product.ID).First(&found).Error
+		assert.Error(t, err)
+		assert.Equal(t, gorm.ErrRecordNotFound, err)
+
+		// Product should still exist in database (soft delete)
+		var deleted domain.Product
+		err = db.Unscoped().Where("id = ?", product.ID).First(&deleted).Error
+		require.NoError(t, err)
+		assert.NotNil(t, deleted.DeletedAt)
+		assert.True(t, deleted.DeletedAt.Valid)
+	})
+
+	t.Run("fail - product not found", func(t *testing.T) {
+		err := repo.Delete(ctx, uuid.NewV4().String())
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrProductNotFound)
+	})
+
+	t.Run("fail - already deleted product", func(t *testing.T) {
+		product := createTestProduct(t, db)
+		err := db.Delete(product).Error
+		require.NoError(t, err)
+
+		err = repo.Delete(ctx, product.ID)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrProductNotFound)
+	})
+}
+
+// TestHardDelete tests the HardDelete method.
+func TestHardDelete(t *testing.T) {
+	db := setupTestDB(t)
+	defer teardownTestDB(t, db)
+
+	repo := repository.NewProductRepository(db)
+	ctx := context.Background()
+
+	t.Run("successful hard delete product", func(t *testing.T) {
+		product := createTestProduct(t, db)
+
+		err := repo.HardDelete(ctx, product.ID)
+		require.NoError(t, err)
+
+		// Product should not exist at all (hard delete)
+		var deleted domain.Product
+		err = db.Unscoped().Where("id = ?", product.ID).First(&deleted).Error
+		assert.Error(t, err)
+		assert.Equal(t, gorm.ErrRecordNotFound, err)
+	})
+
+	t.Run("successful hard delete soft-deleted product", func(t *testing.T) {
+		product := createTestProduct(t, db)
+		err := db.Delete(product).Error
+		require.NoError(t, err)
+
+		err = repo.HardDelete(ctx, product.ID)
+		require.NoError(t, err)
+
+		// Product should not exist at all
+		var deleted domain.Product
+		err = db.Unscoped().Where("id = ?", product.ID).First(&deleted).Error
+		assert.Error(t, err)
+	})
+
+	t.Run("fail - product not found", func(t *testing.T) {
+		err := repo.HardDelete(ctx, uuid.NewV4().String())
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrProductNotFound)
+	})
+}
+
+// TestRestore tests the Restore method.
+func TestRestore(t *testing.T) {
+	db := setupTestDB(t)
+	defer teardownTestDB(t, db)
+
+	repo := repository.NewProductRepository(db)
+	ctx := context.Background()
+
+	t.Run("successful restore soft-deleted product", func(t *testing.T) {
+		product := createTestProduct(t, db)
+		err := db.Delete(product).Error
+		require.NoError(t, err)
+
+		err = repo.Restore(ctx, product.ID)
+		require.NoError(t, err)
+
+		// Product should now be findable in normal queries
+		var found domain.Product
+		err = db.Where("id = ?", product.ID).First(&found).Error
+		require.NoError(t, err)
+		assert.False(t, found.DeletedAt.Valid)
+	})
+
+	t.Run("fail - product not found", func(t *testing.T) {
+		err := repo.Restore(ctx, uuid.NewV4().String())
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrProductNotFound)
+	})
+
+	t.Run("fail - restore active product", func(t *testing.T) {
+		product := createTestProduct(t, db)
+
+		err := repo.Restore(ctx, product.ID)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrProductNotFound)
+	})
+}
+
+// TestFindByID tests the FindByID method.
+func TestFindByID(t *testing.T) {
+	db := setupTestDB(t)
+	defer teardownTestDB(t, db)
+
+	repo := repository.NewProductRepository(db)
+	ctx := context.Background()
+
+	t.Run("successful find active product by ID", func(t *testing.T) {
+		product := createTestProduct(t, db)
+
+		found, err := repo.FindByID(ctx, product.ID, domain.DefaultParanoidOptions())
+		require.NoError(t, err)
+		assert.Equal(t, product.ID, found.ID)
+		assert.Equal(t, product.Name, found.Name)
+		assert.Equal(t, product.Price, found.Price)
+	})
+
+	t.Run("successful find inactive product", func(t *testing.T) {
+		product := createTestProduct(t, db)
+		product.Status = domain.ProductStatusInactive
+		err := db.Save(product).Error
+		require.NoError(t, err)
+
+		found, err := repo.FindByID(ctx, product.ID, domain.DefaultParanoidOptions())
+		require.NoError(t, err)
+		assert.Equal(t, domain.ProductStatusInactive, found.Status)
+	})
+
+	t.Run("successful find deleted product with include deleted", func(t *testing.T) {
+		product := createTestProduct(t, db)
+		err := db.Delete(product).Error
+		require.NoError(t, err)
+
+		found, err := repo.FindByID(ctx, product.ID, &domain.ParanoidOptions{IncludeDeleted: true})
+		require.NoError(t, err)
+		assert.Equal(t, product.ID, found.ID)
+	})
+
+	t.Run("fail - find deleted product without include deleted", func(t *testing.T) {
+		product := createTestProduct(t, db)
+		err := db.Delete(product).Error
+		require.NoError(t, err)
+
+		_, err = repo.FindByID(ctx, product.ID, domain.DefaultParanoidOptions())
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrProductNotFound)
+	})
+
+	t.Run("fail - product not found", func(t *testing.T) {
+		_, err := repo.FindByID(ctx, uuid.NewV4().String(), domain.DefaultParanoidOptions())
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrProductNotFound)
+	})
+
+	t.Run("successful find with nil options", func(t *testing.T) {
+		product := createTestProduct(t, db)
+
+		found, err := repo.FindByID(ctx, product.ID, nil)
+		require.NoError(t, err)
+		assert.Equal(t, product.ID, found.ID)
+	})
+}
+
+// TestFindAll tests the FindAll method.
+func TestFindAll(t *testing.T) {
+	db := setupTestDB(t)
+	defer teardownTestDB(t, db)
+
+	repo := repository.NewProductRepository(db)
+	ctx := context.Background()
+
+	// Setup test data
+	var products []*domain.Product
+	for i := 0; i < 5; i++ {
+		product := createTestProduct(t, db)
+		products = append(products, product)
+	}
+
+	// Create a soft-deleted product
+	deletedProduct := createTestProduct(t, db)
+	err := db.Delete(deletedProduct).Error
+	require.NoError(t, err)
+
+	t.Run("successful find all products - first page", func(t *testing.T) {
+		result, err := repo.FindAll(ctx, &dto.ListProductsRequest{Page: 1, Limit: 2})
+		require.NoError(t, err)
+		assert.Len(t, result.Products, 2)
+		assert.GreaterOrEqual(t, result.Total, int64(5))
+		assert.Equal(t, 1, result.Page)
+		assert.Equal(t, 2, result.Limit)
+	})
+
+	t.Run("successful find all products - second page", func(t *testing.T) {
+		result, err := repo.FindAll(ctx, &dto.ListProductsRequest{Page: 2, Limit: 2})
+		require.NoError(t, err)
+		assert.Len(t, result.Products, 2)
+		assert.Equal(t, 2, result.Page)
+	})
+
+	t.Run("successful find all products with status filter ACTIVE", func(t *testing.T) {
+		inactiveProduct := createTestProduct(t, db)
+		inactiveProduct.Status = domain.ProductStatusInactive
+		err := db.Save(inactiveProduct).Error
+		require.NoError(t, err)
+
+		result, err := repo.FindAll(ctx, &dto.ListProductsRequest{Page: 1, Limit: 10, Status: "ACTIVE"})
+		require.NoError(t, err)
+		assert.Greater(t, result.Total, int64(0))
+		for _, product := range result.Products {
+			assert.Equal(t, domain.ProductStatusActive, product.Status)
+		}
+	})
+
+	t.Run("successful find all products with status filter INACTIVE", func(t *testing.T) {
+		result, err := repo.FindAll(ctx, &dto.ListProductsRequest{Page: 1, Limit: 10, Status: "INACTIVE"})
+		require.NoError(t, err)
+		for _, product := range result.Products {
+			assert.Equal(t, domain.ProductStatusInactive, product.Status)
+		}
+	})
+
+	t.Run("successful find all products with include deleted", func(t *testing.T) {
+		result, err := repo.FindAll(ctx, &dto.ListProductsRequest{Page: 1, Limit: 10, IncludeDeleted: true})
+		require.NoError(t, err)
+		assert.Greater(t, result.Total, int64(5))
+	})
+
+	t.Run("successful find all products with only deleted", func(t *testing.T) {
+		result, err := repo.FindAll(ctx, &dto.ListProductsRequest{Page: 1, Limit: 10, OnlyDeleted: true})
+		require.NoError(t, err)
+		assert.Equal(t, int64(1), result.Total)
+		if len(result.Products) > 0 {
+			assert.NotNil(t, result.Products[0].DeletedAt)
+			assert.True(t, result.Products[0].DeletedAt.Valid)
+		}
+	})
+
+	t.Run("successful find all with nil request", func(t *testing.T) {
+		result, err := repo.FindAll(ctx, nil)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.GreaterOrEqual(t, result.Total, int64(5))
+	})
+
+	t.Run("successful find all with pagination defaults", func(t *testing.T) {
+		result, err := repo.FindAll(ctx, &dto.ListProductsRequest{Page: 0, Limit: 0})
+		require.NoError(t, err)
+		assert.Equal(t, 1, result.Page)
+		assert.Equal(t, 10, result.Limit)
+	})
+
+	t.Run("successful find all with empty result", func(t *testing.T) {
+		result, err := repo.FindAll(ctx, &dto.ListProductsRequest{Page: 1, Limit: 10, Search: "nonexistentproduct123456"})
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), result.Total)
+		assert.Empty(t, result.Products)
+	})
+}
+
+// TestExistsByName tests the ExistsByName method.
+func TestExistsByName(t *testing.T) {
+	db := setupTestDB(t)
+	defer teardownTestDB(t, db)
+
+	repo := repository.NewProductRepository(db)
+	ctx := context.Background()
+
+	t.Run("product name exists", func(t *testing.T) {
+		product := createTestProduct(t, db)
+
+		exists, err := repo.ExistsByName(ctx, product.Name)
+		require.NoError(t, err)
+		assert.True(t, exists)
+	})
+
+	t.Run("product name does not exist", func(t *testing.T) {
+		exists, err := repo.ExistsByName(ctx, "Non-existent Product")
+		require.NoError(t, err)
+		assert.False(t, exists)
+	})
+
+	t.Run("soft deleted product should not exist", func(t *testing.T) {
+		product := createTestProduct(t, db)
+		err := db.Delete(product).Error
+		require.NoError(t, err)
+
+		exists, err := repo.ExistsByName(ctx, product.Name)
+		require.NoError(t, err)
+		assert.False(t, exists)
+	})
+
+	t.Run("case sensitive product name check", func(t *testing.T) {
+		product := createTestProduct(t, db)
+
+		// Change case
+		upperName := ""
+		for i, c := range product.Name {
+			if i == 0 {
+				upperName += string(c - 32) // Convert to uppercase (ASCII only)
+			} else {
+				upperName += string(c)
+			}
+		}
+
+		exists, err := repo.ExistsByName(ctx, upperName)
+		require.NoError(t, err)
+		assert.False(t, exists)
+	})
+}
+
+// TestUpdateStock tests the UpdateStock method.
+func TestUpdateStock(t *testing.T) {
+	db := setupTestDB(t)
+	defer teardownTestDB(t, db)
+
+	repo := repository.NewProductRepository(db)
+	ctx := context.Background()
+
+	t.Run("successful update stock to higher value", func(t *testing.T) {
+		product := createTestProduct(t, db)
+
+		err := repo.UpdateStock(ctx, product.ID, 150)
+		require.NoError(t, err)
+
+		var found domain.Product
+		err = db.Where("id = ?", product.ID).First(&found).Error
+		require.NoError(t, err)
+		assert.Equal(t, 150, found.Stock)
+	})
+
+	t.Run("successful update stock to lower value", func(t *testing.T) {
+		product := createTestProduct(t, db)
+
+		err := repo.UpdateStock(ctx, product.ID, 25)
+		require.NoError(t, err)
+
+		var found domain.Product
+		err = db.Where("id = ?", product.ID).First(&found).Error
+		require.NoError(t, err)
+		assert.Equal(t, 25, found.Stock)
+	})
+
+	t.Run("successful update stock to zero", func(t *testing.T) {
+		product := createTestProduct(t, db)
+
+		err := repo.UpdateStock(ctx, product.ID, 0)
+		require.NoError(t, err)
+
+		var found domain.Product
+		err = db.Where("id = ?", product.ID).First(&found).Error
+		require.NoError(t, err)
+		assert.Equal(t, 0, found.Stock)
+	})
+
+	t.Run("successful update stock to very high value", func(t *testing.T) {
+		product := createTestProduct(t, db)
+
+		err := repo.UpdateStock(ctx, product.ID, 10000)
+		require.NoError(t, err)
+
+		var found domain.Product
+		err = db.Where("id = ?", product.ID).First(&found).Error
+		require.NoError(t, err)
+		assert.Equal(t, 10000, found.Stock)
+	})
+
+	t.Run("fail - product not found", func(t *testing.T) {
+		err := repo.UpdateStock(ctx, uuid.NewV4().String(), 50)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrProductNotFound)
+	})
+}
+
+// TestProductRepositoryIntegration tests the repository with multiple operations.
+func TestProductRepositoryIntegration(t *testing.T) {
+	db := setupTestDB(t)
+	defer teardownTestDB(t, db)
+
+	repo := repository.NewProductRepository(db)
+	ctx := context.Background()
+
+	t.Run("full lifecycle: create, find, update, delete, restore", func(t *testing.T) {
+		// Create
+		product := createTestProduct(t, db)
+
+		// Find by ID
+		found, err := repo.FindByID(ctx, product.ID, domain.DefaultParanoidOptions())
+		require.NoError(t, err)
+		assert.Equal(t, product.Name, found.Name)
+
+		// Update
+		product.Price = 59.99
+		err = repo.Update(ctx, product)
+		require.NoError(t, err)
+
+		// Verify update
+		updated, err := repo.FindByID(ctx, product.ID, domain.DefaultParanoidOptions())
+		require.NoError(t, err)
+		assert.Equal(t, 59.99, updated.Price)
+
+		// Update stock
+		err = repo.UpdateStock(ctx, product.ID, 150)
+		require.NoError(t, err)
+
+		// Verify stock update
+		stockUpdated, err := repo.FindByID(ctx, product.ID, domain.DefaultParanoidOptions())
+		require.NoError(t, err)
+		assert.Equal(t, 150, stockUpdated.Stock)
+
+		// Delete (soft)
+		err = repo.Delete(ctx, product.ID)
+		require.NoError(t, err)
+
+		// Verify soft delete
+		_, err = repo.FindByID(ctx, product.ID, domain.DefaultParanoidOptions())
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrProductNotFound)
+
+		// Restore
+		err = repo.Restore(ctx, product.ID)
+		require.NoError(t, err)
+
+		// Verify restore
+		restored, err := repo.FindByID(ctx, product.ID, domain.DefaultParanoidOptions())
+		require.NoError(t, err)
+		assert.Equal(t, product.ID, restored.ID)
+
+		// Hard delete
+		err = repo.HardDelete(ctx, product.ID)
+		require.NoError(t, err)
+
+		// Verify hard delete
+		_, err = repo.FindByID(ctx, product.ID, &domain.ParanoidOptions{IncludeDeleted: true})
+		assert.Error(t, err)
+	})
+
+	t.Run("exists by name after operations", func(t *testing.T) {
+		// Initial state - should not exist
+		productName := fmt.Sprintf("Lifecycle Product_%s", uuid.NewV4().String())
+		exists, err := repo.ExistsByName(ctx, productName)
+		require.NoError(t, err)
+		assert.False(t, exists)
+
+		// Create product
+		product := &domain.Product{
+			Name:        productName,
+			Description: "A lifecycle test product",
+			Price:       29.99,
+			Stock:       75,
+			Status:      domain.ProductStatusActive,
+			CategoryID:  uuid.NewV4().String(),
+		}
+		err = repo.Create(ctx, product)
+		require.NoError(t, err)
+
+		// Should exist now
+		exists, err = repo.ExistsByName(ctx, productName)
+		require.NoError(t, err)
+		assert.True(t, exists)
+
+		// Soft delete
+		err = repo.Delete(ctx, product.ID)
+		require.NoError(t, err)
+
+		// Should not exist after soft delete
+		exists, err = repo.ExistsByName(ctx, productName)
+		require.NoError(t, err)
+		assert.False(t, exists)
+	})
+}
+
+// TestEdgeCases tests edge cases and error conditions.
+func TestEdgeCases(t *testing.T) {
+	db := setupTestDB(t)
+	defer teardownTestDB(t, db)
+
+	repo := repository.NewProductRepository(db)
+	ctx := context.Background()
+
+	t.Run("create product with empty ID", func(t *testing.T) {
+		product := &domain.Product{
+			Name:        fmt.Sprintf("Empty ID Product_%s", uuid.NewV4().String()),
+			Description: "Product with empty ID",
+			Price:       19.99,
+			Stock:       50,
+			Status:      domain.ProductStatusActive,
+			CategoryID:  uuid.NewV4().String(),
+		}
+
+		err := repo.Create(ctx, product)
+		require.NoError(t, err)
+		assert.NotEmpty(t, product.ID)
+	})
+
+	t.Run("update non-existent product", func(t *testing.T) {
+		product := &domain.Product{
+			Model:      domain.Model{ID: uuid.NewV4().String()},
+			Name:       "Non-existent Product",
+			Price:      19.99,
+			Stock:      50,
+			Status:     domain.ProductStatusActive,
+			CategoryID: uuid.NewV4().String(),
+		}
+
+		err := repo.Update(ctx, product)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrProductNotFound)
+	})
+
+	t.Run("delete non-existent product", func(t *testing.T) {
+		err := repo.Delete(ctx, uuid.NewV4().String())
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrProductNotFound)
+	})
+
+	t.Run("restore non-existent product", func(t *testing.T) {
+		err := repo.Restore(ctx, uuid.NewV4().String())
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrProductNotFound)
+	})
+
+	t.Run("hard delete non-existent product", func(t *testing.T) {
+		err := repo.HardDelete(ctx, uuid.NewV4().String())
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrProductNotFound)
+	})
+
+	t.Run("update stock non-existent product", func(t *testing.T) {
+		err := repo.UpdateStock(ctx, uuid.NewV4().String(), 100)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrProductNotFound)
+	})
+
+	t.Run("FindAll with large page number", func(t *testing.T) {
+		result, err := repo.FindAll(ctx, &dto.ListProductsRequest{Page: 999, Limit: 10})
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), result.Total)
+		assert.Empty(t, result.Products)
+	})
+}

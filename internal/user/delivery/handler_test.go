@@ -33,7 +33,7 @@ func TestGetUser_Success(t *testing.T) {
 	router := setupTestRouter(handler)
 
 	expectedUser := &dto.UserResponse{
-		ID:       "user-123",
+		ID:       "550e8400-e29b-41d4-a716-446655440001",
 		Email:    "test@example.com",
 		Role:     "USER",
 		IsActive: true,
@@ -43,7 +43,7 @@ func TestGetUser_Success(t *testing.T) {
 		Return(expectedUser, nil)
 
 	// Create request
-	req, _ := http.NewRequest("GET", "/api/v1/users/user-123", nil)
+	req, _ := http.NewRequest("GET", "/api/v1/users/550e8400-e29b-41d4-a716-446655440001", nil)
 	w := httptest.NewRecorder()
 
 	// Register route and serve
@@ -59,7 +59,7 @@ func TestGetUser_Success(t *testing.T) {
 
 	assert.True(t, response["success"].(bool))
 	data := response["data"].(map[string]interface{})
-	assert.Equal(t, "user-123", data["id"])
+	assert.Equal(t, "550e8400-e29b-41d4-a716-446655440001", data["id"])
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -121,7 +121,7 @@ func TestUpdateProfile_Success(t *testing.T) {
 
 	// Set user_id in context (simulating auth middleware)
 	router.Use(func(c *gin.Context) {
-		c.Set("user_id", "user-123")
+		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440001")
 		c.Next()
 	})
 
@@ -161,7 +161,7 @@ func TestUpdateProfile_ValidationError(t *testing.T) {
 
 	// Set user_id in context
 	router.Use(func(c *gin.Context) {
-		c.Set("user_id", "user-123")
+		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440001")
 		c.Next()
 	})
 
@@ -237,7 +237,7 @@ func TestActivateUser_Success(t *testing.T) {
 		Return(nil)
 
 	// Create request
-	req, _ := http.NewRequest("POST", "/api/v1/users/user-123/activate", nil)
+	req, _ := http.NewRequest("POST", "/api/v1/users/550e8400-e29b-41d4-a716-446655440001/activate", nil)
 	w := httptest.NewRecorder()
 
 	// Register route and serve
@@ -269,7 +269,7 @@ func TestDeactivateUser_Success(t *testing.T) {
 		Return(nil)
 
 	// Create request
-	req, _ := http.NewRequest("POST", "/api/v1/users/user-123/deactivate", nil)
+	req, _ := http.NewRequest("POST", "/api/v1/users/550e8400-e29b-41d4-a716-446655440001/deactivate", nil)
 	w := httptest.NewRecorder()
 
 	// Register route and serve
@@ -301,7 +301,7 @@ func TestDeleteUser_Success(t *testing.T) {
 		Return(nil)
 
 	// Create request
-	req, _ := http.NewRequest("DELETE", "/api/v1/users/user-123", nil)
+	req, _ := http.NewRequest("DELETE", "/api/v1/users/550e8400-e29b-41d4-a716-446655440001", nil)
 	w := httptest.NewRecorder()
 
 	// Register route and serve
@@ -333,7 +333,7 @@ func TestRestoreUser_Success(t *testing.T) {
 		Success: true,
 		Message: "User restored successfully",
 		User: &dto.UserResponse{
-			ID:    "user-123",
+			ID:    "550e8400-e29b-41d4-a716-446655440001",
 			Email: "test@example.com",
 			Role:  "USER",
 		},
@@ -343,7 +343,7 @@ func TestRestoreUser_Success(t *testing.T) {
 		Return(expectedResponse, nil)
 
 	// Create request
-	req, _ := http.NewRequest("POST", "/api/v1/users/user-123/restore", nil)
+	req, _ := http.NewRequest("POST", "/api/v1/users/550e8400-e29b-41d4-a716-446655440001/restore", nil)
 	w := httptest.NewRecorder()
 
 	// Register route and serve
@@ -375,7 +375,7 @@ func TestGetActivityLogs_Success(t *testing.T) {
 		Logs: []*dto.ActivityLogResponse{
 			{
 				ID:       "log-1",
-				UserID:   "user-123",
+				UserID:   "550e8400-e29b-41d4-a716-446655440001",
 				Action:   "login",
 				Resource: "auth",
 			},

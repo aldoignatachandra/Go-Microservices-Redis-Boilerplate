@@ -1,4 +1,4 @@
-// Package repository_test provides tests for the user repository.
+// Package repository_test provides tests for the auth user repository.
 package repository_test
 
 import (
@@ -13,9 +13,9 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"github.com/ignata/go-microservices-boilerplate/internal/user/domain"
-	"github.com/ignata/go-microservices-boilerplate/internal/user/dto"
-	"github.com/ignata/go-microservices-boilerplate/internal/user/repository"
+	"github.com/ignata/go-microservices-boilerplate/internal/auth/domain"
+	"github.com/ignata/go-microservices-boilerplate/internal/auth/dto"
+	"github.com/ignata/go-microservices-boilerplate/internal/auth/repository"
 )
 
 // setupTestDB creates an in-memory SQLite database for testing.
@@ -28,7 +28,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err, "Failed to open test database")
 
 	// Migrate the schema
-	err = db.AutoMigrate(&domain.User{}, &domain.Profile{})
+	err = db.AutoMigrate(&domain.User{})
 	require.NoError(t, err, "Failed to migrate test database")
 
 	return db
@@ -63,24 +63,6 @@ func createTestUser(t *testing.T, db *gorm.DB) *domain.User {
 	return user
 }
 
-// createTestProfile creates a test profile.
-func createTestProfile(t *testing.T, db *gorm.DB, userID string) *domain.Profile {
-	t.Helper()
-	profile := &domain.Profile{
-		Model: domain.Model{
-			ID:        uuid.NewV4().String(),
-			CreatedAt: time.Now().UTC(),
-			UpdatedAt: time.Now().UTC(),
-		},
-		UserID:    userID,
-		FirstName: "John",
-		LastName:  "Doe",
-	}
-	err := db.Create(profile).Error
-	require.NoError(t, err)
-	return profile
-}
-
 // TestCreate tests the Create method.
 func TestCreate(t *testing.T) {
 	db := setupTestDB(t)
@@ -108,28 +90,6 @@ func TestCreate(t *testing.T) {
 		assert.Equal(t, user.Email, found.Email)
 	})
 
-	t.Run("successful create user with profile", func(t *testing.T) {
-		profile := &domain.Profile{
-			UserID:    uuid.NewV4().String(),
-			FirstName: "Jane",
-			LastName:  "Smith",
-		}
-		err := db.Create(profile).Error
-		require.NoError(t, err)
-
-		user := &domain.User{
-			Model:       domain.Model{ID: profile.UserID},
-			Email:       fmt.Sprintf("test_%s@example.com", uuid.NewV4().String()),
-			PasswordHash: "hashedpassword",
-			Role:        domain.RoleUser,
-			IsActive:    true,
-			Profile:     profile,
-		}
-
-		err = repo.Create(ctx, user)
-		require.NoError(t, err)
-	})
-
 	t.Run("successful create admin user", func(t *testing.T) {
 		user := &domain.User{
 			Email:        fmt.Sprintf("admin_%s@example.com", uuid.NewV4().String()),
@@ -155,6 +115,21 @@ func TestCreate(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, user.IsActive)
 	})
+
+	t.Run("successful create user with last login", func(t *testing.T) {
+		now := time.Now().UTC()
+		user := &domain.User{
+			Email:        fmt.Sprintf("lastlogin_%s@example.com", uuid.NewV4().String()),
+			PasswordHash: "hashedpassword",
+			Role:         domain.RoleUser,
+			IsActive:     true,
+			LastLoginAt:  &now,
+		}
+
+		err := repo.Create(ctx, user)
+		require.NoError(t, err)
+		assert.NotNil(t, user.LastLoginAt)
+	})
 }
 
 // TestUpdate tests the Update method.
@@ -167,7 +142,6 @@ func TestUpdate(t *testing.T) {
 
 	t.Run("successful update user email", func(t *testing.T) {
 		user := createTestUser(t, db)
-		originalEmail := user.Email
 		user.Email = fmt.Sprintf("updated_%s@example.com", uuid.NewV4().String())
 
 		err := repo.Update(ctx, user)
@@ -176,7 +150,6 @@ func TestUpdate(t *testing.T) {
 		var found domain.User
 		err = db.Where("id = ?", user.ID).First(&found).Error
 		require.NoError(t, err)
-		assert.NotEqual(t, originalEmail, found.Email)
 		assert.Equal(t, user.Email, found.Email)
 	})
 
@@ -204,6 +177,19 @@ func TestUpdate(t *testing.T) {
 		err = db.Where("id = ?", user.ID).First(&found).Error
 		require.NoError(t, err)
 		assert.False(t, found.IsActive)
+	})
+
+	t.Run("successful update password hash", func(t *testing.T) {
+		user := createTestUser(t, db)
+		user.PasswordHash = "newhash"
+
+		err := repo.Update(ctx, user)
+		require.NoError(t, err)
+
+		var found domain.User
+		err = db.Where("id = ?", user.ID).First(&found).Error
+		require.NoError(t, err)
+		assert.Equal(t, "newhash", found.PasswordHash)
 	})
 
 	t.Run("successful update last login", func(t *testing.T) {
@@ -368,7 +354,7 @@ func TestFindByID(t *testing.T) {
 	t.Run("successful find active user by ID", func(t *testing.T) {
 		user := createTestUser(t, db)
 
-		found, err := repo.FindByID(ctx, user.ID, dto.DefaultParanoidOptions())
+		found, err := repo.FindByID(ctx, user.ID, domain.DefaultParanoidOptions())
 		require.NoError(t, err)
 		assert.Equal(t, user.ID, found.ID)
 		assert.Equal(t, user.Email, found.Email)
@@ -381,19 +367,9 @@ func TestFindByID(t *testing.T) {
 		err := db.Save(user).Error
 		require.NoError(t, err)
 
-		found, err := repo.FindByID(ctx, user.ID, dto.DefaultParanoidOptions())
+		found, err := repo.FindByID(ctx, user.ID, domain.DefaultParanoidOptions())
 		require.NoError(t, err)
 		assert.Equal(t, domain.RoleAdmin, found.Role)
-	})
-
-	t.Run("successful find user with profile", func(t *testing.T) {
-		user := createTestUser(t, db)
-		profile := createTestProfile(t, db, user.ID)
-
-		found, err := repo.FindByID(ctx, user.ID, dto.DefaultParanoidOptions())
-		require.NoError(t, err)
-		assert.NotNil(t, found.Profile)
-		assert.Equal(t, profile.FirstName, found.Profile.FirstName)
 	})
 
 	t.Run("successful find deleted user with include deleted", func(t *testing.T) {
@@ -401,7 +377,7 @@ func TestFindByID(t *testing.T) {
 		err := db.Delete(user).Error
 		require.NoError(t, err)
 
-		found, err := repo.FindByID(ctx, user.ID, &dto.ParanoidOptions{IncludeDeleted: true})
+		found, err := repo.FindByID(ctx, user.ID, &domain.ParanoidOptions{IncludeDeleted: true})
 		require.NoError(t, err)
 		assert.Equal(t, user.ID, found.ID)
 	})
@@ -411,13 +387,13 @@ func TestFindByID(t *testing.T) {
 		err := db.Delete(user).Error
 		require.NoError(t, err)
 
-		_, err = repo.FindByID(ctx, user.ID, dto.DefaultParanoidOptions())
+		_, err = repo.FindByID(ctx, user.ID, domain.DefaultParanoidOptions())
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, domain.ErrUserNotFound)
 	})
 
 	t.Run("fail - user not found", func(t *testing.T) {
-		_, err := repo.FindByID(ctx, uuid.NewV4().String(), dto.DefaultParanoidOptions())
+		_, err := repo.FindByID(ctx, uuid.NewV4().String(), domain.DefaultParanoidOptions())
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, domain.ErrUserNotFound)
 	})
@@ -442,7 +418,7 @@ func TestFindByEmail(t *testing.T) {
 	t.Run("successful find active user by email", func(t *testing.T) {
 		user := createTestUser(t, db)
 
-		found, err := repo.FindByEmail(ctx, user.Email, dto.DefaultParanoidOptions())
+		found, err := repo.FindByEmail(ctx, user.Email, domain.DefaultParanoidOptions())
 		require.NoError(t, err)
 		assert.Equal(t, user.ID, found.ID)
 		assert.Equal(t, user.Email, found.Email)
@@ -454,19 +430,20 @@ func TestFindByEmail(t *testing.T) {
 		err := db.Save(user).Error
 		require.NoError(t, err)
 
-		found, err := repo.FindByEmail(ctx, user.Email, dto.DefaultParanoidOptions())
+		found, err := repo.FindByEmail(ctx, user.Email, domain.DefaultParanoidOptions())
 		require.NoError(t, err)
 		assert.Equal(t, domain.RoleAdmin, found.Role)
 	})
 
-	t.Run("successful find user with profile", func(t *testing.T) {
+	t.Run("successful find inactive user", func(t *testing.T) {
 		user := createTestUser(t, db)
-		profile := createTestProfile(t, db, user.ID)
-
-		found, err := repo.FindByEmail(ctx, user.Email, dto.DefaultParanoidOptions())
+		user.IsActive = false
+		err := db.Save(user).Error
 		require.NoError(t, err)
-		assert.NotNil(t, found.Profile)
-		assert.Equal(t, profile.FirstName, found.Profile.FirstName)
+
+		found, err := repo.FindByEmail(ctx, user.Email, domain.DefaultParanoidOptions())
+		require.NoError(t, err)
+		assert.False(t, found.IsActive)
 	})
 
 	t.Run("successful find deleted user with include deleted", func(t *testing.T) {
@@ -474,7 +451,7 @@ func TestFindByEmail(t *testing.T) {
 		err := db.Delete(user).Error
 		require.NoError(t, err)
 
-		found, err := repo.FindByEmail(ctx, user.Email, &dto.ParanoidOptions{IncludeDeleted: true})
+		found, err := repo.FindByEmail(ctx, user.Email, &domain.ParanoidOptions{IncludeDeleted: true})
 		require.NoError(t, err)
 		assert.Equal(t, user.ID, found.ID)
 	})
@@ -484,13 +461,13 @@ func TestFindByEmail(t *testing.T) {
 		err := db.Delete(user).Error
 		require.NoError(t, err)
 
-		_, err = repo.FindByEmail(ctx, user.Email, dto.DefaultParanoidOptions())
+		_, err = repo.FindByEmail(ctx, user.Email, domain.DefaultParanoidOptions())
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, domain.ErrUserNotFound)
 	})
 
 	t.Run("fail - user not found", func(t *testing.T) {
-		_, err := repo.FindByEmail(ctx, "nonexistent@example.com", dto.DefaultParanoidOptions())
+		_, err := repo.FindByEmail(ctx, "nonexistent@example.com", domain.DefaultParanoidOptions())
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, domain.ErrUserNotFound)
 	})
@@ -652,127 +629,8 @@ func TestExistsByEmail(t *testing.T) {
 	})
 }
 
-// TestUpdateProfile tests the UpdateProfile method.
-func TestUpdateProfile(t *testing.T) {
-	db := setupTestDB(t)
-	defer teardownTestDB(t, db)
-
-	repo := repository.NewUserRepository(db)
-	ctx := context.Background()
-
-	t.Run("successful update existing profile", func(t *testing.T) {
-		user := createTestUser(t, db)
-		profile := createTestProfile(t, db, user.ID)
-
-		profile.FirstName = "Jane"
-		profile.LastName = "Smith"
-
-		err := repo.UpdateProfile(ctx, profile)
-		require.NoError(t, err)
-
-		var found domain.Profile
-		err = db.Where("user_id = ?", user.ID).First(&found).Error
-		require.NoError(t, err)
-		assert.Equal(t, "Jane", found.FirstName)
-		assert.Equal(t, "Smith", found.LastName)
-	})
-
-	t.Run("successful create new profile", func(t *testing.T) {
-		user := createTestUser(t, db)
-
-		profile := &domain.Profile{
-			Model:    domain.Model{ID: uuid.NewV4().String()},
-			UserID:   user.ID,
-			FirstName: "Alice",
-			LastName:  "Johnson",
-		}
-
-		err := repo.UpdateProfile(ctx, profile)
-		require.NoError(t, err)
-
-		var found domain.Profile
-		err = db.Where("user_id = ?", user.ID).First(&found).Error
-		require.NoError(t, err)
-		assert.Equal(t, "Alice", found.FirstName)
-	})
-
-	t.Run("successful update profile with bio", func(t *testing.T) {
-		user := createTestUser(t, db)
-		profile := createTestProfile(t, db, user.ID)
-
-		profile.Bio = "Software Engineer"
-
-		err := repo.UpdateProfile(ctx, profile)
-		require.NoError(t, err)
-
-		var found domain.Profile
-		err = db.Where("user_id = ?", user.ID).First(&found).Error
-		require.NoError(t, err)
-		assert.Equal(t, "Software Engineer", found.Bio)
-	})
-
-	t.Run("successful update profile with avatar", func(t *testing.T) {
-		user := createTestUser(t, db)
-		profile := createTestProfile(t, db, user.ID)
-
-		profile.Avatar = "https://example.com/avatar.jpg"
-
-		err := repo.UpdateProfile(ctx, profile)
-		require.NoError(t, err)
-
-		var found domain.Profile
-		err = db.Where("user_id = ?", user.ID).First(&found).Error
-		require.NoError(t, err)
-		assert.Equal(t, "https://example.com/avatar.jpg", found.Avatar)
-	})
-}
-
-// TestGetProfile tests the GetProfile method.
-func TestGetProfile(t *testing.T) {
-	db := setupTestDB(t)
-	defer teardownTestDB(t, db)
-
-	repo := repository.NewUserRepository(db)
-	ctx := context.Background()
-
-	t.Run("successful get existing profile", func(t *testing.T) {
-		user := createTestUser(t, db)
-		profile := createTestProfile(t, db, user.ID)
-
-		found, err := repo.GetProfile(ctx, user.ID)
-		require.NoError(t, err)
-		require.NotNil(t, found)
-		assert.Equal(t, profile.UserID, found.UserID)
-		assert.Equal(t, profile.FirstName, found.FirstName)
-		assert.Equal(t, profile.LastName, found.LastName)
-	})
-
-	t.Run("successful get non-existent profile returns nil", func(t *testing.T) {
-		user := createTestUser(t, db)
-
-		profile, err := repo.GetProfile(ctx, user.ID)
-		require.NoError(t, err)
-		assert.Nil(t, profile)
-	})
-
-	t.Run("successful get profile with all fields", func(t *testing.T) {
-		user := createTestUser(t, db)
-		profile := createTestProfile(t, db, user.ID)
-		profile.Bio = "Full stack developer"
-		profile.Avatar = "https://example.com/jane.jpg"
-		err := db.Save(profile).Error
-		require.NoError(t, err)
-
-		found, err := repo.GetProfile(ctx, user.ID)
-		require.NoError(t, err)
-		require.NotNil(t, found)
-		assert.Equal(t, "Full stack developer", found.Bio)
-		assert.Equal(t, "https://example.com/jane.jpg", found.Avatar)
-	})
-}
-
-// TestUserRepositoryIntegration tests the repository with multiple operations.
-func TestUserRepositoryIntegration(t *testing.T) {
+// TestAuthUserRepositoryIntegration tests the repository with multiple operations.
+func TestAuthUserRepositoryIntegration(t *testing.T) {
 	db := setupTestDB(t)
 	defer teardownTestDB(t, db)
 
@@ -784,12 +642,12 @@ func TestUserRepositoryIntegration(t *testing.T) {
 		user := createTestUser(t, db)
 
 		// Find by ID
-		found, err := repo.FindByID(ctx, user.ID, dto.DefaultParanoidOptions())
+		found, err := repo.FindByID(ctx, user.ID, domain.DefaultParanoidOptions())
 		require.NoError(t, err)
 		assert.Equal(t, user.Email, found.Email)
 
 		// Find by Email
-		foundByEmail, err := repo.FindByEmail(ctx, user.Email, dto.DefaultParanoidOptions())
+		foundByEmail, err := repo.FindByEmail(ctx, user.Email, domain.DefaultParanoidOptions())
 		require.NoError(t, err)
 		assert.Equal(t, user.ID, foundByEmail.ID)
 
@@ -799,29 +657,27 @@ func TestUserRepositoryIntegration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify update
-		updated, err := repo.FindByID(ctx, user.ID, dto.DefaultParanoidOptions())
+		updated, err := repo.FindByID(ctx, user.ID, domain.DefaultParanoidOptions())
 		require.NoError(t, err)
 		assert.Equal(t, domain.RoleAdmin, updated.Role)
 
-		// Create and update profile
-		profile := createTestProfile(t, db, user.ID)
-		profile.FirstName = "Test"
-		profile.LastName = "User"
-		err = repo.UpdateProfile(ctx, profile)
+		// Update last login
+		now := time.Now().UTC()
+		user.LastLoginAt = &now
+		err = repo.Update(ctx, user)
 		require.NoError(t, err)
 
-		// Get profile
-		retrievedProfile, err := repo.GetProfile(ctx, user.ID)
+		// Verify last login
+		withLogin, err := repo.FindByID(ctx, user.ID, domain.DefaultParanoidOptions())
 		require.NoError(t, err)
-		assert.NotNil(t, retrievedProfile)
-		assert.Equal(t, "Test", retrievedProfile.FirstName)
+		assert.NotNil(t, withLogin.LastLoginAt)
 
 		// Delete (soft)
 		err = repo.Delete(ctx, user.ID)
 		require.NoError(t, err)
 
 		// Verify soft delete
-		_, err = repo.FindByID(ctx, user.ID, dto.DefaultParanoidOptions())
+		_, err = repo.FindByID(ctx, user.ID, domain.DefaultParanoidOptions())
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, domain.ErrUserNotFound)
 
@@ -830,7 +686,7 @@ func TestUserRepositoryIntegration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify restore
-		restored, err := repo.FindByID(ctx, user.ID, dto.DefaultParanoidOptions())
+		restored, err := repo.FindByID(ctx, user.ID, domain.DefaultParanoidOptions())
 		require.NoError(t, err)
 		assert.Equal(t, user.ID, restored.ID)
 
@@ -839,19 +695,20 @@ func TestUserRepositoryIntegration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify hard delete
-		_, err = repo.FindByID(ctx, user.ID, &dto.ParanoidOptions{IncludeDeleted: true})
+		_, err = repo.FindByID(ctx, user.ID, &domain.ParanoidOptions{IncludeDeleted: true})
 		assert.Error(t, err)
 	})
 
 	t.Run("exists by email after operations", func(t *testing.T) {
 		// Initial state - should not exist
-		exists, err := repo.ExistsByEmail(ctx, "lifecycle@example.com")
+		email := fmt.Sprintf("lifecycle_%s@example.com", uuid.NewV4().String())
+		exists, err := repo.ExistsByEmail(ctx, email)
 		require.NoError(t, err)
 		assert.False(t, exists)
 
 		// Create user
 		user := &domain.User{
-			Email:        "lifecycle@example.com",
+			Email:        email,
 			PasswordHash: "hashedpassword",
 			Role:         domain.RoleUser,
 			IsActive:     true,
@@ -860,7 +717,7 @@ func TestUserRepositoryIntegration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Should exist now
-		exists, err = repo.ExistsByEmail(ctx, "lifecycle@example.com")
+		exists, err = repo.ExistsByEmail(ctx, email)
 		require.NoError(t, err)
 		assert.True(t, exists)
 
@@ -869,7 +726,7 @@ func TestUserRepositoryIntegration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Should not exist after soft delete
-		exists, err = repo.ExistsByEmail(ctx, "lifecycle@example.com")
+		exists, err = repo.ExistsByEmail(ctx, email)
 		require.NoError(t, err)
 		assert.False(t, exists)
 	})
@@ -930,5 +787,83 @@ func TestEdgeCases(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, int64(0), result.Total)
 		assert.Empty(t, result.Users)
+	})
+}
+
+// TestUserRoleMethods tests user role-related methods.
+func TestUserRoleMethods(t *testing.T) {
+	db := setupTestDB(t)
+	defer teardownTestDB(t, db)
+
+	repo := repository.NewUserRepository(db)
+	ctx := context.Background()
+
+	t.Run("create and find admin user", func(t *testing.T) {
+		adminUser := &domain.User{
+			Email:        fmt.Sprintf("admin_%s@example.com", uuid.NewV4().String()),
+			PasswordHash: "hashedpassword",
+			Role:         domain.RoleAdmin,
+			IsActive:     true,
+		}
+		err := repo.Create(ctx, adminUser)
+		require.NoError(t, err)
+
+		found, err := repo.FindByEmail(ctx, adminUser.Email, domain.DefaultParanoidOptions())
+		require.NoError(t, err)
+		assert.True(t, found.IsAdmin())
+	})
+
+	t.Run("create and find regular user", func(t *testing.T) {
+		regularUser := &domain.User{
+			Email:        fmt.Sprintf("user_%s@example.com", uuid.NewV4().String()),
+			PasswordHash: "hashedpassword",
+			Role:         domain.RoleUser,
+			IsActive:     true,
+		}
+		err := repo.Create(ctx, regularUser)
+		require.NoError(t, err)
+
+		found, err := repo.FindByEmail(ctx, regularUser.Email, domain.DefaultParanoidOptions())
+		require.NoError(t, err)
+		assert.False(t, found.IsAdmin())
+	})
+}
+
+// TestUserActiveStatus tests user active status methods.
+func TestUserActiveStatus(t *testing.T) {
+	db := setupTestDB(t)
+	defer teardownTestDB(t, db)
+
+	repo := repository.NewUserRepository(db)
+	ctx := context.Background()
+
+	t.Run("create and find active user", func(t *testing.T) {
+		activeUser := &domain.User{
+			Email:        fmt.Sprintf("active_%s@example.com", uuid.NewV4().String()),
+			PasswordHash: "hashedpassword",
+			Role:         domain.RoleUser,
+			IsActive:     true,
+		}
+		err := repo.Create(ctx, activeUser)
+		require.NoError(t, err)
+
+		found, err := repo.FindByEmail(ctx, activeUser.Email, domain.DefaultParanoidOptions())
+		require.NoError(t, err)
+		assert.True(t, found.CanLogin())
+	})
+
+	t.Run("create and find inactive user", func(t *testing.T) {
+		inactiveUser := &domain.User{
+			Email:        fmt.Sprintf("inactive_%s@example.com", uuid.NewV4().String()),
+			PasswordHash: "hashedpassword",
+			Role:         domain.RoleUser,
+			IsActive:     false,
+		}
+		err := repo.Create(ctx, inactiveUser)
+		require.NoError(t, err)
+
+		found, err := repo.FindByEmail(ctx, inactiveUser.Email, domain.DefaultParanoidOptions())
+		require.NoError(t, err)
+		assert.False(t, found.CanLogin())
 	})
 }
