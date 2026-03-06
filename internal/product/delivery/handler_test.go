@@ -854,7 +854,7 @@ func TestHandleError_ValidationError(t *testing.T) {
 
 	// Create a validation error that would come from the usecase layer
 	// (not from Gin binding which returns BAD_REQUEST)
-	validationErr := errors.New("stock quantity exceeds available inventory")
+	validationErr := errors.New("invalid stock reduction amount")
 	mockUseCase.On("CreateProduct", mock.Anything, mock.AnythingOfType("*dto.CreateProductRequest")).
 		Return(nil, validationErr)
 

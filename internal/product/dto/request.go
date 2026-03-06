@@ -16,6 +16,7 @@ type CreateProductRequest struct {
 
 // UpdateProductRequest represents a product update request.
 type UpdateProductRequest struct {
+	ID          string   `uri:"id" binding:"required,uuid"`
 	Name        *string  `json:"name" binding:"omitempty,min=3,max=255"`
 	Description *string  `json:"description" binding:"omitempty,max=1000"`
 	Price       *float64 `json:"price" binding:"omitempty,gt=0"`

@@ -4,6 +4,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ignata/go-microservices-boilerplate/internal/user/domain"
 	"github.com/ignata/go-microservices-boilerplate/internal/user/dto"
@@ -18,7 +19,7 @@ type ActivityRepository interface {
 	FindByUserID(ctx context.Context, req *dto.ListActivityLogsRequest) (*domain.ActivityLogList, error)
 	// FindAll finds all activity logs with pagination
 	FindAll(ctx context.Context, req *dto.ListActivityLogsRequest) (*domain.ActivityLogList, error)
-	// DeleteOlderThan deletes activity logs older than the specified duration
+	// DeleteOlderThan deletes activity logs older than the specified number of days.
 	DeleteOlderThan(ctx context.Context, days int) error
 }
 
@@ -142,13 +143,16 @@ func (r *gormActivityRepository) FindAll(ctx context.Context, req *dto.ListActiv
 
 // DeleteOlderThan deletes activity logs older than the specified number of days.
 func (r *gormActivityRepository) DeleteOlderThan(ctx context.Context, days int) error {
+	// Calculate the cutoff date in Go to be database-agnostic
+	// This fixes issues with SQLite which doesn't support PostgreSQL's INTERVAL syntax
+	cutoff := time.Now().AddDate(0, 0, -days)
+
 	result := r.db.WithContext(ctx).
-		Where("created_at < NOW() - INTERVAL '? days'", days).
+		Where("created_at < ?", cutoff).
 		Delete(&domain.ActivityLog{})
 
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete old activity logs: %w", result.Error)
 	}
-
 	return nil
 }

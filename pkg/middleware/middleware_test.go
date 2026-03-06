@@ -492,10 +492,10 @@ func TestRecovery(t *testing.T) {
 // TestGetUserID tests the GetUserID helper function.
 func TestGetUserID(t *testing.T) {
 	tests := []struct {
-		name     string
-		setup    func(*gin.Context)
-		wantID   string
-		wantOK   bool
+		name   string
+		setup  func(*gin.Context)
+		wantID string
+		wantOK bool
 	}{
 		{
 			name: "user ID exists in context",
@@ -506,8 +506,8 @@ func TestGetUserID(t *testing.T) {
 			wantOK: true,
 		},
 		{
-			name:  "user ID does not exist",
-			setup: func(c *gin.Context) {},
+			name:   "user ID does not exist",
+			setup:  func(c *gin.Context) {},
 			wantID: "",
 			wantOK: false,
 		},
@@ -540,10 +540,10 @@ func TestGetUserID(t *testing.T) {
 // TestGetUserRole tests the GetUserRole helper function.
 func TestGetUserRole(t *testing.T) {
 	tests := []struct {
-		name      string
-		setup     func(*gin.Context)
-		wantRole  domain.Role
-		wantOK    bool
+		name     string
+		setup    func(*gin.Context)
+		wantRole domain.Role
+		wantOK   bool
 	}{
 		{
 			name: "role exists in context",
@@ -554,8 +554,8 @@ func TestGetUserRole(t *testing.T) {
 			wantOK:   true,
 		},
 		{
-			name:  "role does not exist",
-			setup: func(c *gin.Context) {},
+			name:     "role does not exist",
+			setup:    func(c *gin.Context) {},
 			wantRole: "",
 			wantOK:   false,
 		},
@@ -747,9 +747,9 @@ func TestCORS(t *testing.T) {
 		{
 			name: "expose custom headers",
 			config: CORSConfig{
-				AllowedOrigins:  []string{"*"},
-				ExposedHeaders:  []string{"X-Custom-Header"},
-				AllowedMethods:  []string{"GET"},
+				AllowedOrigins: []string{"*"},
+				ExposedHeaders: []string{"X-Custom-Header"},
+				AllowedMethods: []string{"GET"},
 			},
 			origin:         "https://example.com",
 			method:         "GET",
@@ -1075,8 +1075,8 @@ func TestRateLimit_SkipFunc(t *testing.T) {
 			skipFunc: func(c *gin.Context) bool {
 				return c.GetHeader("X-Bypass-RateLimit") == "true"
 			},
-			headers:  map[string]string{},
-			skipped:  false,
+			headers: map[string]string{},
+			skipped: false,
 		},
 		{
 			name: "skip by path",
@@ -1084,7 +1084,7 @@ func TestRateLimit_SkipFunc(t *testing.T) {
 				return c.Request.URL.Path == "/health"
 			},
 			headers: map[string]string{},
-			skipped:  false, // Request goes to /test, not /health
+			skipped: false, // Request goes to /test, not /health
 		},
 	}
 
@@ -1221,8 +1221,8 @@ func TestRecoveryWithWriter(t *testing.T) {
 // TestPanicHandler tests panic handler function.
 func TestPanicHandler(t *testing.T) {
 	tests := []struct {
-		name   string
-		detail bool
+		name          string
+		detail        bool
 		hasPanicField bool
 	}{
 		{"with detail", true, true},
@@ -1235,7 +1235,7 @@ func TestPanicHandler(t *testing.T) {
 			handler := PanicHandler(tt.detail)
 			router := gin.New()
 			router.Use(Recovery(RecoveryConfig{
-				Logger: log,
+				Logger:       log,
 				ErrorHandler: handler,
 			}))
 			router.GET("/panic", func(c *gin.Context) {
@@ -1274,7 +1274,7 @@ func TestTimeoutMiddleware(t *testing.T) {
 	}{
 		// Use more lenient timeouts to avoid flakiness
 		{"completes in time", 200 * time.Millisecond, 50 * time.Millisecond, http.StatusOK},
-		{"times out", 50 * time.Millisecond, 200 * time.Millisecond, http.StatusServiceUnavailable},
+		{"times out", 50 * time.Millisecond, 200 * time.Millisecond, http.StatusRequestTimeout},
 	}
 
 	for _, tt := range tests {
@@ -1337,7 +1337,7 @@ func TestRequestTimeout(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	assert.Equal(t, http.StatusRequestTimeout, w.Code)
 }
 
 // TestLoggingMiddleware tests logging middleware.

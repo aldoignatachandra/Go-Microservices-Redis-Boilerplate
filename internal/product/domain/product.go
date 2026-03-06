@@ -4,6 +4,7 @@ package domain
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -183,5 +184,18 @@ func IsNotFoundError(err error) bool {
 
 // IsValidationError checks if the error is a validation error.
 func IsValidationError(err error) bool {
-	return err != nil
+	if err == nil {
+		return false
+	}
+	// Check for "insufficient stock" error string as it is returned dynamically
+	// We use Contains because the error might be wrapped
+	errStr := err.Error()
+	if strings.Contains(errStr, "insufficient stock") {
+		return true
+	}
+	// Check for "invalid stock" errors
+	if strings.Contains(errStr, "invalid stock reduction amount") || strings.Contains(errStr, "invalid stock increase amount") {
+		return true
+	}
+	return false
 }

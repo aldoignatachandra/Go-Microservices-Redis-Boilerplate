@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/google/uuid"
 
 	"github.com/ignata/go-microservices-boilerplate/internal/user/domain"
 	"github.com/ignata/go-microservices-boilerplate/internal/user/dto"
@@ -26,6 +26,7 @@ func TestActivityRepository_Create(t *testing.T) {
 	require.NoError(t, err)
 
 	repo := repository.NewActivityRepository(db)
+	require.NotNil(t, repo)
 	ctx := context.Background()
 
 	t.Run("successful create", func(t *testing.T) {
@@ -35,10 +36,10 @@ func TestActivityRepository_Create(t *testing.T) {
 				CreatedAt: time.Now().UTC(),
 				UpdatedAt: time.Now().UTC(),
 			},
-			UserID:    uuid.New().String(),
-			Action:    "user.login",
-			Resource:  "auth",
-			Metadata:  map[string]interface{}{"ip": "192.168.1.1"},
+			UserID:   uuid.New().String(),
+			Action:   "user.login",
+			Resource: "auth",
+			Metadata: map[string]interface{}{"ip": "192.168.1.1"},
 		}
 
 		err := repo.Create(ctx, log)
@@ -103,7 +104,7 @@ func TestActivityRepository_FindByUserID(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Len(t, result.Logs, 5)
-		assert.Equal(t, 5, result.Total)
+		assert.Equal(t, int64(5), result.Total)
 	})
 
 	t.Run("find with pagination", func(t *testing.T) {
@@ -116,16 +117,16 @@ func TestActivityRepository_FindByUserID(t *testing.T) {
 		result, err := repo.FindByUserID(ctx, req)
 		assert.NoError(t, err)
 		assert.Len(t, result.Logs, 2)
-		assert.Equal(t, 5, result.Total)
+		assert.Equal(t, int64(5), result.Total)
 		assert.Equal(t, 3, result.TotalPages)
 	})
 
 	t.Run("find with action filter", func(t *testing.T) {
 		req := &dto.ListActivityLogsRequest{
-			UserID:  userID,
-			Action:  "action.1",
-			Page:    1,
-			Limit:   10,
+			UserID: userID,
+			Action: "action.1",
+			Page:   1,
+			Limit:  10,
 		}
 
 		result, err := repo.FindByUserID(ctx, req)
@@ -156,7 +157,7 @@ func TestActivityRepository_FindByUserID(t *testing.T) {
 		result, err := repo.FindByUserID(ctx, req)
 		assert.NoError(t, err)
 		assert.Len(t, result.Logs, 0)
-		assert.Equal(t, 0, result.Total)
+		assert.Equal(t, int64(0), result.Total)
 	})
 
 	t.Run("nil request defaults", func(t *testing.T) {
@@ -281,23 +282,23 @@ func TestActivityRepository_DeleteOlderThan(t *testing.T) {
 	ctx := context.Background()
 
 	// Create old and recent logs
-	oldTime := time.Now().UTC().Add(-10 * 24 * time.Hour) // 10 days ago
+	oldTime := time.Now().UTC().Add(-10 * 24 * time.Hour)   // 10 days ago
 	recentTime := time.Now().UTC().Add(-1 * 24 * time.Hour) // 1 day ago
 
 	oldLog := &domain.ActivityLog{
-		Model:     domain.Model{ID: uuid.New().String(), CreatedAt: oldTime, UpdatedAt: oldTime},
-		UserID:    uuid.New().String(),
-		Action:    "old.action",
-		Resource:  "test",
+		Model:    domain.Model{ID: uuid.New().String(), CreatedAt: oldTime, UpdatedAt: oldTime},
+		UserID:   uuid.New().String(),
+		Action:   "old.action",
+		Resource: "test",
 	}
 	err = db.Create(oldLog).Error
 	require.NoError(t, err)
 
 	recentLog := &domain.ActivityLog{
-		Model:     domain.Model{ID: uuid.New().String(), CreatedAt: recentTime, UpdatedAt: recentTime},
-		UserID:    uuid.New().String(),
-		Action:    "recent.action",
-		Resource:  "test",
+		Model:    domain.Model{ID: uuid.New().String(), CreatedAt: recentTime, UpdatedAt: recentTime},
+		UserID:   uuid.New().String(),
+		Action:   "recent.action",
+		Resource: "test",
 	}
 	err = db.Create(recentLog).Error
 	require.NoError(t, err)
