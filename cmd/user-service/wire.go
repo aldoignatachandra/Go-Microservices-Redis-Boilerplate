@@ -36,6 +36,7 @@ func (s *AppServer) Shutdown(ctx context.Context) error {
 }
 
 // initializeApp initializes the application with all dependencies using Wire.
+//
 //go:generate wire
 func initializeApp(cfg *config.Config) (*AppServer, error) {
 	wire.Build(

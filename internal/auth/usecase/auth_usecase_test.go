@@ -170,10 +170,6 @@ func withEmail(email string) func(*domain.User) {
 	return func(u *domain.User) { u.Email = email }
 }
 
-func withRole(role domain.Role) func(*domain.User) {
-	return func(u *domain.User) { u.Role = role }
-}
-
 func withActive(active bool) func(*domain.User) {
 	return func(u *domain.User) { u.IsActive = active }
 }

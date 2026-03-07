@@ -10,8 +10,8 @@ import (
 
 // Common JWT errors.
 var (
-	ErrInvalidToken      = errors.New("invalid token")
-	ErrExpiredToken      = errors.New("token has expired")
+	ErrInvalidToken         = errors.New("invalid token")
+	ErrExpiredToken         = errors.New("token has expired")
 	ErrInvalidSigningMethod = errors.New("invalid signing method")
 )
 
@@ -34,8 +34,8 @@ type Claims struct {
 type TokenPair struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
-	ExpiresIn    int64  `json:"expires_in"` // seconds
 	TokenType    string `json:"token_type"`
+	ExpiresIn    int64  `json:"expires_in"` // seconds
 }
 
 // JWTManager handles JWT operations.

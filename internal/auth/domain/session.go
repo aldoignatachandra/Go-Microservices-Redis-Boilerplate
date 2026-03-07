@@ -47,7 +47,7 @@ func (s *Session) Revoke() {
 }
 
 // BeforeCreate is a GORM hook that runs before creating a session.
-func (s *Session) BeforeCreate(tx *gorm.DB) error {
+func (s *Session) BeforeCreate(_ *gorm.DB) error {
 	if s.ID == "" {
 		s.ID = uuid.New().String()
 	}

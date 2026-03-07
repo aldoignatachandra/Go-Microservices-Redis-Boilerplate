@@ -21,9 +21,13 @@ const (
 type contextKey string
 
 const (
-	ContextKeyUserID        contextKey = "user_id"
-	ContextKeyUserRole      contextKey = "user_role"
-	ContextKeyRequestID     contextKey = "request_id"
+	// ContextKeyUserID is the context key for user ID.
+	ContextKeyUserID contextKey = "user_id"
+	// ContextKeyUserRole is the context key for user role.
+	ContextKeyUserRole contextKey = "user_role"
+	// ContextKeyRequestID is the context key for request ID.
+	ContextKeyRequestID contextKey = "request_id"
+	// ContextKeyCorrelationID is the context key for correlation ID.
 	ContextKeyCorrelationID contextKey = "correlation_id"
 )
 

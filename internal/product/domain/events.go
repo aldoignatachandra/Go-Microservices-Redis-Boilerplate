@@ -6,53 +6,53 @@ import "time"
 // Event types for the product service.
 const (
 	// Product events
-	EventProductCreated   = "product.created"
-	EventProductUpdated   = "product.updated"
-	EventProductDeleted   = "product.deleted"
-	EventProductRestored  = "product.restored"
+	EventProductCreated      = "product.created"
+	EventProductUpdated      = "product.updated"
+	EventProductDeleted      = "product.deleted"
+	EventProductRestored     = "product.restored"
 	EventProductStockUpdated = "product.stock_updated"
 )
 
 // ProductEvent represents a product-related event.
 type ProductEvent struct {
-	EventType string                 `json:"event_type"`
-	ProductID string                 `json:"product_id"`
-	Name      string                 `json:"name,omitempty"`
-	Price     float64                `json:"price,omitempty"`
-	Stock     int                    `json:"stock,omitempty"`
-	Status    string                 `json:"status,omitempty"`
-	CategoryID string                `json:"category_id,omitempty"`
-	Timestamp time.Time              `json:"timestamp"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	EventType  string                 `json:"event_type"`
+	ProductID  string                 `json:"product_id"`
+	Name       string                 `json:"name,omitempty"`
+	Price      float64                `json:"price,omitempty"`
+	Stock      int                    `json:"stock,omitempty"`
+	Status     string                 `json:"status,omitempty"`
+	CategoryID string                 `json:"category_id,omitempty"`
+	Timestamp  time.Time              `json:"timestamp"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // NewProductCreatedEvent creates a new product created event.
 func NewProductCreatedEvent(product *Product) *ProductEvent {
 	return &ProductEvent{
-		EventType: EventProductCreated,
-		ProductID: product.ID,
-		Name:      product.Name,
-		Price:     product.Price,
-		Stock:     product.Stock,
-		Status:    string(product.Status),
+		EventType:  EventProductCreated,
+		ProductID:  product.ID,
+		Name:       product.Name,
+		Price:      product.Price,
+		Stock:      product.Stock,
+		Status:     string(product.Status),
 		CategoryID: product.CategoryID,
-		Timestamp: time.Now().UTC(),
-		Metadata:  make(map[string]interface{}),
+		Timestamp:  time.Now().UTC(),
+		Metadata:   make(map[string]interface{}),
 	}
 }
 
 // NewProductUpdatedEvent creates a new product updated event.
 func NewProductUpdatedEvent(product *Product) *ProductEvent {
 	return &ProductEvent{
-		EventType: EventProductUpdated,
-		ProductID: product.ID,
-		Name:      product.Name,
-		Price:     product.Price,
-		Stock:     product.Stock,
-		Status:    string(product.Status),
+		EventType:  EventProductUpdated,
+		ProductID:  product.ID,
+		Name:       product.Name,
+		Price:      product.Price,
+		Stock:      product.Stock,
+		Status:     string(product.Status),
 		CategoryID: product.CategoryID,
-		Timestamp: time.Now().UTC(),
-		Metadata:  make(map[string]interface{}),
+		Timestamp:  time.Now().UTC(),
+		Metadata:   make(map[string]interface{}),
 	}
 }
 
@@ -69,15 +69,15 @@ func NewProductDeletedEvent(productID string) *ProductEvent {
 // NewProductRestoredEvent creates a new product restored event.
 func NewProductRestoredEvent(product *Product) *ProductEvent {
 	return &ProductEvent{
-		EventType: EventProductRestored,
-		ProductID: product.ID,
-		Name:      product.Name,
-		Price:     product.Price,
-		Stock:     product.Stock,
-		Status:    string(product.Status),
+		EventType:  EventProductRestored,
+		ProductID:  product.ID,
+		Name:       product.Name,
+		Price:      product.Price,
+		Stock:      product.Stock,
+		Status:     string(product.Status),
 		CategoryID: product.CategoryID,
-		Timestamp: time.Now().UTC(),
-		Metadata:  make(map[string]interface{}),
+		Timestamp:  time.Now().UTC(),
+		Metadata:   make(map[string]interface{}),
 	}
 }
 

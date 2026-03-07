@@ -6,12 +6,12 @@ import "errors"
 // Common domain errors.
 var (
 	// User errors
-	ErrUserNotFound      = errors.New("user not found")
-	ErrUserAlreadyExists = errors.New("user already exists")
-	ErrUserDeleted       = errors.New("user has been deleted")
-	ErrUserInactive      = errors.New("user is inactive")
+	ErrUserNotFound       = errors.New("user not found")
+	ErrUserAlreadyExists  = errors.New("user already exists")
+	ErrUserDeleted        = errors.New("user has been deleted")
+	ErrUserInactive       = errors.New("user is inactive")
 	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrEmailAlreadyUsed  = errors.New("email already in use")
+	ErrEmailAlreadyUsed   = errors.New("email already in use")
 
 	// Profile errors
 	ErrProfileNotFound = errors.New("profile not found")

@@ -12,8 +12,10 @@ import (
 type Role string
 
 const (
+	// RoleAdmin represents an administrator role.
 	RoleAdmin Role = "ADMIN"
-	RoleUser  Role = "USER"
+	// RoleUser represents a standard user role.
+	RoleUser Role = "USER"
 )
 
 // Model is the base model for all entities.
@@ -25,7 +27,7 @@ type Model struct {
 }
 
 // BeforeCreate is a GORM hook that sets the UUID.
-func (m *Model) BeforeCreate(tx *gorm.DB) error {
+func (m *Model) BeforeCreate(_ *gorm.DB) error {
 	if m.ID == "" {
 		m.ID = uuid.New().String()
 	}
@@ -50,7 +52,7 @@ func (u *User) IsAdmin() bool {
 
 // CanLogin checks if user can login.
 func (u *User) CanLogin() bool {
-	return u.IsActive && u.DeletedAt.Valid == false
+	return u.IsActive && !u.DeletedAt.Valid
 }
 
 // TouchLastLogin updates the last login timestamp.

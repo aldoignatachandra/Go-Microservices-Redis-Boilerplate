@@ -115,11 +115,8 @@ func (r *RedisClient) GetOrSet(ctx context.Context, key string, fn func() (inter
 		return nil, err
 	}
 
-	// Store in cache
-	if err := r.SetWithExpiry(ctx, key, data, expiration); err != nil {
-		// Log error but don't fail
-		// In production, you might want to log this
-	}
+	// Store in cache (ignore errors as cache is optional)
+	_ = r.SetWithExpiry(ctx, key, data, expiration)
 
 	return data, nil
 }

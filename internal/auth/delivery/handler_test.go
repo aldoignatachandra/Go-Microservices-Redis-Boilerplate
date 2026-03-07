@@ -3,6 +3,7 @@ package delivery_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -56,7 +57,7 @@ func TestRegister_Success(t *testing.T) {
 		"password": "SecurePass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -131,7 +132,7 @@ func TestRegister_ValidationError(t *testing.T) {
 			}
 
 			// Act
-			req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+			req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
@@ -165,7 +166,7 @@ func TestRegister_EmailAlreadyUsed(t *testing.T) {
 		"password": "SecurePass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -217,7 +218,7 @@ func TestRegister_WithRole(t *testing.T) {
 		"role":     "ADMIN",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -268,7 +269,7 @@ func TestLogin_Success(t *testing.T) {
 		"password": "CorrectPassword123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "test-agent")
 	w := httptest.NewRecorder()
@@ -306,7 +307,7 @@ func TestLogin_InvalidCredentials(t *testing.T) {
 		"password": "WrongPassword",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -342,7 +343,7 @@ func TestLogin_UserDeleted(t *testing.T) {
 		"password": "password123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -377,7 +378,7 @@ func TestLogin_UserInactive(t *testing.T) {
 		"password": "password123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -408,7 +409,7 @@ func TestLogout_Success(t *testing.T) {
 	mockUseCase.On("Logout", mock.Anything, "550e8400-e29b-41d4-a716-446655440001").Return(nil)
 
 	// Act
-	req, _ := http.NewRequest("POST", "/auth/logout", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/logout", nil)
 	w := httptest.NewRecorder()
 
 	// Set user_id in context (simulating auth middleware)
@@ -442,7 +443,7 @@ func TestLogout_Unauthorized(t *testing.T) {
 	router := setupTestRouter()
 
 	// Act - no user_id set in context
-	req, _ := http.NewRequest("POST", "/auth/logout", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/logout", nil)
 	w := httptest.NewRecorder()
 
 	router.POST("/auth/logout", handler.Logout)
@@ -486,7 +487,7 @@ func TestRefreshToken_Success(t *testing.T) {
 		"refresh_token": "valid-refresh-token",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -522,7 +523,7 @@ func TestRefreshToken_InvalidToken(t *testing.T) {
 		"refresh_token": "invalid-token",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -559,7 +560,7 @@ func TestGetCurrentUser_Success(t *testing.T) {
 		Return(expectedResponse, nil)
 
 	// Act
-	req, _ := http.NewRequest("GET", "/auth/me", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/auth/me", nil)
 	w := httptest.NewRecorder()
 
 	// Set user_id in context
@@ -593,7 +594,7 @@ func TestGetCurrentUser_Unauthorized(t *testing.T) {
 	router := setupTestRouter()
 
 	// Act - no user_id set
-	req, _ := http.NewRequest("GET", "/auth/me", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/auth/me", nil)
 	w := httptest.NewRecorder()
 
 	router.GET("/auth/me", handler.GetCurrentUser)
@@ -619,7 +620,7 @@ func TestChangePassword_Success(t *testing.T) {
 		"new_password":     "NewPass456",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -662,7 +663,7 @@ func TestChangePassword_InvalidCurrentPassword(t *testing.T) {
 		"new_password":     "NewPass456",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -700,7 +701,7 @@ func TestChangePassword_Unauthorized(t *testing.T) {
 		"new_password":     "NewPass456",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -729,7 +730,7 @@ func TestGetUser_Success(t *testing.T) {
 		Return(expectedResponse, nil)
 
 	// Act
-	req, _ := http.NewRequest("GET", "/admin/users/550e8400-e29b-41d4-a716-446655440001", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/admin/users/550e8400-e29b-41d4-a716-446655440001", nil)
 	w := httptest.NewRecorder()
 
 	router.GET("/admin/users/:id", handler.GetUser)
@@ -760,7 +761,7 @@ func TestGetUser_NotFound(t *testing.T) {
 		Return(nil, domain.ErrUserNotFound)
 
 	// Act
-	req, _ := http.NewRequest("GET", "/admin/users/550e8400-e29b-41d4-a716-446655440002", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/admin/users/550e8400-e29b-41d4-a716-446655440002", nil)
 	w := httptest.NewRecorder()
 
 	router.GET("/admin/users/:id", handler.GetUser)
@@ -804,7 +805,7 @@ func TestListUsers_Success(t *testing.T) {
 		Return(expectedResponse, nil)
 
 	// Act
-	req, _ := http.NewRequest("GET", "/admin/users?page=1&limit=10", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/admin/users?page=1&limit=10", nil)
 	w := httptest.NewRecorder()
 
 	router.GET("/admin/users", handler.ListUsers)
@@ -879,7 +880,7 @@ func TestListUsers_WithFilters(t *testing.T) {
 			tt.setup(mockUseCase)
 
 			// Act
-			req, _ := http.NewRequest("GET", tt.query, nil)
+			req, _ := http.NewRequestWithContext(context.Background(), "GET", tt.query, nil)
 			w := httptest.NewRecorder()
 
 			router.GET("/admin/users", handler.ListUsers)
@@ -904,7 +905,7 @@ func TestDeleteUser_Success(t *testing.T) {
 	})).Return(nil)
 
 	// Act
-	req, _ := http.NewRequest("DELETE", "/admin/users/550e8400-e29b-41d4-a716-446655440001", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "DELETE", "/admin/users/550e8400-e29b-41d4-a716-446655440001", nil)
 	w := httptest.NewRecorder()
 
 	router.DELETE("/admin/users/:id", handler.DeleteUser)
@@ -936,7 +937,7 @@ func TestDeleteUser_ForceDelete(t *testing.T) {
 	})).Return(nil)
 
 	// Act
-	req, _ := http.NewRequest("DELETE", "/admin/users/550e8400-e29b-41d4-a716-446655440001?force=true", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "DELETE", "/admin/users/550e8400-e29b-41d4-a716-446655440001?force=true", nil)
 	w := httptest.NewRecorder()
 
 	router.DELETE("/admin/users/:id", handler.DeleteUser)
@@ -967,7 +968,7 @@ func TestDeleteUser_NotFound(t *testing.T) {
 		Return(domain.ErrUserNotFound)
 
 	// Act
-	req, _ := http.NewRequest("DELETE", "/admin/users/550e8400-e29b-41d4-a716-446655440002", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "DELETE", "/admin/users/550e8400-e29b-41d4-a716-446655440002", nil)
 	w := httptest.NewRecorder()
 
 	router.DELETE("/admin/users/:id", handler.DeleteUser)
@@ -1003,7 +1004,7 @@ func TestRestoreUser_Success(t *testing.T) {
 		Return(expectedUser, nil)
 
 	// Act
-	req, _ := http.NewRequest("POST", "/admin/users/550e8400-e29b-41d4-a716-446655440001/restore", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/admin/users/550e8400-e29b-41d4-a716-446655440001/restore", nil)
 	w := httptest.NewRecorder()
 
 	router.POST("/admin/users/:id/restore", handler.RestoreUser)
@@ -1035,7 +1036,7 @@ func TestRestoreUser_NotFound(t *testing.T) {
 		Return(nil, domain.ErrUserNotFound)
 
 	// Act
-	req, _ := http.NewRequest("POST", "/admin/users/550e8400-e29b-41d4-a716-446655440002/restore", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/admin/users/550e8400-e29b-41d4-a716-446655440002/restore", nil)
 	w := httptest.NewRecorder()
 
 	router.POST("/admin/users/:id/restore", handler.RestoreUser)
@@ -1068,7 +1069,7 @@ func TestHandleError_ValidationError(t *testing.T) {
 		"password": "SecurePass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -1100,7 +1101,7 @@ func TestHandleError_SessionExpired(t *testing.T) {
 		"refresh_token": "expired-token",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -1130,7 +1131,7 @@ func TestHandleError_UserGone(t *testing.T) {
 		Return(nil, domain.ErrUserDeleted)
 
 	// Act
-	req, _ := http.NewRequest("GET", "/auth/me", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/auth/me", nil)
 	w := httptest.NewRecorder()
 
 	// Set user_id in context
@@ -1170,7 +1171,7 @@ func TestRegister_InternalError(t *testing.T) {
 		"password": "SecurePass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -1221,7 +1222,7 @@ func TestRegister_WithDefaultRole(t *testing.T) {
 		"password": "SecurePass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -1256,7 +1257,7 @@ func TestLogin_EmptyPassword(t *testing.T) {
 		"password": "",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -1302,7 +1303,7 @@ func TestLogin_WithIPAndUserAgent(t *testing.T) {
 		"password": "CorrectPassword123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	req.RemoteAddr = "192.168.1.1:1234"
@@ -1334,7 +1335,7 @@ func TestLogout_Error(t *testing.T) {
 		Return(errors.New("session revocation failed"))
 
 	// Act
-	req, _ := http.NewRequest("POST", "/auth/logout", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/logout", nil)
 	w := httptest.NewRecorder()
 
 	router.Use(func(c *gin.Context) {
@@ -1365,7 +1366,7 @@ func TestRefreshToken_MalformedJSON(t *testing.T) {
 	router := setupTestRouter()
 
 	// Act
-	req, _ := http.NewRequest("POST", "/auth/refresh", bytes.NewBufferString("{invalid json"))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/refresh", bytes.NewBufferString("{invalid json"))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -1393,7 +1394,7 @@ func TestGetCurrentUser_Error(t *testing.T) {
 		Return(nil, errors.New("database error"))
 
 	// Act
-	req, _ := http.NewRequest("GET", "/auth/me", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/auth/me", nil)
 	w := httptest.NewRecorder()
 
 	router.Use(func(c *gin.Context) {
@@ -1429,7 +1430,7 @@ func TestChangePassword_EmptyNewPassword(t *testing.T) {
 		"new_password":     "",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -1467,7 +1468,7 @@ func TestChangePassword_RepositoryError(t *testing.T) {
 		"new_password":     "NewPass456",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -1499,7 +1500,7 @@ func TestGetUser_InvalidUUID(t *testing.T) {
 	router := setupTestRouter()
 
 	// Act - Gin's UUID validation will fail
-	req, _ := http.NewRequest("GET", "/admin/users/invalid-uuid", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/admin/users/invalid-uuid", nil)
 	w := httptest.NewRecorder()
 
 	router.GET("/admin/users/:id", handler.GetUser)
@@ -1534,7 +1535,7 @@ func TestGetUser_IncludeDeleted(t *testing.T) {
 	})).Return(expectedResponse, nil)
 
 	// Act
-	req, _ := http.NewRequest("GET", "/admin/users/550e8400-e29b-41d4-a716-446655440001?include_deleted=true", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/admin/users/550e8400-e29b-41d4-a716-446655440001?include_deleted=true", nil)
 	w := httptest.NewRecorder()
 
 	router.GET("/admin/users/:id", handler.GetUser)
@@ -1584,7 +1585,7 @@ func TestListUsers_InvalidQueryParams(t *testing.T) {
 			router := setupTestRouter()
 
 			// Act
-			req, _ := http.NewRequest("GET", tt.query, nil)
+			req, _ := http.NewRequestWithContext(context.Background(), "GET", tt.query, nil)
 			w := httptest.NewRecorder()
 
 			router.GET("/admin/users", handler.ListUsers)
@@ -1610,7 +1611,7 @@ func TestDeleteUser_InvalidUUID(t *testing.T) {
 	router := setupTestRouter()
 
 	// Act - Gin's UUID validation will fail
-	req, _ := http.NewRequest("DELETE", "/admin/users/invalid-uuid", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "DELETE", "/admin/users/invalid-uuid", nil)
 	w := httptest.NewRecorder()
 
 	router.DELETE("/admin/users/:id", handler.DeleteUser)
@@ -1637,7 +1638,7 @@ func TestDeleteUser_Error(t *testing.T) {
 		Return(errors.New("failed to delete user"))
 
 	// Act
-	req, _ := http.NewRequest("DELETE", "/admin/users/550e8400-e29b-41d4-a716-446655440001", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "DELETE", "/admin/users/550e8400-e29b-41d4-a716-446655440001", nil)
 	w := httptest.NewRecorder()
 
 	router.DELETE("/admin/users/:id", handler.DeleteUser)
@@ -1666,7 +1667,7 @@ func TestRestoreUser_Error(t *testing.T) {
 		Return(nil, errors.New("failed to restore user"))
 
 	// Act
-	req, _ := http.NewRequest("POST", "/admin/users/550e8400-e29b-41d4-a716-446655440001/restore", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/admin/users/550e8400-e29b-41d4-a716-446655440001/restore", nil)
 	w := httptest.NewRecorder()
 
 	router.POST("/admin/users/:id/restore", handler.RestoreUser)
@@ -1692,7 +1693,7 @@ func TestRestoreUser_InvalidUUID(t *testing.T) {
 	router := setupTestRouter()
 
 	// Act - Gin's UUID validation will fail
-	req, _ := http.NewRequest("POST", "/admin/users/invalid-uuid/restore", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/admin/users/invalid-uuid/restore", nil)
 	w := httptest.NewRecorder()
 
 	router.POST("/admin/users/:id/restore", handler.RestoreUser)
@@ -1720,7 +1721,7 @@ func TestHandleError_UnknownError(t *testing.T) {
 		Return(nil, unknownError)
 
 	// Act
-	req, _ := http.NewRequest("GET", "/auth/me", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/auth/me", nil)
 	w := httptest.NewRecorder()
 
 	router.Use(func(c *gin.Context) {
@@ -1769,7 +1770,7 @@ func TestHandleError_PasswordTooShort(t *testing.T) {
 		"new_password":     "ValidPass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -1802,7 +1803,7 @@ func TestHandleError_SessionRevoked(t *testing.T) {
 		"refresh_token": "revoked-token",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -1858,7 +1859,7 @@ func TestLogin_ValidationErrors(t *testing.T) {
 				"password": tt.password,
 			}
 			bodyBytes, _ := json.Marshal(reqBody)
-			req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(bodyBytes))
+			req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
@@ -1887,7 +1888,7 @@ func TestRefreshToken_MissingToken(t *testing.T) {
 	// Act - missing refresh_token field
 	reqBody := map[string]interface{}{}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -1916,7 +1917,7 @@ func TestRefreshToken_EmptyToken(t *testing.T) {
 		"refresh_token": "",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -1977,7 +1978,7 @@ func TestChangePassword_MissingFields(t *testing.T) {
 
 			// Act
 			bodyBytes, _ := json.Marshal(tt.requestBody)
-			req, _ := http.NewRequest("POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
+			req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
@@ -2006,7 +2007,7 @@ func TestListUsers_Error(t *testing.T) {
 		Return(nil, errors.New("database connection failed"))
 
 	// Act
-	req, _ := http.NewRequest("GET", "/admin/users?page=1&limit=10", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/admin/users?page=1&limit=10", nil)
 	w := httptest.NewRecorder()
 
 	router.GET("/admin/users", handler.ListUsers)
@@ -2032,7 +2033,7 @@ func TestListUsers_InvalidLimitValue(t *testing.T) {
 	router := setupTestRouter()
 
 	// Act - limit exceeds maximum
-	req, _ := http.NewRequest("GET", "/admin/users?limit=1000", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/admin/users?limit=1000", nil)
 	w := httptest.NewRecorder()
 
 	router.GET("/admin/users", handler.ListUsers)
@@ -2056,7 +2057,7 @@ func TestDeleteUser_InvalidForceParameter(t *testing.T) {
 	router := setupTestRouter()
 
 	// Act - invalid force parameter
-	req, _ := http.NewRequest("DELETE", "/admin/users/550e8400-e29b-41d4-a716-446655440001?force=invalid", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "DELETE", "/admin/users/550e8400-e29b-41d4-a716-446655440001?force=invalid", nil)
 	w := httptest.NewRecorder()
 
 	router.DELETE("/admin/users/:id", handler.DeleteUser)
@@ -2133,12 +2134,12 @@ func TestHandleError_MultipleErrorTypes(t *testing.T) {
 					"new_password":     "ValidPass123",
 				}
 				bodyBytes, _ := json.Marshal(reqBody)
-				req, _ = http.NewRequest("POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
+				req, _ = http.NewRequestWithContext(context.Background(), "POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
 				req.Header.Set("Content-Type", "application/json")
 				endpoint = "/auth/change-password"
 			case "not found error":
 				router.GET("/admin/users/:id", handler.GetUser)
-				req, _ = http.NewRequest("GET", "/admin/users/550e8400-e29b-41d4-a716-446655440001", nil)
+				req, _ = http.NewRequestWithContext(context.Background(), "GET", "/admin/users/550e8400-e29b-41d4-a716-446655440001", nil)
 				endpoint = "/admin/users/:id"
 			case "auth error":
 				router.POST("/auth/login", handler.Login)
@@ -2147,7 +2148,7 @@ func TestHandleError_MultipleErrorTypes(t *testing.T) {
 					"password": "password123",
 				}
 				bodyBytes, _ := json.Marshal(reqBody)
-				req, _ = http.NewRequest("POST", "/auth/login", bytes.NewBuffer(bodyBytes))
+				req, _ = http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
 				req.Header.Set("Content-Type", "application/json")
 				endpoint = "/auth/login"
 			}
@@ -2235,7 +2236,7 @@ func TestRegister_PasswordComplexity(t *testing.T) {
 				"password": tt.password,
 			}
 			bodyBytes, _ := json.Marshal(reqBody)
-			req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+			req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
@@ -2264,7 +2265,7 @@ func TestGetUser_WithInvalidIncludeDeleted(t *testing.T) {
 	router := setupTestRouter()
 
 	// Act - invalid include_deleted parameter
-	req, _ := http.NewRequest("GET", "/admin/users/550e8400-e29b-41d4-a716-446655440001?include_deleted=invalid", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/admin/users/550e8400-e29b-41d4-a716-446655440001?include_deleted=invalid", nil)
 	w := httptest.NewRecorder()
 
 	router.GET("/admin/users/:id", handler.GetUser)
@@ -2292,7 +2293,7 @@ func TestRegister_MissingEmail(t *testing.T) {
 		"password": "SecurePass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -2323,7 +2324,7 @@ func TestRegister_InvalidRole(t *testing.T) {
 		"role":     "INVALID_ROLE",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -2346,7 +2347,7 @@ func TestLogin_MissingEmailField(t *testing.T) {
 		"password": "password123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -2388,7 +2389,7 @@ func TestChangePassword_SameAsOldPassword(t *testing.T) {
 		"new_password":     "SamePass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -2426,7 +2427,7 @@ func TestRegister_MalformedJSON(t *testing.T) {
 	router := setupTestRouter()
 
 	// Act
-	req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBufferString("{malformed json}"))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBufferString("{malformed json}"))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -2451,7 +2452,7 @@ func TestLogin_MalformedJSON(t *testing.T) {
 	router := setupTestRouter()
 
 	// Act
-	req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBufferString("{malformed json}"))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBufferString("{malformed json}"))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -2483,7 +2484,7 @@ func TestChangePassword_MalformedJSON(t *testing.T) {
 	router.POST("/auth/change-password", handler.ChangePassword)
 
 	// Act
-	req, _ := http.NewRequest("POST", "/auth/change-password", bytes.NewBufferString("{malformed json}"))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/change-password", bytes.NewBufferString("{malformed json}"))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -2518,7 +2519,7 @@ func TestHandleError_ContextTimeout(t *testing.T) {
 	router.GET("/auth/me", handler.GetCurrentUser)
 
 	// Act
-	req, _ := http.NewRequest("GET", "/auth/me", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/auth/me", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -2551,7 +2552,7 @@ func TestHandleError_DatabaseConnectionError(t *testing.T) {
 		"password": "SecurePass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -2580,7 +2581,7 @@ func TestGetUser_EmptyUserID(t *testing.T) {
 	router := setupTestRouter()
 
 	// Act - empty ID will fail UUID validation at Gin binding level
-	req, _ := http.NewRequest("GET", "/admin/users/", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/admin/users/", nil)
 	w := httptest.NewRecorder()
 
 	router.GET("/admin/users/:id", handler.GetUser)
@@ -2615,7 +2616,7 @@ func TestListUsers_DefaultParameters(t *testing.T) {
 		Return(expectedResponse, nil)
 
 	// Act - no pagination parameters (should use defaults)
-	req, _ := http.NewRequest("GET", "/admin/users", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/admin/users", nil)
 	w := httptest.NewRecorder()
 
 	router.GET("/admin/users", handler.ListUsers)
@@ -2662,7 +2663,7 @@ func TestRegister_Concurrency(t *testing.T) {
 		"password": "SecurePass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -2674,7 +2675,7 @@ func TestRegister_Concurrency(t *testing.T) {
 	mockUseCase.AssertExpectations(t)
 }
 
-// TestLogout_ContextCancelled tests logout with cancelled context.
+// TestLogout_ContextCancelled tests logout with canceled context.
 func TestLogout_ContextCancelled(t *testing.T) {
 	// Arrange
 	mockUseCase := new(authusecasemocks.AuthUseCase)
@@ -2692,7 +2693,7 @@ func TestLogout_ContextCancelled(t *testing.T) {
 	router.POST("/auth/logout", handler.Logout)
 
 	// Act
-	req, _ := http.NewRequest("POST", "/auth/logout", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/logout", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -2721,7 +2722,7 @@ func TestRestoreUser_AlreadyActive(t *testing.T) {
 		Return(expectedUser, nil)
 
 	// Act
-	req, _ := http.NewRequest("POST", "/admin/users/550e8400-e29b-41d4-a716-446655440001/restore", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/admin/users/550e8400-e29b-41d4-a716-446655440001/restore", nil)
 	w := httptest.NewRecorder()
 
 	router.POST("/admin/users/:id/restore", handler.RestoreUser)
@@ -2752,7 +2753,7 @@ func TestDeleteUser_AlreadyDeleted(t *testing.T) {
 		Return(domain.ErrUserNotFound)
 
 	// Act
-	req, _ := http.NewRequest("DELETE", "/admin/users/550e8400-e29b-41d4-a716-446655440001", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "DELETE", "/admin/users/550e8400-e29b-41d4-a716-446655440001", nil)
 	w := httptest.NewRecorder()
 
 	router.DELETE("/admin/users/:id", handler.DeleteUser)
@@ -2785,7 +2786,7 @@ func TestRefreshToken_Expired(t *testing.T) {
 		"refresh_token": "expired-token",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -2822,7 +2823,7 @@ func TestGetCurrentUser_ContextTimeout(t *testing.T) {
 	router.GET("/auth/me", handler.GetCurrentUser)
 
 	// Act
-	req, _ := http.NewRequest("GET", "/auth/me", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/auth/me", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)

@@ -10,10 +10,10 @@ import (
 
 // Response is the standard API response format.
 type Response struct {
-	Success   bool        `json:"success"`
-	Data      interface{} `json:"data,omitempty"`
-	Error     *ErrorBody  `json:"error,omitempty"`
-	Meta      *Meta       `json:"meta,omitempty"`
+	Success bool
+	Data    interface{}
+	Error   *ErrorBody
+	Meta    *Meta
 }
 
 // ErrorBody represents an error in the response.
@@ -31,9 +31,9 @@ type Meta struct {
 
 // ListMeta contains metadata for list responses.
 type ListMeta struct {
+	Count      int
+	Pagination *Pagination
 	Meta
-	Pagination *Pagination `json:"pagination,omitempty"`
-	Count      int         `json:"count"`
 }
 
 // Pagination contains pagination information.
@@ -74,12 +74,7 @@ func NoContent(c *gin.Context) {
 }
 
 // List sends a list response with pagination.
-func List(c *gin.Context, data interface{}, page, limit int, total int64) {
-	totalPages := int(total) / limit
-	if int(total)%limit > 0 {
-		totalPages++
-	}
-
+func List(c *gin.Context, data interface{}, _, limit int, total int64) {
 	c.JSON(http.StatusOK, Response{
 		Success: true,
 		Data:    data,

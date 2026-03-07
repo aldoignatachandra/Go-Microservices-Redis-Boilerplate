@@ -247,7 +247,7 @@ func TestParseEvent(t *testing.T) {
 				"timestamp": "1234567890",
 				"payload":   "invalid-json",
 			},
-			wantType: "test.event",
+			wantType:   "test.event",
 			wantSource: "test-service",
 			wantPayload: map[string]interface{}{
 				"raw": "invalid-json",
@@ -515,7 +515,7 @@ func TestRedisEventBus_Subscribe(t *testing.T) {
 				return nil
 			},
 			timeout: 100 * time.Millisecond,
-			wantErr: true, // Should return error when context is cancelled
+			wantErr: true, // Should return error when context is canceled
 		},
 	}
 
@@ -542,14 +542,14 @@ func TestRedisEventBus_Subscribe(t *testing.T) {
 
 			// Act
 			err := bus.Subscribe(ctx, eventbus.SubscribeOptions{
-				Stream:      tt.stream,
-				Group:       tt.group,
-				Consumer:    tt.consumer,
-				BatchSize:   1,
-				BlockMs:     100,
-				Handler:     tt.handler,
+				Stream:       tt.stream,
+				Group:        tt.group,
+				Consumer:     tt.consumer,
+				BatchSize:    1,
+				BlockMs:      100,
+				Handler:      tt.handler,
 				ErrorHandler: tt.errorHandler,
-				MaxRetries:  1,
+				MaxRetries:   1,
 			})
 
 			// Assert
@@ -640,8 +640,8 @@ func TestRedisEventBus_Ack(t *testing.T) {
 // TestRedisEventBus_Close tests closing the event bus.
 func TestRedisEventBus_Close(t *testing.T) {
 	tests := []struct {
-		name   string
-		setup  func(t *testing.T, ctx context.Context, bus *eventbus.RedisEventBus)
+		name     string
+		setup    func(t *testing.T, ctx context.Context, bus *eventbus.RedisEventBus)
 		validate func(t *testing.T, bus *eventbus.RedisEventBus)
 	}{
 		{
@@ -739,11 +739,11 @@ func TestRedisEventBus_EndToEnd(t *testing.T) {
 	subDone := make(chan error, 1)
 	go func() {
 		err := bus.Subscribe(ctx, eventbus.SubscribeOptions{
-			Stream:      stream,
-			Group:       group,
-			Consumer:    consumer,
-			BatchSize:   1,
-			BlockMs:     100,
+			Stream:    stream,
+			Group:     group,
+			Consumer:  consumer,
+			BatchSize: 1,
+			BlockMs:   100,
 			Handler: func(ctx context.Context, event *eventbus.Event) error {
 				receivedEvents <- event
 				return nil
@@ -797,13 +797,13 @@ func TestConsumerConfig(t *testing.T) {
 func TestSubscribeOptions(t *testing.T) {
 	// Arrange
 	opts := eventbus.SubscribeOptions{
-		Stream:      "test:stream",
-		Group:       "test-group",
-		Consumer:    "test-consumer",
-		BatchSize:   5,
-		BlockMs:     2000,
-		MaxRetries:  3,
-		Handler:     func(ctx context.Context, event *eventbus.Event) error { return nil },
+		Stream:       "test:stream",
+		Group:        "test-group",
+		Consumer:     "test-consumer",
+		BatchSize:    5,
+		BlockMs:      2000,
+		MaxRetries:   3,
+		Handler:      func(ctx context.Context, event *eventbus.Event) error { return nil },
 		ErrorHandler: func(ctx context.Context, event *eventbus.Event, err error) {},
 	}
 
@@ -1102,7 +1102,7 @@ func TestProducerConfig_Defaults(t *testing.T) {
 // TestStreamConstants tests stream constant values.
 func TestStreamConstants(t *testing.T) {
 	tests := []struct {
-		name    string
+		name     string
 		constant string
 	}{
 		{"StreamAuthEvents", eventbus.StreamAuthEvents},
@@ -1121,7 +1121,7 @@ func TestStreamConstants(t *testing.T) {
 // TestEventTypeConstants tests event type constant values.
 func TestEventTypeConstants(t *testing.T) {
 	tests := []struct {
-		name    string
+		name     string
 		constant string
 	}{
 		{"EventUserCreated", eventbus.EventUserCreated},
@@ -1438,14 +1438,14 @@ func TestRedisEventBus_Subscribe_RetryLogic(t *testing.T) {
 	// Start subscriber
 	go func() {
 		_ = bus.Subscribe(ctx, eventbus.SubscribeOptions{
-			Stream:        stream,
-			Group:         group,
-			Consumer:      consumer,
-			BatchSize:     1,
-			BlockMs:       100,
-			Handler:       handler,
-			ErrorHandler:  errorHandler,
-			MaxRetries:    3,
+			Stream:       stream,
+			Group:        group,
+			Consumer:     consumer,
+			BatchSize:    1,
+			BlockMs:      100,
+			Handler:      handler,
+			ErrorHandler: errorHandler,
+			MaxRetries:   3,
 		})
 	}()
 
@@ -1461,8 +1461,8 @@ func TestConsumer_IsRunning(t *testing.T) {
 	// Arrange
 	_, client := setupTestRedis(t)
 	consumer := eventbus.NewConsumer(client, eventbus.ConsumerConfig{
-		Stream:  "test:running",
-		Group:   "test-group",
+		Stream:   "test:running",
+		Group:    "test-group",
 		Consumer: "test-consumer",
 	})
 

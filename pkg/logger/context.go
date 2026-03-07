@@ -54,54 +54,39 @@ func WithContext(ctx context.Context, base *zap.Logger) *zap.Logger {
 	}
 
 	fields := make([]zap.Field, 0, 7)
-
-	if requestID := ctx.Value(RequestIDKey); requestID != nil {
-		if id, ok := requestID.(string); ok && id != "" {
-			fields = append(fields, zap.String("request_id", id))
-		}
-	}
-
-	if userID := ctx.Value(UserIDKey); userID != nil {
-		if id, ok := userID.(string); ok && id != "" {
-			fields = append(fields, zap.String("user_id", id))
-		}
-	}
-
-	if traceID := ctx.Value(TraceIDKey); traceID != nil {
-		if id, ok := traceID.(string); ok && id != "" {
-			fields = append(fields, zap.String("trace_id", id))
-		}
-	}
-
-	if serviceName := ctx.Value(ServiceNameKey); serviceName != nil {
-		if name, ok := serviceName.(string); ok && name != "" {
-			fields = append(fields, zap.String("service", name))
-		}
-	}
-
-	if method := ctx.Value(MethodKey); method != nil {
-		if m, ok := method.(string); ok && m != "" {
-			fields = append(fields, zap.String("method", m))
-		}
-	}
-
-	if path := ctx.Value(PathKey); path != nil {
-		if p, ok := path.(string); ok && p != "" {
-			fields = append(fields, zap.String("path", p))
-		}
-	}
-
-	if statusCode := ctx.Value(StatusCodeKey); statusCode != nil {
-		if code, ok := statusCode.(int); ok {
-			fields = append(fields, zap.Int("status_code", code))
-		}
-	}
+	fields = appendContextField(fields, ctx, RequestIDKey, "request_id")
+	fields = appendContextField(fields, ctx, UserIDKey, "user_id")
+	fields = appendContextField(fields, ctx, TraceIDKey, "trace_id")
+	fields = appendContextField(fields, ctx, ServiceNameKey, "service")
+	fields = appendContextField(fields, ctx, MethodKey, "method")
+	fields = appendContextField(fields, ctx, PathKey, "path")
+	fields = appendStatusCodeField(fields, ctx)
 
 	if len(fields) == 0 {
 		return base
 	}
 
 	return base.With(fields...)
+}
+
+// appendContextField appends a context value as a string field if it exists.
+func appendContextField(fields []zap.Field, ctx context.Context, key ContextKey, fieldName string) []zap.Field {
+	if value := ctx.Value(key); value != nil {
+		if str, ok := value.(string); ok && str != "" {
+			return append(fields, zap.String(fieldName, str))
+		}
+	}
+	return fields
+}
+
+// appendStatusCodeField appends the status code from context if it exists.
+func appendStatusCodeField(fields []zap.Field, ctx context.Context) []zap.Field {
+	if statusCode := ctx.Value(StatusCodeKey); statusCode != nil {
+		if code, ok := statusCode.(int); ok && code > 0 {
+			return append(fields, zap.Int("status_code", code))
+		}
+	}
+	return fields
 }
 
 // WithContextValues creates a logger with explicit context values.

@@ -12,6 +12,10 @@ import (
 	"github.com/ignata/go-microservices-boilerplate/pkg/utils"
 )
 
+const (
+	queryParamTrue = "true"
+)
+
 // UserHandler handles user-related HTTP requests.
 type UserHandler struct {
 	userUseCase usecase.UserUseCase
@@ -117,7 +121,7 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 		ID: c.Param("id"),
 	}
 
-	if includeDeleted := c.Query("include_deleted"); includeDeleted == "true" {
+	if c.Query("include_deleted") == queryParamTrue {
 		req.IncludeDeleted = true
 	}
 
@@ -165,10 +169,10 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 	req.Search = c.Query("search")
 
 	// Parse paranoid options
-	if includeDeleted := c.Query("include_deleted"); includeDeleted == "true" {
+	if c.Query("include_deleted") == queryParamTrue {
 		req.IncludeDeleted = true
 	}
-	if onlyDeleted := c.Query("only_deleted"); onlyDeleted == "true" {
+	if c.Query("only_deleted") == queryParamTrue {
 		req.OnlyDeleted = true
 	}
 

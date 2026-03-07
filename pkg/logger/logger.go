@@ -10,6 +10,11 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+const (
+	// defaultLogLevel is the default logging level.
+	defaultLogLevel = "info"
+)
+
 // Logger is an alias for zap.Logger for convenience.
 type Logger = *zap.Logger
 
@@ -50,7 +55,7 @@ func New(cfg *Config) (*zap.Logger, error) {
 		switch cfg.Level {
 		case "debug":
 			zapCfg.Level = zap.NewAtomicLevelAt(zapcore.DebugLevel)
-		case "info":
+		case defaultLogLevel:
 			zapCfg.Level = zap.NewAtomicLevelAt(zapcore.InfoLevel)
 		case "warn":
 			zapCfg.Level = zap.NewAtomicLevelAt(zapcore.WarnLevel)

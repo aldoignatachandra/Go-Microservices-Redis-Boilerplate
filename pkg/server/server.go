@@ -21,10 +21,10 @@ type Config struct {
 
 // Server wraps http.Server with additional functionality.
 type Server struct {
-	*http.Server
-	engine          *gin.Engine
 	shutdownTimeout time.Duration
 	onShutdown      []func(context.Context) error
+	*http.Server
+	engine *gin.Engine
 }
 
 // New creates a new HTTP server with Gin engine.

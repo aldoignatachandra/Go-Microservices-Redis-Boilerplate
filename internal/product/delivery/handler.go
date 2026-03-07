@@ -4,8 +4,8 @@ package delivery
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/ignata/go-microservices-boilerplate/internal/product/dto"
 	"github.com/ignata/go-microservices-boilerplate/internal/product/domain"
+	"github.com/ignata/go-microservices-boilerplate/internal/product/dto"
 	"github.com/ignata/go-microservices-boilerplate/internal/product/usecase"
 	"github.com/ignata/go-microservices-boilerplate/pkg/utils"
 )

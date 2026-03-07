@@ -1036,12 +1036,12 @@ func TestConcurrentOperations(t *testing.T) {
 			if err != nil {
 				// Check for various forms of database locked errors
 				errStr := err.Error()
-				if errStr == "database table is locked" || 
-				   errStr == "database table is locked: profiles" || 
-				   errStr == "failed to update profile: database table is locked" ||
-				   errStr == "failed to update profile: database table is locked: profiles" ||
-				   errStr == "failed to get profile: database table is locked" ||
-				   errStr == "failed to get profile: database table is locked: profiles" {
+				if errStr == "database table is locked" ||
+					errStr == "database table is locked: profiles" ||
+					errStr == "failed to update profile: database table is locked" ||
+					errStr == "failed to update profile: database table is locked: profiles" ||
+					errStr == "failed to get profile: database table is locked" ||
+					errStr == "failed to get profile: database table is locked: profiles" {
 					continue
 				}
 			}

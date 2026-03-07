@@ -54,7 +54,7 @@ func TestActivityRepository_Create(t *testing.T) {
 			Resource: "auth",
 		}
 
-		// Create a cancelled context
+		// Create a canceled context
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 

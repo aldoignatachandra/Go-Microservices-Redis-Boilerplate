@@ -40,7 +40,7 @@ type IPRateLimiter struct {
 }
 
 type limiter struct {
-	limiter *rate.Limiter
+	limiter  *rate.Limiter
 	lastSeen time.Time
 }
 

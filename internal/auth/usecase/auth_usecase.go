@@ -107,12 +107,13 @@ func (uc *authUseCase) Register(ctx context.Context, req *dto.RegisterRequest) (
 		IsActive:     true,
 	}
 
-	if err := uc.userRepo.Create(ctx, user); err != nil {
+	if err = uc.userRepo.Create(ctx, user); err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
 	// Generate tokens
-	tokenPair, err := uc.jwtManager.GenerateTokenPair(user.ID, user.Email, string(user.Role))
+	var tokenPair *utils.TokenPair
+	tokenPair, err = uc.jwtManager.GenerateTokenPair(user.ID, user.Email, string(user.Role))
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate tokens: %w", err)
 	}
@@ -123,7 +124,7 @@ func (uc *authUseCase) Register(ctx context.Context, req *dto.RegisterRequest) (
 		RefreshToken: tokenPair.RefreshToken,
 		ExpiresAt:    time.Now().UTC().Add(uc.config.RefreshExpiresIn),
 	}
-	if err := uc.sessionRepo.Create(ctx, session); err != nil {
+	if err = uc.sessionRepo.Create(ctx, session); err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
@@ -169,7 +170,8 @@ func (uc *authUseCase) Login(ctx context.Context, req *dto.LoginRequest, ipAddre
 	}
 
 	// Generate tokens
-	tokenPair, err := uc.jwtManager.GenerateTokenPair(user.ID, user.Email, string(user.Role))
+	var tokenPair *utils.TokenPair
+	tokenPair, err = uc.jwtManager.GenerateTokenPair(user.ID, user.Email, string(user.Role))
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate tokens: %w", err)
 	}
@@ -182,7 +184,7 @@ func (uc *authUseCase) Login(ctx context.Context, req *dto.LoginRequest, ipAddre
 		IPAddress:    ipAddress,
 		UserAgent:    userAgent,
 	}
-	if err := uc.sessionRepo.Create(ctx, session); err != nil {
+	if err = uc.sessionRepo.Create(ctx, session); err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 

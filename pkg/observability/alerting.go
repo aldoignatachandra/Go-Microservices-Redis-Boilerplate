@@ -14,9 +14,13 @@ import (
 type AlertSeverity string
 
 const (
-	SeverityInfo     AlertSeverity = "info"
-	SeverityWarning  AlertSeverity = "warning"
-	SeverityError    AlertSeverity = "error"
+	// SeverityInfo represents an informational alert.
+	SeverityInfo AlertSeverity = "info"
+	// SeverityWarning represents a warning alert.
+	SeverityWarning AlertSeverity = "warning"
+	// SeverityError represents an error alert.
+	SeverityError AlertSeverity = "error"
+	// SeverityCritical represents a critical alert.
 	SeverityCritical AlertSeverity = "critical"
 )
 
@@ -180,12 +184,12 @@ func (am *AlertManager) sendAlert(alert *Alert) {
 
 // HighErrorRateRule checks if the error rate is too high.
 type HighErrorRateRule struct {
-	errorCount  int64
-	totalCount  int64
-	threshold   float64
-	window      time.Duration
-	lastReset   time.Time
-	mu          sync.Mutex
+	errorCount int64
+	totalCount int64
+	threshold  float64
+	window     time.Duration
+	lastReset  time.Time
+	mu         sync.Mutex
 }
 
 // NewHighErrorRateRule creates a new high error rate rule.

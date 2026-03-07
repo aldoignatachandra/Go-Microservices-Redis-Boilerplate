@@ -19,31 +19,25 @@ func RegisterRoutes(r *gin.Engine, authUseCase usecase.AuthUseCase, jwtSecret st
 
 	// Public auth routes
 	auth := r.Group("/auth")
-	{
-		auth.POST("/register", handler.Register)
-		auth.POST("/login", handler.Login)
-		auth.POST("/refresh", handler.RefreshToken)
-	}
+	auth.POST("/register", handler.Register)
+	auth.POST("/login", handler.Login)
+	auth.POST("/refresh", handler.RefreshToken)
 
 	// Protected auth routes (require authentication)
 	authProtected := r.Group("/auth")
 	authProtected.Use(AuthMiddleware(jwtSecret))
-	{
-		authProtected.POST("/logout", handler.Logout)
-		authProtected.GET("/me", handler.GetCurrentUser)
-		authProtected.POST("/change-password", handler.ChangePassword)
-	}
+	authProtected.POST("/logout", handler.Logout)
+	authProtected.GET("/me", handler.GetCurrentUser)
+	authProtected.POST("/change-password", handler.ChangePassword)
 
 	// Admin routes (require admin role)
 	admin := r.Group("/admin")
 	admin.Use(AuthMiddleware(jwtSecret))
 	admin.Use(AdminOnlyMiddleware())
-	{
-		admin.GET("/users", handler.ListUsers)
-		admin.GET("/users/:id", handler.GetUser)
-		admin.DELETE("/users/:id", handler.DeleteUser)
-		admin.POST("/users/:id/restore", handler.RestoreUser)
-	}
+	admin.GET("/users", handler.ListUsers)
+	admin.GET("/users/:id", handler.GetUser)
+	admin.DELETE("/users/:id", handler.DeleteUser)
+	admin.POST("/users/:id/restore", handler.RestoreUser)
 }
 
 // PublicHealth is a public health check.
@@ -77,7 +71,5 @@ func RegisterHealthRoutes(r *gin.Engine, healthHandler *server.HealthHandler) {
 
 	// Admin health routes (should be protected)
 	admin := r.Group("/admin")
-	{
-		admin.GET("/health", healthHandler.AdminHealth)
-	}
+	admin.GET("/health", healthHandler.AdminHealth)
 }

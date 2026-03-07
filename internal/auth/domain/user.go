@@ -11,8 +11,10 @@ import (
 type Role string
 
 const (
+	// RoleAdmin represents an administrator role.
 	RoleAdmin Role = "ADMIN"
-	RoleUser  Role = "USER"
+	// RoleUser represents a standard user role.
+	RoleUser Role = "USER"
 )
 
 // IsValid checks if the role is valid.
@@ -31,10 +33,10 @@ type Model struct {
 // User represents a user entity.
 type User struct {
 	Model
-	Email        string `gorm:"type:varchar(255);not null;uniqueIndex" json:"email"`
-	PasswordHash string `gorm:"type:text;not null" json:"-"`
-	Role         Role   `gorm:"type:varchar(50);not null;default:'USER'" json:"role"`
-	IsActive     bool   `gorm:"default:true" json:"is_active"`
+	Email        string     `gorm:"type:varchar(255);not null;uniqueIndex" json:"email"`
+	PasswordHash string     `gorm:"type:text;not null" json:"-"`
+	Role         Role       `gorm:"type:varchar(50);not null;default:'USER'" json:"role"`
+	IsActive     bool       `gorm:"default:true" json:"is_active"`
 	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
 }
 
@@ -50,7 +52,7 @@ func (u *User) IsAdmin() bool {
 
 // CanLogin checks if the user can login.
 func (u *User) CanLogin() bool {
-	return u.IsActive && u.DeletedAt.Valid == false
+	return u.IsActive && !u.DeletedAt.Valid
 }
 
 // TouchLastLogin updates the last login timestamp.
@@ -60,7 +62,7 @@ func (u *User) TouchLastLogin() {
 }
 
 // BeforeCreate is a GORM hook that runs before creating a user.
-func (u *User) BeforeCreate(tx *gorm.DB) error {
+func (u *User) BeforeCreate(_ *gorm.DB) error {
 	now := time.Now().UTC()
 	u.CreatedAt = now
 	u.UpdatedAt = now
@@ -74,7 +76,7 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 }
 
 // BeforeUpdate is a GORM hook that runs before updating a user.
-func (u *User) BeforeUpdate(tx *gorm.DB) error {
+func (u *User) BeforeUpdate(_ *gorm.DB) error {
 	u.UpdatedAt = time.Now().UTC()
 	return nil
 }

@@ -82,7 +82,7 @@ func (s *GracefulServer) WaitForShutdownWithContext(ctx context.Context) {
 
 	select {
 	case <-ctx.Done():
-		log.Println("Context cancelled, initiating graceful shutdown...")
+		log.Println("Context canceled, initiating graceful shutdown...")
 	case sig := <-quit:
 		log.Printf("Received signal %v, initiating graceful shutdown...", sig)
 	}

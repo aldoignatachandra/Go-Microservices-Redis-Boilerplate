@@ -334,9 +334,9 @@ func TestListProducts_Success(t *testing.T) {
 // TestListProducts_WithFilters tests listing products with filters.
 func TestListProducts_WithFilters(t *testing.T) {
 	tests := []struct {
-		name    string
-		query   string
-		setup   func(*productusecasemocks.ProductUseCase)
+		name  string
+		query string
+		setup func(*productusecasemocks.ProductUseCase)
 	}{
 		{
 			name:  "filter by status",

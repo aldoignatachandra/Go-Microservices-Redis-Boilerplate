@@ -2,8 +2,6 @@
 package delivery
 
 import (
-	"strings"
-
 	"github.com/gin-gonic/gin"
 
 	"github.com/ignata/go-microservices-boilerplate/internal/auth/domain"
@@ -189,18 +187,4 @@ func RequireRoles(roles ...domain.Role) gin.HandlerFunc {
 		utils.Forbidden(c, "Insufficient permissions")
 		c.Abort()
 	}
-}
-
-// extractBearerToken extracts Bearer token from Authorization header.
-func extractBearerToken(authHeader string) string {
-	if authHeader == "" {
-		return ""
-	}
-
-	parts := strings.SplitN(authHeader, " ", 2)
-	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-		return ""
-	}
-
-	return parts[1]
 }

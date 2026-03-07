@@ -77,7 +77,5 @@ func RegisterHealthRoutes(r *gin.Engine, healthHandler *server.HealthHandler) {
 
 	// Admin health routes (should be protected)
 	admin := r.Group("/admin")
-	{
-		admin.GET("/health", healthHandler.AdminHealth)
-	}
+	admin.GET("/health", healthHandler.AdminHealth)
 }

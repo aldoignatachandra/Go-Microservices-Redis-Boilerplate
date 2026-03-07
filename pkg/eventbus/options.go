@@ -86,10 +86,10 @@ const (
 
 // StreamNames defines common stream name constants.
 const (
-	StreamAuthEvents  = "auth:events"
-	StreamUserEvents  = "users:events"
+	StreamAuthEvents    = "auth:events"
+	StreamUserEvents    = "users:events"
 	StreamProductEvents = "products:events"
-	StreamActivityLog = "activity:log"
+	StreamActivityLog   = "activity:log"
 )
 
 // EventBuilder provides a fluent interface for building events.

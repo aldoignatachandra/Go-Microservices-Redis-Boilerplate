@@ -39,7 +39,7 @@ func NewPostgresConnection(cfg *PostgresConfig) (*PostgresDB, error) {
 	)
 
 	// Configure GORM logger
-	gormLogger := logger.Default
+	var gormLogger logger.Interface
 	if cfg.SSLMode == "disable" {
 		// Development mode: log all queries
 		gormLogger = logger.Default.LogMode(logger.Info)

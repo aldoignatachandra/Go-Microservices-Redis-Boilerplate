@@ -4,9 +4,9 @@ package mocks
 import (
 	"context"
 
-	"github.com/stretchr/testify/mock"
 	"github.com/ignata/go-microservices-boilerplate/internal/user/domain"
 	"github.com/ignata/go-microservices-boilerplate/internal/user/dto"
+	"github.com/stretchr/testify/mock"
 )
 
 // MockUserRepository is a mock implementation of UserRepository.

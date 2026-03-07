@@ -69,8 +69,8 @@ func Recovery(config RecoveryConfig) gin.HandlerFunc {
 // CustomRecovery returns a recovery middleware with custom error response.
 func CustomRecovery(log logger.Logger, customHandler func(*gin.Context, interface{})) gin.HandlerFunc {
 	return Recovery(RecoveryConfig{
-		Logger:      log,
-		StackTrace:  true,
+		Logger:       log,
+		StackTrace:   true,
 		ErrorHandler: customHandler,
 	})
 }

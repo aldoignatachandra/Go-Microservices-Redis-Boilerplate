@@ -75,7 +75,7 @@ func (e *Event) ToMap() map[string]interface{} {
 	}
 
 	// Marshal metadata to JSON string
-	if e.Metadata != nil && len(e.Metadata) > 0 {
+	if len(e.Metadata) > 0 {
 		metadataBytes, _ := json.Marshal(e.Metadata)
 		result["metadata"] = string(metadataBytes)
 	}
@@ -104,8 +104,9 @@ func ParseEvent(values map[string]interface{}) (*Event, error) {
 
 	if timestamp, ok := values["timestamp"].(string); ok {
 		var ts int64
-		fmt.Sscanf(timestamp, "%d", &ts)
-		event.Timestamp = ts
+		if _, err := fmt.Sscanf(timestamp, "%d", &ts); err == nil {
+			event.Timestamp = ts
+		}
 	}
 
 	if payload, ok := values["payload"].(string); ok && payload != "" {
@@ -200,12 +201,12 @@ func (b *RedisEventBus) Publish(ctx context.Context, stream string, event *Event
 // Subscribe starts consuming events from a stream using consumer groups.
 func (b *RedisEventBus) Subscribe(ctx context.Context, opts SubscribeOptions) error {
 	consumer := NewConsumer(b.client, ConsumerConfig{
-		Stream:      opts.Stream,
-		Group:       opts.Group,
-		Consumer:    opts.Consumer,
-		BatchSize:   opts.BatchSize,
-		BlockMs:     opts.BlockMs,
-		MaxRetries:  opts.MaxRetries,
+		Stream:     opts.Stream,
+		Group:      opts.Group,
+		Consumer:   opts.Consumer,
+		BatchSize:  opts.BatchSize,
+		BlockMs:    opts.BlockMs,
+		MaxRetries: opts.MaxRetries,
 	})
 
 	b.consumer = consumer

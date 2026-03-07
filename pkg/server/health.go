@@ -35,10 +35,10 @@ type HealthHandler struct {
 
 // HealthHandlerConfig holds health handler configuration.
 type HealthHandlerConfig struct {
-	ServiceName string
-	Version     string
-	DB          HealthChecker
-	Redis       HealthChecker
+	ServiceName  string
+	Version      string
+	DB           HealthChecker
+	Redis        HealthChecker
 	CustomChecks map[string]HealthChecker
 }
 

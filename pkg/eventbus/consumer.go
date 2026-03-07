@@ -28,11 +28,11 @@ type ConsumerConfig struct {
 
 // Consumer consumes events from a Redis stream using consumer groups.
 type Consumer struct {
-	client    *redis.Client
-	config    ConsumerConfig
-	stopChan  chan struct{}
-	running   bool
-	mu        sync.Mutex
+	client   *redis.Client
+	config   ConsumerConfig
+	stopChan chan struct{}
+	running  bool
+	mu       sync.Mutex
 }
 
 // NewConsumer creates a new stream consumer.
@@ -53,7 +53,7 @@ func NewConsumer(client *redis.Client, config ConsumerConfig) *Consumer {
 }
 
 // Consume starts consuming messages from the stream.
-// It blocks until the context is cancelled or Stop() is called.
+// It blocks until the context is canceled or Stop() is called.
 func (c *Consumer) Consume(
 	ctx context.Context,
 	handler func(ctx context.Context, event *Event) error,

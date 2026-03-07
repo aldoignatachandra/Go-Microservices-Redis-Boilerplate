@@ -6,14 +6,14 @@ import "time"
 // Event types for the auth service.
 const (
 	// User events
-	EventUserCreated   = "user.created"
-	EventUserUpdated   = "user.updated"
-	EventUserDeleted   = "user.deleted"
-	EventUserRestored  = "user.restored"
+	EventUserCreated  = "user.created"
+	EventUserUpdated  = "user.updated"
+	EventUserDeleted  = "user.deleted"
+	EventUserRestored = "user.restored"
 
 	// Authentication events
-	EventUserLoggedIn  = "user.logged_in"
-	EventUserLoggedOut = "user.logged_out"
+	EventUserLoggedIn       = "user.logged_in"
+	EventUserLoggedOut      = "user.logged_out"
 	EventUserRefreshedToken = "user.refreshed_token"
 )
 

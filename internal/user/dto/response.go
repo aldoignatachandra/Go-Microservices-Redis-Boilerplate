@@ -9,15 +9,15 @@ import (
 
 // UserResponse represents a user in responses.
 type UserResponse struct {
-	ID         string             `json:"id"`
-	Email      string             `json:"email"`
-	Role       string             `json:"role"`
-	IsActive   bool               `json:"is_active"`
-	Profile    *ProfileResponse   `json:"profile,omitempty"`
-	CreatedAt  time.Time          `json:"created_at"`
-	UpdatedAt  time.Time          `json:"updated_at"`
-	DeletedAt  *time.Time         `json:"deleted_at,omitempty"`
-	LastLoginAt *time.Time        `json:"last_login_at,omitempty"`
+	ID          string           `json:"id"`
+	Email       string           `json:"email"`
+	Role        string           `json:"role"`
+	IsActive    bool             `json:"is_active"`
+	Profile     *ProfileResponse `json:"profile,omitempty"`
+	CreatedAt   time.Time        `json:"created_at"`
+	UpdatedAt   time.Time        `json:"updated_at"`
+	DeletedAt   *time.Time       `json:"deleted_at,omitempty"`
+	LastLoginAt *time.Time       `json:"last_login_at,omitempty"`
 }
 
 // ProfileResponse represents a user profile in responses.
@@ -37,12 +37,12 @@ func FromUser(user *domain.User) *UserResponse {
 	}
 
 	resp := &UserResponse{
-		ID:         user.ID,
-		Email:      user.Email,
-		Role:       string(user.Role),
-		IsActive:   user.IsActive,
-		CreatedAt:  user.CreatedAt,
-		UpdatedAt:  user.UpdatedAt,
+		ID:          user.ID,
+		Email:       user.Email,
+		Role:        string(user.Role),
+		IsActive:    user.IsActive,
+		CreatedAt:   user.CreatedAt,
+		UpdatedAt:   user.UpdatedAt,
 		LastLoginAt: user.LastLoginAt,
 	}
 

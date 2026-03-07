@@ -46,7 +46,7 @@ func Logging(config LoggingConfig) gin.HandlerFunc {
 		requestID := GetRequestID(c)
 
 		// Get user ID if present
-	 userID, _ := c.Get("user_id")
+		userID, _ := c.Get("user_id")
 
 		// Build log fields
 		fields := []zap.Field{

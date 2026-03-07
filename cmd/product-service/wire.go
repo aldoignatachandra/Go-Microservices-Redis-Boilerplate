@@ -78,7 +78,7 @@ func provideLogger(cfg *config.Config) (*zap.Logger, error) {
 // provideEventBusProducer creates an event bus producer.
 func provideEventBusProducer(redisClient *database.RedisClient, cfg *config.Config) *eventbus.Producer {
 	return eventbus.NewProducer(redisClient.Client, eventbus.ProducerConfig{
-		MaxLen:       cfg.Streams.MaxLen,
+		MaxLen:        cfg.Streams.MaxLen,
 		DefaultSource: cfg.App.Name,
 	})
 }
@@ -93,6 +93,7 @@ func provideProductUseCase(
 	productRepo repository.ProductRepository,
 	producer *eventbus.Producer,
 	cfg *config.Config,
+	logger *zap.Logger,
 ) usecase.ProductUseCase {
 	return usecase.NewProductUseCase(
 		productRepo,
@@ -100,5 +101,6 @@ func provideProductUseCase(
 		usecase.Config{
 			ServiceName: cfg.App.Name,
 		},
+		logger,
 	)
 }

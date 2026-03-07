@@ -102,7 +102,7 @@ type InstrumentationMetrics struct {
 	// Database connection pool
 	DBConnections *prometheus.GaugeVec
 	// Cache hit rate
-	CacheHits *prometheus.CounterVec
+	CacheHits   *prometheus.CounterVec
 	CacheMisses *prometheus.CounterVec
 	// Queue depth
 	QueueDepth *prometheus.GaugeVec

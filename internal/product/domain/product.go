@@ -15,9 +15,12 @@ import (
 type ProductStatus string
 
 const (
-	ProductStatusActive   ProductStatus = "ACTIVE"
+	// ProductStatusActive represents an active product.
+	ProductStatusActive ProductStatus = "ACTIVE"
+	// ProductStatusInactive represents an inactive product.
 	ProductStatusInactive ProductStatus = "INACTIVE"
-	ProductStatusDeleted  ProductStatus = "DELETED"
+	// ProductStatusDeleted represents a deleted product.
+	ProductStatusDeleted ProductStatus = "DELETED"
 )
 
 // IsValid checks if the status is valid.
@@ -34,7 +37,7 @@ type Model struct {
 }
 
 // BeforeCreate is a GORM hook that sets the UUID.
-func (m *Model) BeforeCreate(tx *gorm.DB) error {
+func (m *Model) BeforeCreate(_ *gorm.DB) error {
 	if m.ID == "" {
 		m.ID = uuid.New().String()
 	}
@@ -59,7 +62,7 @@ func (Product) TableName() string {
 
 // IsAvailable checks if the product is available for purchase.
 func (p *Product) IsAvailable() bool {
-	return p.Status == ProductStatusActive && p.Stock > 0 && p.DeletedAt.Valid == false
+	return p.Status == ProductStatusActive && p.Stock > 0 && !p.DeletedAt.Valid
 }
 
 // ReduceStock reduces the product stock by the given amount.
@@ -84,7 +87,7 @@ func (p *Product) IncreaseStock(amount int) error {
 }
 
 // BeforeCreate is a GORM hook that runs before creating a product.
-func (p *Product) BeforeCreate(tx *gorm.DB) error {
+func (p *Product) BeforeCreate(_ *gorm.DB) error {
 	// Generate ID if empty (this handles cases where Model.BeforeCreate might not be called)
 	if p.ID == "" {
 		p.ID = uuid.New().String()
@@ -96,7 +99,7 @@ func (p *Product) BeforeCreate(tx *gorm.DB) error {
 }
 
 // BeforeUpdate is a GORM hook that runs before updating a product.
-func (p *Product) BeforeUpdate(tx *gorm.DB) error {
+func (p *Product) BeforeUpdate(_ *gorm.DB) error {
 	p.UpdatedAt = time.Now().UTC()
 	return nil
 }

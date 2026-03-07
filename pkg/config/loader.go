@@ -68,9 +68,7 @@ func LoadWithEnv(configPath string, env string) (*Config, error) {
 	}
 
 	// Post-process configuration
-	if err := postProcess(&cfg); err != nil {
-		return nil, fmt.Errorf("failed to process config: %w", err)
-	}
+	postProcess(&cfg)
 
 	return &cfg, nil
 }
@@ -94,9 +92,7 @@ func LoadFromEnv() (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	if err := postProcess(&cfg); err != nil {
-		return nil, fmt.Errorf("failed to process config: %w", err)
-	}
+	postProcess(&cfg)
 
 	return &cfg, nil
 }
@@ -208,7 +204,7 @@ func bindEnvVars(v *viper.Viper) {
 }
 
 // postProcess performs post-processing on the configuration.
-func postProcess(cfg *Config) error {
+func postProcess(cfg *Config) {
 	// Parse duration strings if they weren't parsed correctly
 	if cfg.Server.ReadTimeout == 0 {
 		cfg.Server.ReadTimeout = 10 * time.Second
@@ -231,8 +227,6 @@ func postProcess(cfg *Config) error {
 	if cfg.RateLimit.Duration == 0 {
 		cfg.RateLimit.Duration = time.Minute
 	}
-
-	return nil
 }
 
 // getEnv gets an environment variable or returns the default value.

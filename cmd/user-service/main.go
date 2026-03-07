@@ -52,7 +52,7 @@ func main() {
 	}); err != nil {
 		log.Fatalf("Failed to initialize logger: %v", err)
 	}
-	defer logger.Sync()
+	defer func() { _ = logger.Sync() }()
 
 	// Initialize application using Wire
 	app, err := initializeApp(cfg)

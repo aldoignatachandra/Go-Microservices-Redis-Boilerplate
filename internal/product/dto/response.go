@@ -9,24 +9,24 @@ import (
 
 // ProductResponse represents a product response.
 type ProductResponse struct {
-	ID          string        `json:"id"`
-	Name        string        `json:"name"`
-	Description string        `json:"description"`
-	Price       float64       `json:"price"`
-	Stock       int           `json:"stock"`
-	Status      string        `json:"status"`
-	CategoryID  string        `json:"category_id"`
-	CreatedAt   string        `json:"created_at"`
-	UpdatedAt   string        `json:"updated_at"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Price       float64 `json:"price"`
+	Stock       int     `json:"stock"`
+	Status      string  `json:"status"`
+	CategoryID  string  `json:"category_id"`
+	CreatedAt   string  `json:"created_at"`
+	UpdatedAt   string  `json:"updated_at"`
 }
 
 // ProductListResponse represents a list of products with pagination info.
 type ProductListResponse struct {
 	Products   []*ProductResponse `json:"products"`
-	Total      int64             `json:"total"`
-	Page       int               `json:"page"`
-	Limit      int               `json:"limit"`
-	TotalPages int               `json:"total_pages"`
+	Total      int64              `json:"total"`
+	Page       int                `json:"page"`
+	Limit      int                `json:"limit"`
+	TotalPages int                `json:"total_pages"`
 }
 
 // FromProduct converts a domain Product to a ProductResponse.

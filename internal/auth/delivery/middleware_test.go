@@ -2,6 +2,7 @@
 package delivery_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -37,7 +38,7 @@ func TestAuthMiddleware_Success(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/protected", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/protected", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
 
@@ -60,7 +61,7 @@ func TestAuthMiddleware_MissingHeader(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/protected", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/protected", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -102,7 +103,7 @@ func TestAuthMiddleware_InvalidFormat(t *testing.T) {
 			})
 
 			// Act
-			req, _ := http.NewRequest("GET", "/protected", nil)
+			req, _ := http.NewRequestWithContext(context.Background(), "GET", "/protected", nil)
 			req.Header.Set("Authorization", tt.header)
 			w := httptest.NewRecorder()
 
@@ -127,7 +128,7 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/protected", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/protected", nil)
 	req.Header.Set("Authorization", "Bearer invalid-token")
 	w := httptest.NewRecorder()
 
@@ -155,7 +156,7 @@ func TestAdminOnlyMiddleware_Success(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/admin", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/admin", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -182,7 +183,7 @@ func TestAdminOnlyMiddleware_NotAdmin(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/admin", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/admin", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -204,7 +205,7 @@ func TestAdminOnlyMiddleware_NoRole(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/admin", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/admin", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -235,7 +236,7 @@ func TestOptionalAuthMiddleware_WithToken(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/optional", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/optional", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
 
@@ -259,7 +260,7 @@ func TestOptionalAuthMiddleware_WithoutToken(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/optional", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/optional", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -282,7 +283,7 @@ func TestOptionalAuthMiddleware_InvalidToken(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/optional", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/optional", nil)
 	req.Header.Set("Authorization", "Bearer invalid-token")
 	w := httptest.NewRecorder()
 
@@ -304,7 +305,7 @@ func TestCORSMiddleware_Options(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("OPTIONS", "/test", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "OPTIONS", "/test", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -326,7 +327,7 @@ func TestCORSMiddleware_Get(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/test", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -354,7 +355,7 @@ func TestRateLimitKeyFunc_Authenticated(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/test", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -375,7 +376,7 @@ func TestRateLimitKeyFunc_Unauthenticated(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/test", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -401,7 +402,7 @@ func TestGetCurrentUserID(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/test", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -422,7 +423,7 @@ func TestGetCurrentUserID_NotSet(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/test", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -448,7 +449,7 @@ func TestGetCurrentUserEmail(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/test", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -474,7 +475,7 @@ func TestGetCurrentUserRole(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/test", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -500,7 +501,7 @@ func TestIsAuthenticated(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/test", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -521,7 +522,7 @@ func TestIsAuthenticated_NotAuthenticated(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/test", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -547,7 +548,7 @@ func TestIsAdmin(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/test", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -573,7 +574,7 @@ func TestHasRole(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/test", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -599,7 +600,7 @@ func TestRequireRoles_Success(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/protected", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/protected", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -625,7 +626,7 @@ func TestRequireRoles_InsufficientPermissions(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/protected", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/protected", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -646,7 +647,7 @@ func TestRequireRoles_NoRole(t *testing.T) {
 	})
 
 	// Act
-	req, _ := http.NewRequest("GET", "/protected", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/protected", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)

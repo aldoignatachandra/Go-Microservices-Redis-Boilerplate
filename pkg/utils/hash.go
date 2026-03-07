@@ -84,36 +84,55 @@ func DefaultPasswordRules() PasswordRules {
 
 // Validate validates a password against the rules.
 func (r PasswordRules) Validate(password string) bool {
-	if len(password) < r.MinLength || len(password) > r.MaxLength {
+	if !r.isValidLength(password) {
 		return false
 	}
 
-	var hasUpper, hasLower, hasDigit, hasSpecial bool
+	chars := r.analyzeCharacters(password)
+	return r.meetsRequirements(chars)
+}
+
+// isValidLength checks if password length is within allowed range.
+func (r PasswordRules) isValidLength(password string) bool {
+	return len(password) >= r.MinLength && len(password) <= r.MaxLength
+}
+
+// charAnalysis holds character type analysis results.
+type charAnalysis struct {
+	hasUpper, hasLower, hasDigit, hasSpecial bool
+}
+
+// analyzeCharacters analyzes password for character types.
+func (r PasswordRules) analyzeCharacters(password string) charAnalysis {
+	var result charAnalysis
 	for _, char := range password {
 		switch {
-		case 'A' <= char && char <= 'Z':
-			hasUpper = true
-		case 'a' <= char && char <= 'z':
-			hasLower = true
-		case '0' <= char && char <= '9':
-			hasDigit = true
+		case char >= 'A' && char <= 'Z':
+			result.hasUpper = true
+		case char >= 'a' && char <= 'z':
+			result.hasLower = true
+		case char >= '0' && char <= '9':
+			result.hasDigit = true
 		default:
-			hasSpecial = true
+			result.hasSpecial = true
 		}
 	}
+	return result
+}
 
-	if r.RequireUpper && !hasUpper {
+// meetsRequirements checks if character analysis meets all requirements.
+func (r PasswordRules) meetsRequirements(chars charAnalysis) bool {
+	if r.RequireUpper && !chars.hasUpper {
 		return false
 	}
-	if r.RequireLower && !hasLower {
+	if r.RequireLower && !chars.hasLower {
 		return false
 	}
-	if r.RequireDigit && !hasDigit {
+	if r.RequireDigit && !chars.hasDigit {
 		return false
 	}
-	if r.RequireSpecial && !hasSpecial {
+	if r.RequireSpecial && !chars.hasSpecial {
 		return false
 	}
-
 	return true
 }

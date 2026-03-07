@@ -10,12 +10,12 @@ import (
 // Event types for the user service.
 const (
 	// User events (consumed from auth service)
-	EventUserCreated   = "user.created"
-	EventUserUpdated   = "user.updated"
-	EventUserDeleted   = "user.deleted"
-	EventUserRestored  = "user.restored"
-	EventUserLoggedIn  = "user.logged_in"
-	EventUserLoggedOut = "user.logged_out"
+	EventUserCreated     = "user.created"
+	EventUserUpdated     = "user.updated"
+	EventUserDeleted     = "user.deleted"
+	EventUserRestored    = "user.restored"
+	EventUserLoggedIn    = "user.logged_in"
+	EventUserLoggedOut   = "user.logged_out"
 	EventUserActivated   = "user.activated"
 	EventUserDeactivated = "user.deactivated"
 
@@ -28,13 +28,12 @@ const (
 
 // Activity types for logging user actions.
 const (
-	ActivityProfileUpdated = "profile_updated"
+	ActivityProfileUpdated  = "profile_updated"
 	ActivityUserActivated   = "user_activated"
 	ActivityUserDeactivated = "user_deactivated"
-	ActivityUserDeleted      = "user_deleted"
-	ActivityUserRestored      = "user_restored"
+	ActivityUserDeleted     = "user_deleted"
+	ActivityUserRestored    = "user_restored"
 )
-
 
 // UserEvent represents a user-related event.
 type UserEvent struct {
@@ -157,11 +156,11 @@ func (e *ActivityEvent) ToActivityLog() *ActivityLog {
 // NewProfileUpdatedEvent creates a new profile updated event.
 func NewProfileUpdatedEvent(userID string, profile *Profile) *eventbus.Event {
 	return eventbus.NewEvent(EventProfileUpdated, "user-service", map[string]interface{}{
-		"user_id":     userID,
-		"first_name":  profile.FirstName,
-		"last_name":   profile.LastName,
-		"avatar":      profile.Avatar,
-		"bio":         profile.Bio,
+		"user_id":    userID,
+		"first_name": profile.FirstName,
+		"last_name":  profile.LastName,
+		"avatar":     profile.Avatar,
+		"bio":        profile.Bio,
 	})
 }
 
