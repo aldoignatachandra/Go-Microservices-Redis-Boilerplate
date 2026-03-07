@@ -659,12 +659,19 @@ func InitializeAuthService() (*AuthService, error) {
 # Generate mocks for testing
 make mocks
 
-# Generate Swagger documentation
+# Generate Swagger documentation (outputs to cmd/*/docs/)
 make swagger
 
 # Generate Wire DI code
 make wire
 ```
+
+**Swagger Output:** Each service generates its own Swagger docs in `cmd/{service}/docs/`:
+- `cmd/auth-service/docs/` - Auth service API docs
+- `cmd/user-service/docs/` - User service API docs
+- `cmd/product-service/docs/` - Product service API docs
+
+Access via: `http://localhost:{port}/swagger/index.html`
 
 ---
 
