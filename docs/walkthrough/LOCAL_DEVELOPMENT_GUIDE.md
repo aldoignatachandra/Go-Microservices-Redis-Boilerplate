@@ -839,7 +839,7 @@ make docker-restart     # Restart all containers
 
 ```bash
 make wire               # Regenerate Wire dependency injection
-make swagger            # Generate Swagger/OpenAPI docs
+make swagger            # Generate Swagger/OpenAPI docs (outputs to cmd/*/docs/)
 make mocks              # Generate test mocks
 ```
 
