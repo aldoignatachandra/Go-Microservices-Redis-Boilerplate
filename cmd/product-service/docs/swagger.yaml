@@ -1,0 +1,480 @@
+basePath: /
+definitions:
+  github_com_ignata_go-microservices-boilerplate_internal_product_dto.CreateProductRequest:
+    properties:
+      category_id:
+        type: string
+      description:
+        maxLength: 1000
+        type: string
+      name:
+        maxLength: 255
+        minLength: 3
+        type: string
+      price:
+        type: number
+      stock:
+        type: integer
+    required:
+    - category_id
+    - name
+    - price
+    - stock
+    type: object
+  github_com_ignata_go-microservices-boilerplate_internal_product_dto.DeleteResponse:
+    properties:
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  github_com_ignata_go-microservices-boilerplate_internal_product_dto.ProductListResponse:
+    properties:
+      limit:
+        type: integer
+      page:
+        type: integer
+      products:
+        items:
+          $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.ProductResponse'
+        type: array
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  github_com_ignata_go-microservices-boilerplate_internal_product_dto.ProductResponse:
+    properties:
+      category_id:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      price:
+        type: number
+      status:
+        type: string
+      stock:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  github_com_ignata_go-microservices-boilerplate_internal_product_dto.UpdateProductRequest:
+    properties:
+      description:
+        maxLength: 1000
+        type: string
+      id:
+        type: string
+      name:
+        maxLength: 255
+        minLength: 3
+        type: string
+      price:
+        type: number
+      status:
+        enum:
+        - ACTIVE
+        - INACTIVE
+        type: string
+      stock:
+        type: integer
+    required:
+    - id
+    type: object
+  github_com_ignata_go-microservices-boilerplate_internal_product_dto.UpdateStockRequest:
+    properties:
+      id:
+        type: string
+      stock:
+        type: integer
+    required:
+    - id
+    - stock
+    type: object
+  github_com_ignata_go-microservices-boilerplate_internal_product_dto.UpdateStockResponse:
+    properties:
+      message:
+        type: string
+      stock:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  github_com_ignata_go-microservices-boilerplate_pkg_utils.ErrorBody:
+    properties:
+      code:
+        type: string
+      details:
+        type: string
+      message:
+        type: string
+    type: object
+  github_com_ignata_go-microservices-boilerplate_pkg_utils.Meta:
+    properties:
+      request_id:
+        type: string
+      timestamp:
+        type: string
+    type: object
+  github_com_ignata_go-microservices-boilerplate_pkg_utils.Response:
+    properties:
+      data: {}
+      error:
+        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.ErrorBody'
+      meta:
+        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Meta'
+      success:
+        type: boolean
+    type: object
+  pkg_server.HealthResponse:
+    properties:
+      checks:
+        additionalProperties:
+          type: string
+        type: object
+      service:
+        type: string
+      status:
+        type: string
+      timestamp:
+        type: string
+      uptime:
+        type: string
+      version:
+        type: string
+    type: object
+host: localhost:3102
+info:
+  contact:
+    name: API Support
+    url: https://github.com/aldoignatachandra/Go-Microservices-Redis-Boilerplate
+  description: Product service for Go Microservices Redis Pub/Sub Boilerplate. Manages
+    product CRUD operations and stock management with Redis event publishing.
+  title: Product Service API
+  version: "1.0"
+paths:
+  /admin/health:
+    get:
+      description: Detailed health with dependency status (requires system auth)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/pkg_server.HealthResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/pkg_server.HealthResponse'
+      security:
+      - SystemAuth: []
+      summary: Admin health check
+      tags:
+      - health
+  /health:
+    get:
+      description: Returns 200 if service is running (for load balancers)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/pkg_server.HealthResponse'
+      summary: Public health check
+      tags:
+      - health
+  /live:
+    get:
+      description: Returns 200 if service is alive
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+      summary: Liveness probe
+      tags:
+      - health
+  /products:
+    get:
+      description: List products with pagination and filters
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by status
+        enum:
+        - ACTIVE
+        - INACTIVE
+        in: query
+        name: status
+        type: string
+      - description: Search by name
+        in: query
+        name: search
+        type: string
+      - description: Include deleted products
+        in: query
+        name: include_deleted
+        type: boolean
+      - description: Only deleted products
+        in: query
+        name: only_deleted
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.ProductListResponse'
+      summary: List products
+      tags:
+      - products
+    post:
+      consumes:
+      - application/json
+      description: Create a new product with name, description, price, stock and category
+      parameters:
+      - description: Product creation data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.CreateProductRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.ProductResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      summary: Create a new product
+      tags:
+      - products
+  /products/{id}:
+    delete:
+      description: Delete a product (soft delete by default)
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Force hard delete
+        in: query
+        name: force
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.DeleteResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      summary: Delete product
+      tags:
+      - products
+    get:
+      description: Get a specific product by ID
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Include deleted products
+        in: query
+        name: include_deleted
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.ProductResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      summary: Get product by ID
+      tags:
+      - products
+    put:
+      consumes:
+      - application/json
+      description: Update product details
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Product update data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.UpdateProductRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.ProductResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      summary: Update product
+      tags:
+      - products
+  /products/{id}/restore:
+    post:
+      description: Restore a soft-deleted product
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.ProductResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      summary: Restore product
+      tags:
+      - products
+  /products/{id}/stock:
+    put:
+      consumes:
+      - application/json
+      description: Update product stock quantity
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Stock update data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.UpdateStockRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.UpdateStockResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      summary: Update product stock
+      tags:
+      - products
+  /ready:
+    get:
+      description: Returns 200 if service is ready to accept traffic
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+      summary: Readiness probe
+      tags:
+      - health
+  /started:
+    get:
+      description: Returns 200 if service has started
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+      summary: Startup probe
+      tags:
+      - health
+securityDefinitions:
+  BearerAuth:
+    description: 'Enter your bearer token in the format: Bearer {token}'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

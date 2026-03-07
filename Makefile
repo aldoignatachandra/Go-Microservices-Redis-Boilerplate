@@ -78,9 +78,9 @@ wire: ## Generate Wire dependency injection
 
 swagger: ## Generate Swagger documentation
 	@which swag > /dev/null || (echo "Installing swag..." && $(GO) install github.com/swaggo/swag/cmd/swag@latest)
-	swag init -g cmd/auth-service/main.go -o api/openapi/auth
-	swag init -g cmd/user-service/main.go -o api/openapi/user
-	swag init -g cmd/product-service/main.go -o api/openapi/product
+	swag init -g cmd/auth-service/main.go -o cmd/auth-service/docs --parseDependency --parseInternal --exclude "internal/user,internal/product"
+	swag init -g cmd/user-service/main.go -o cmd/user-service/docs --parseDependency --parseInternal --exclude "internal/auth,internal/product"
+	swag init -g cmd/product-service/main.go -o cmd/product-service/docs --parseDependency --parseInternal --exclude "internal/auth,internal/user"
 	@echo "✅ Swagger documentation generated!"
 
 # ═══════════════════════════════════════════════════════════════════════════

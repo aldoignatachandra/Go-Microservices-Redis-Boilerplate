@@ -30,7 +30,7 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.uber.org/zap"
 
-	_ "github.com/ignata/go-microservices-boilerplate/docs"
+	_ "github.com/ignata/go-microservices-boilerplate/cmd/product-service/docs"
 	"github.com/ignata/go-microservices-boilerplate/internal/product/delivery"
 	"github.com/ignata/go-microservices-boilerplate/internal/product/usecase"
 	"github.com/ignata/go-microservices-boilerplate/pkg/config"

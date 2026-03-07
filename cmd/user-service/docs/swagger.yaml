@@ -1,0 +1,579 @@
+basePath: /
+definitions:
+  github_com_ignata_go-microservices-boilerplate_internal_user_dto.ActivityLogListResponse:
+    properties:
+      logs:
+        items:
+          $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.ActivityLogResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.PaginationMeta'
+    type: object
+  github_com_ignata_go-microservices-boilerplate_internal_user_dto.ActivityLogResponse:
+    properties:
+      action:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      ip_address:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      resource:
+        type: string
+      resource_id:
+        type: string
+      user_agent:
+        type: string
+      user_id:
+        type: string
+    type: object
+  github_com_ignata_go-microservices-boilerplate_internal_user_dto.MessageResponse:
+    properties:
+      message:
+        type: string
+    type: object
+  github_com_ignata_go-microservices-boilerplate_internal_user_dto.PaginationMeta:
+    properties:
+      has_next:
+        type: boolean
+      has_prev:
+        type: boolean
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  github_com_ignata_go-microservices-boilerplate_internal_user_dto.ProfileResponse:
+    properties:
+      avatar:
+        type: string
+      bio:
+        type: string
+      first_name:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: string
+      last_name:
+        type: string
+    type: object
+  github_com_ignata_go-microservices-boilerplate_internal_user_dto.RestoreResponse:
+    properties:
+      message:
+        type: string
+      success:
+        type: boolean
+      user:
+        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.UserResponse'
+    type: object
+  github_com_ignata_go-microservices-boilerplate_internal_user_dto.UpdateProfileRequest:
+    properties:
+      avatar:
+        type: string
+      bio:
+        maxLength: 500
+        type: string
+      first_name:
+        maxLength: 100
+        type: string
+      last_name:
+        maxLength: 100
+        type: string
+    type: object
+  github_com_ignata_go-microservices-boilerplate_internal_user_dto.UserListResponse:
+    properties:
+      pagination:
+        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.PaginationMeta'
+      users:
+        items:
+          $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.UserResponse'
+        type: array
+    type: object
+  github_com_ignata_go-microservices-boilerplate_internal_user_dto.UserResponse:
+    properties:
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      last_login_at:
+        type: string
+      profile:
+        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.ProfileResponse'
+      role:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  github_com_ignata_go-microservices-boilerplate_pkg_utils.ErrorBody:
+    properties:
+      code:
+        type: string
+      details:
+        type: string
+      message:
+        type: string
+    type: object
+  github_com_ignata_go-microservices-boilerplate_pkg_utils.Meta:
+    properties:
+      request_id:
+        type: string
+      timestamp:
+        type: string
+    type: object
+  github_com_ignata_go-microservices-boilerplate_pkg_utils.Response:
+    properties:
+      data: {}
+      error:
+        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.ErrorBody'
+      meta:
+        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Meta'
+      success:
+        type: boolean
+    type: object
+  pkg_server.HealthResponse:
+    properties:
+      checks:
+        additionalProperties:
+          type: string
+        type: object
+      service:
+        type: string
+      status:
+        type: string
+      timestamp:
+        type: string
+      uptime:
+        type: string
+      version:
+        type: string
+    type: object
+host: localhost:3101
+info:
+  contact:
+    name: API Support
+    url: https://github.com/aldoignatachandra/Go-Microservices-Redis-Boilerplate
+  description: User service for Go Microservices Redis Pub/Sub Boilerplate. Manages
+    user profiles, activity logs, and consumes auth events from Redis Streams.
+  title: User Service API
+  version: "1.0"
+paths:
+  /admin/health:
+    get:
+      description: Detailed health with dependency status (requires system auth)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/pkg_server.HealthResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/pkg_server.HealthResponse'
+      security:
+      - SystemAuth: []
+      summary: Admin health check
+      tags:
+      - health
+  /api/v1/activity-logs:
+    get:
+      description: Get activity logs with optional filtering
+      parameters:
+      - description: Filter by user ID
+        in: query
+        name: user_id
+        type: string
+      - description: Filter by action
+        in: query
+        name: action
+        type: string
+      - description: Filter by resource
+        in: query
+        name: resource
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.ActivityLogListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      summary: Get activity logs
+      tags:
+      - users
+  /api/v1/users:
+    get:
+      description: Get a paginated list of users
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by role
+        in: query
+        name: role
+        type: string
+      - description: Search by email or name
+        in: query
+        name: search
+        type: string
+      - description: Include deleted users
+        in: query
+        name: include_deleted
+        type: boolean
+      - description: Only show deleted users
+        in: query
+        name: only_deleted
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.UserListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      summary: List users
+      tags:
+      - users
+  /api/v1/users/{id}:
+    delete:
+      description: Soft delete a user account
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      summary: Delete user
+      tags:
+      - users
+    get:
+      description: Get a user by ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Include deleted users
+        in: query
+        name: include_deleted
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      summary: Get user by ID
+      tags:
+      - users
+  /api/v1/users/{id}/activate:
+    post:
+      description: Activate a user account
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      summary: Activate user
+      tags:
+      - users
+  /api/v1/users/{id}/deactivate:
+    post:
+      description: Deactivate a user account
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      summary: Deactivate user
+      tags:
+      - users
+  /api/v1/users/{id}/profile:
+    get:
+      description: Get a user's profile information
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.ProfileResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      summary: Get user profile
+      tags:
+      - users
+  /api/v1/users/{id}/restore:
+    post:
+      description: Restore a soft-deleted user account
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.RestoreResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      summary: Restore user
+      tags:
+      - users
+  /api/v1/users/profile:
+    put:
+      consumes:
+      - application/json
+      description: Update a user's profile information
+      parameters:
+      - description: Profile update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.ProfileResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      summary: Update user profile
+      tags:
+      - users
+  /health:
+    get:
+      description: Returns 200 if service is running (for load balancers)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/pkg_server.HealthResponse'
+      summary: Public health check
+      tags:
+      - health
+  /live:
+    get:
+      description: Returns 200 if service is alive
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+      summary: Liveness probe
+      tags:
+      - health
+  /ready:
+    get:
+      description: Returns 200 if service is ready to accept traffic
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+      summary: Readiness probe
+      tags:
+      - health
+  /started:
+    get:
+      description: Returns 200 if service has started
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+      summary: Startup probe
+      tags:
+      - health
+securityDefinitions:
+  BearerAuth:
+    description: 'Enter your bearer token in the format: Bearer {token}'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
