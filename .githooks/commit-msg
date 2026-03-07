@@ -1,0 +1,48 @@
+#!/bin/bash
+#
+# Commit-msg hook for Go Microservices Redis PubSub Boilerplate
+# Validates commit message format (similar to commitlint)
+#
+
+# Read the commit message
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Define the pattern: type: description or type(scope): description
+# Allowed types: add, update, fix, feat, refactor, docs, test, chore, style, perf, ci, build, revert
+PATTERN="^(add|update|fix|feat|refactor|docs|test|chore|style|perf|ci|build|revert)(\(.+\))?!?:\s.+"
+
+# Check if commit message matches the pattern
+if ! echo "$COMMIT_MSG" | grep -qE "$PATTERN"; then
+    echo ""
+    echo "❌ Commit message format is invalid!"
+    echo ""
+    echo "📝 Commit message must follow this format:"
+    echo "   <type>: <description>"
+    echo "   <type>(scope): <description>"
+    echo ""
+    echo "✅ Allowed types:"
+    echo "   add      - Add new feature"
+    echo "   update   - Update existing feature"
+    echo "   fix      - Bug fix"
+    echo "   feat     - New feature (alias for add)"
+    echo "   refactor - Code refactoring"
+    echo "   docs     - Documentation changes"
+    echo "   test     - Adding/updating tests"
+    echo "   chore    - Maintenance tasks"
+    echo "   style    - Code style changes"
+    echo "   perf     - Performance improvements"
+    echo "   ci       - CI/CD changes"
+    echo "   build    - Build system changes"
+    echo "   revert   - Revert previous commit"
+    echo ""
+    echo "📝 Examples:"
+    echo "   add: user authentication endpoint"
+    echo "   update(auth): improve password hashing"
+    echo "   fix: resolve database connection timeout"
+    echo "   feat(api): add pagination support"
+    echo ""
+    exit 1
+fi
+
+echo "✅ Commit message format is valid"

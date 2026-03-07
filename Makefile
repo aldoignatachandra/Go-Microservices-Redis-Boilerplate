@@ -1,4 +1,4 @@
-.PHONY: all build test lint run clean deps docker-up docker-down wire swagger help
+.PHONY: all build test lint run clean deps docker-up docker-down wire swagger install-hooks help
 
 # Variables
 GO := go
@@ -261,6 +261,17 @@ deep-clean: clean
 
 # Run CI pipeline locally
 ci: deps lint test build
+
+# ═══════════════════════════════════════════════════════════════════════════
+# GIT HOOKS
+# ═══════════════════════════════════════════════════════════════════════════
+
+install-hooks: ## Install Git hooks (pre-commit, commit-msg)
+	@chmod +x .githooks/pre-commit .githooks/commit-msg
+	@git config core.hooksPath .githooks
+	@echo "✅ Git hooks installed!"
+	@echo "   • pre-commit  - Runs gofmt, go vet, golangci-lint"
+	@echo "   • commit-msg  - Validates commit message format"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # HELP
