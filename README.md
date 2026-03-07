@@ -27,6 +27,7 @@ This boilerplate implements the **Clean Architecture** pattern with strict layer
   - [5. Run Services](#5-run-services)
 - [API Documentation](#-api-documentation)
 - [Development](#-development)
+- [Git Hooks](#-git-hooks)
 - [Testing](#-testing)
 - [Redis Streams & Events](#-redis-streams--events)
 - [Monitoring](#-monitoring)
@@ -596,6 +597,8 @@ make help              # Show all available commands
 | `make clean`           | Clean build artifacts                          |
 | `make clean-coverage`  | Clean only coverage files                      |
 | `make deep-clean`      | Deep clean (including cache)                   |
+| **Git Hooks**          |                                                |
+| `make install-hooks`   | Install Git hooks (pre-commit, commit-msg)     |
 
 ### Hot Reload with Air
 
@@ -662,6 +665,96 @@ make swagger
 # Generate Wire DI code
 make wire
 ```
+
+---
+
+## Git Hooks
+
+This project includes Git hooks to ensure code quality before every commit.
+
+### Installation
+
+After cloning the repository, install the Git hooks:
+
+```bash
+# Install Git hooks
+make install-hooks
+
+# Or manually
+chmod +x .githooks/pre-commit .githooks/commit-msg
+git config core.hooksPath .githooks
+```
+
+### What the Hooks Do
+
+#### Pre-Commit Hook
+
+Runs automatically before every commit:
+
+1. **gofmt** - Formats all staged Go files
+2. **go vet** - Checks for suspicious code constructs
+3. **golangci-lint** - Runs comprehensive linting (if installed)
+
+#### Commit-Message Hook
+
+Validates commit message format to maintain a clean git history.
+
+### Commit Message Format
+
+All commit messages must follow this format:
+
+```
+<type>: <description>
+```
+
+Or with a scope:
+
+```
+<type>(scope): <description>
+```
+
+**Allowed Types:**
+
+| Type       | Description                              | Example                              |
+| :--------- | :--------------------------------------- | :----------------------------------- |
+| `add`      | Add new feature                          | `add: user authentication endpoint`  |
+| `update`   | Update existing feature                  | `update: improve password hashing`   |
+| `fix`      | Bug fix                                  | `fix: resolve database timeout`      |
+| `feat`     | New feature (alias for add)              | `feat: add pagination support`       |
+| `refactor` | Code refactoring                         | `refactor: simplify auth logic`      |
+| `docs`     | Documentation changes                    | `docs: update API documentation`     |
+| `test`     | Adding/updating tests                    | `test: add unit tests for auth`      |
+| `chore`    | Maintenance tasks                        | `chore: update dependencies`         |
+| `style`    | Code style changes (formatting)          | `style: fix formatting issues`       |
+| `perf`     | Performance improvements                 | `perf: optimize database queries`    |
+| `ci`       | CI/CD changes                            | `ci: add GitHub Actions workflow`    |
+| `build`    | Build system changes                     | `build: update Docker configuration` |
+| `revert`   | Revert previous commit                   | `revert: undo auth changes`          |
+
+### Troubleshooting Commit Errors
+
+| Error                                  | Cause                              | Solution                                              |
+| :------------------------------------- | :--------------------------------- | :---------------------------------------------------- |
+| **"Commit message format is invalid!"** | Message doesn't match pattern      | Use format: `type: description` (e.g., `fix: resolve timeout`) |
+| **gofmt found issues**                 | Code not formatted                 | Run `make fmt` or let the hook auto-format           |
+| **go vet found issues**                | Suspicious code constructs         | Fix the reported issues and try again                |
+| **golangci-lint failed**               | Linting errors detected            | Run `make lint-fix` to auto-fix, or fix manually     |
+| **Hook not running**                   | Hooks not installed                | Run `make install-hooks`                             |
+| **Permission denied**                  | Hook scripts not executable        | Run `chmod +x .githooks/*`                           |
+
+### Bypassing Hooks (Emergency Only)
+
+If you absolutely must bypass the hooks (not recommended):
+
+```bash
+# Skip pre-commit and commit-msg hooks
+git commit --no-verify -m "emergency fix"
+
+# Or temporarily disable
+git config core.hooksPath /dev/null
+```
+
+> **Warning:** Only use `--no-verify` in emergencies. Always run `make lint` and `make test` before pushing.
 
 ---
 
@@ -987,6 +1080,8 @@ APP_ENV=production
 | **Module not found**                | Dependencies not downloaded             | Run `make deps` or `go mod download`                  |
 | **Wire generation failed**          | Wire not installed                      | Run `go install github.com/google/wire/cmd/wire@latest` |
 | **Hot reload not working**          | Air not installed                       | Run `go install github.com/air-verse/air@latest`      |
+| **Commit blocked by hook**          | Pre-commit checks failed                | See [Git Hooks - Troubleshooting Commit Errors](#troubleshooting-commit-errors) |
+| **Invalid commit message**          | Wrong format used                       | Use `type: description` format                        |
 
 ### Debug Mode
 
