@@ -7,26 +7,21 @@ import (
 	"github.com/ignata/go-microservices-boilerplate/internal/user/domain"
 )
 
-// UserResponse represents a user in responses.
+// UserResponse represents a user in responses (aligned with Bun-Hono).
 type UserResponse struct {
-	ID          string           `json:"id"`
-	Email       string           `json:"email"`
-	Username    string           `json:"username"`
-	Name        string           `json:"name"`
-	Role        string           `json:"role"`
-	Profile     *ProfileResponse `json:"profile,omitempty"`
-	CreatedAt   time.Time        `json:"created_at"`
-	UpdatedAt   time.Time        `json:"updated_at"`
-	DeletedAt   *time.Time       `json:"deleted_at,omitempty"`
-	LastLoginAt *time.Time       `json:"last_login_at,omitempty"`
+	ID       string `json:"id"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	Name     string `json:"name"`
+	Role     string `json:"role"`
 }
 
 // ProfileResponse represents a user profile in responses.
 type ProfileResponse struct {
 	ID        string `json:"id"`
-	FirstName string `json:"first_name,omitempty"`
-	LastName  string `json:"last_name,omitempty"`
-	FullName  string `json:"full_name,omitempty"`
+	FirstName string `json:"firstName,omitempty"`
+	LastName  string `json:"lastName,omitempty"`
+	FullName  string `json:"fullName,omitempty"`
 	Avatar    string `json:"avatar,omitempty"`
 	Bio       string `json:"bio,omitempty"`
 }
@@ -38,22 +33,11 @@ func FromUser(user *domain.User) *UserResponse {
 	}
 
 	resp := &UserResponse{
-		ID:          user.ID,
-		Email:       user.Email,
-		Username:    user.Username,
-		Name:        user.Name,
-		Role:        string(user.Role),
-		CreatedAt:   user.CreatedAt,
-		UpdatedAt:   user.UpdatedAt,
-		LastLoginAt: user.LastLoginAt,
-	}
-
-	if user.DeletedAt.Valid {
-		resp.DeletedAt = &user.DeletedAt.Time
-	}
-
-	if user.Profile != nil {
-		resp.Profile = FromProfile(user.Profile)
+		ID:       user.ID,
+		Email:    user.Email,
+		Username: user.Username,
+		Name:     user.Name,
+		Role:     string(user.Role),
 	}
 
 	return resp
@@ -75,20 +59,20 @@ func FromProfile(profile *domain.Profile) *ProfileResponse {
 	}
 }
 
-// UserListResponse represents a list of users.
+// UserListResponse represents a list of users (aligned with Bun-Hono).
 type UserListResponse struct {
-	Users      []*UserResponse `json:"users"`
-	Pagination *PaginationMeta `json:"pagination"`
+	Data       []*UserResponse `json:"data"`
+	Pagination *PaginationMeta `json:"meta"`
 }
 
-// PaginationMeta contains pagination metadata.
+// PaginationMeta contains pagination metadata (aligned with Bun-Hono).
 type PaginationMeta struct {
-	Page       int   `json:"page"`
-	Limit      int   `json:"limit"`
-	Total      int64 `json:"total"`
-	TotalPages int   `json:"total_pages"`
-	HasNext    bool  `json:"has_next"`
-	HasPrev    bool  `json:"has_prev"`
+	Page            int   `json:"page"`
+	Limit           int   `json:"limit"`
+	Total           int64 `json:"total"`
+	TotalPages      int   `json:"totalPages"`
+	HasNextPage     bool  `json:"hasNextPage"`
+	HasPreviousPage bool  `json:"hasPreviousPage"`
 }
 
 // FromUserList creates a UserListResponse from a domain.UserList.
@@ -103,14 +87,14 @@ func FromUserList(list *domain.UserList) *UserListResponse {
 	}
 
 	return &UserListResponse{
-		Users: users,
+		Data: users,
 		Pagination: &PaginationMeta{
-			Page:       list.Page,
-			Limit:      list.Limit,
-			Total:      list.Total,
-			TotalPages: list.TotalPages,
-			HasNext:    list.Page < list.TotalPages,
-			HasPrev:    list.Page > 1,
+			Page:            list.Page,
+			Limit:           list.Limit,
+			Total:           list.Total,
+			TotalPages:      list.TotalPages,
+			HasNextPage:     list.Page < list.TotalPages,
+			HasPreviousPage: list.Page > 1,
 		},
 	}
 }
@@ -118,14 +102,14 @@ func FromUserList(list *domain.UserList) *UserListResponse {
 // ActivityLogResponse represents an activity log in responses.
 type ActivityLogResponse struct {
 	ID        string                 `json:"id"`
-	UserID    string                 `json:"user_id"`
+	UserID    string                 `json:"userId"`
 	Action    string                 `json:"action"`
 	Entity    string                 `json:"entity,omitempty"`
-	EntityID  string                 `json:"entity_id,omitempty"`
-	IPAddress string                 `json:"ip_address,omitempty"`
-	UserAgent string                 `json:"user_agent,omitempty"`
+	EntityID  string                 `json:"entityId,omitempty"`
+	IPAddress string                 `json:"ipAddress,omitempty"`
+	UserAgent string                 `json:"userAgent,omitempty"`
 	Details   map[string]interface{} `json:"details,omitempty"`
-	CreatedAt time.Time              `json:"created_at"`
+	CreatedAt time.Time              `json:"createdAt"`
 }
 
 // FromActivityLog creates an ActivityLogResponse from a domain.ActivityLog.
@@ -149,8 +133,8 @@ func FromActivityLog(log *domain.ActivityLog) *ActivityLogResponse {
 
 // ActivityLogListResponse represents a list of activity logs.
 type ActivityLogListResponse struct {
-	Logs       []*ActivityLogResponse `json:"logs"`
-	Pagination *PaginationMeta        `json:"pagination"`
+	Data       []*ActivityLogResponse `json:"data"`
+	Pagination *PaginationMeta        `json:"meta"`
 }
 
 // FromActivityLogList creates an ActivityLogListResponse from a domain.ActivityLogList.
@@ -165,14 +149,14 @@ func FromActivityLogList(list *domain.ActivityLogList) *ActivityLogListResponse 
 	}
 
 	return &ActivityLogListResponse{
-		Logs: logs,
+		Data: logs,
 		Pagination: &PaginationMeta{
-			Page:       list.Page,
-			Limit:      list.Limit,
-			Total:      list.Total,
-			TotalPages: list.TotalPages,
-			HasNext:    list.Page < list.TotalPages,
-			HasPrev:    list.Page > 1,
+			Page:            list.Page,
+			Limit:           list.Limit,
+			Total:           list.Total,
+			TotalPages:      list.TotalPages,
+			HasNextPage:     list.Page < list.TotalPages,
+			HasPreviousPage: list.Page > 1,
 		},
 	}
 }

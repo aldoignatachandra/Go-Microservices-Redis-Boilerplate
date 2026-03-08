@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -44,7 +43,7 @@ func TestGetProfile_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response map[string]interface{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
-	assert.True(t, response["Success"].(bool))
+	assert.True(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -227,12 +226,10 @@ func TestGetUser_IncludeDeleted(t *testing.T) {
 	handler := delivery.NewUserHandler(mockUseCase)
 	router := setupTestRouter(handler)
 
-	deletedTime, _ := time.Parse(time.RFC3339, "2024-01-01T00:00:00Z")
 	expectedUser := &dto.UserResponse{
-		ID:        "550e8400-e29b-41d4-a716-446655440001",
-		Email:     "deleted@example.com",
-		Role:      "USER",
-		DeletedAt: &deletedTime,
+		ID:    "550e8400-e29b-41d4-a716-446655440001",
+		Email: "deleted@example.com",
+		Role:  "USER",
 	}
 
 	mockUseCase.On("GetUser", mock.Anything, mock.MatchedBy(func(r *dto.GetUserRequest) bool {
@@ -248,7 +245,7 @@ func TestGetUser_IncludeDeleted(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response map[string]interface{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
-	assert.True(t, response["Success"].(bool))
+	assert.True(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -346,7 +343,7 @@ func TestDeleteUser_ForceDelete(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response map[string]interface{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
-	assert.True(t, response["Success"].(bool))
+	assert.True(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -379,8 +376,8 @@ func TestRestoreUser_AlreadyActive(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response map[string]interface{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
 	assert.Equal(t, "User is already active", data["message"])
 
 	mockUseCase.AssertExpectations(t)

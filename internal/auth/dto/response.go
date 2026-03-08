@@ -2,31 +2,23 @@
 package dto
 
 import (
-	"time"
-
 	"github.com/ignata/go-microservices-boilerplate/internal/auth/domain"
 )
 
-// AuthResponse represents an authentication response.
+// AuthResponse represents an authentication response (aligned with Bun-Hono).
 type AuthResponse struct {
-	AccessToken  string        `json:"access_token"`
-	RefreshToken string        `json:"refresh_token"`
-	ExpiresIn    int64         `json:"expires_in"` // seconds
-	TokenType    string        `json:"token_type"`
-	User         *UserResponse `json:"user"`
+	Token     string        `json:"token"`
+	ExpiresIn int64         `json:"expires_in,omitempty"`
+	User      *UserResponse `json:"user"`
 }
 
 // UserResponse represents a user in responses.
 type UserResponse struct {
-	ID          string     `json:"id"`
-	Email       string     `json:"email"`
-	Username    string     `json:"username"`
-	Name        string     `json:"name"`
-	Role        string     `json:"role"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
-	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
+	ID       string `json:"id"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	Name     string `json:"name"`
+	Role     string `json:"role"`
 }
 
 // FromUser creates a UserResponse from a domain.User.
@@ -35,38 +27,29 @@ func FromUser(user *domain.User) *UserResponse {
 		return nil
 	}
 
-	resp := &UserResponse{
-		ID:          user.ID,
-		Email:       user.Email,
-		Username:    user.Username,
-		Name:        user.Name,
-		Role:        string(user.Role),
-		CreatedAt:   user.CreatedAt,
-		UpdatedAt:   user.UpdatedAt,
-		LastLoginAt: user.LastLoginAt,
+	return &UserResponse{
+		ID:       user.ID,
+		Email:    user.Email,
+		Username: user.Username,
+		Name:     user.Name,
+		Role:     string(user.Role),
 	}
-
-	if user.DeletedAt.Valid {
-		resp.DeletedAt = &user.DeletedAt.Time
-	}
-
-	return resp
 }
 
-// UserListResponse represents a list of users.
+// UserListResponse represents a list of users (aligned with Bun-Hono).
 type UserListResponse struct {
-	Users      []*UserResponse `json:"users"`
-	Pagination *PaginationMeta `json:"pagination"`
+	Data       []*UserResponse `json:"data"`
+	Pagination *PaginationMeta `json:"meta"`
 }
 
 // PaginationMeta contains pagination metadata.
 type PaginationMeta struct {
-	Page       int   `json:"page"`
-	Limit      int   `json:"limit"`
-	Total      int64 `json:"total"`
-	TotalPages int   `json:"total_pages"`
-	HasNext    bool  `json:"has_next"`
-	HasPrev    bool  `json:"has_prev"`
+	Page            int   `json:"page"`
+	Limit           int   `json:"limit"`
+	Total           int64 `json:"total"`
+	TotalPages      int   `json:"totalPages"`
+	HasNextPage     bool  `json:"hasNextPage"`
+	HasPreviousPage bool  `json:"hasPreviousPage"`
 }
 
 // FromUserList creates a UserListResponse from a domain.UserList.
@@ -81,14 +64,14 @@ func FromUserList(list *domain.UserList) *UserListResponse {
 	}
 
 	return &UserListResponse{
-		Users: users,
+		Data: users,
 		Pagination: &PaginationMeta{
-			Page:       list.Page,
-			Limit:      list.Limit,
-			Total:      list.Total,
-			TotalPages: list.TotalPages,
-			HasNext:    list.Page < list.TotalPages,
-			HasPrev:    list.Page > 1,
+			Page:            list.Page,
+			Limit:           list.Limit,
+			Total:           list.Total,
+			TotalPages:      list.TotalPages,
+			HasNextPage:     list.Page < list.TotalPages,
+			HasPreviousPage: list.Page > 1,
 		},
 	}
 }
@@ -107,10 +90,8 @@ type ErrorDetails struct {
 
 // TokenResponse represents a token response.
 type TokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresIn    int64  `json:"expires_in"`
-	TokenType    string `json:"token_type"`
+	Token     string `json:"token"`
+	ExpiresIn int64  `json:"expires_in"`
 }
 
 // MessageResponse represents a simple message response.

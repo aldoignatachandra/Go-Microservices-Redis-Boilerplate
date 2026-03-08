@@ -8,12 +8,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Response is the standard API response format.
+// Response is the standard API response format (aligned with Bun-Hono).
 type Response struct {
-	Success bool
-	Data    interface{}
-	Error   *ErrorBody
-	Meta    *Meta
+	Success bool        `json:"success"`
+	Message string      `json:"message,omitempty"`
+	Data    interface{} `json:"data,omitempty"`
+	Meta    interface{} `json:"meta,omitempty"`
 }
 
 // ErrorBody represents an error in the response.
@@ -31,25 +31,30 @@ type Meta struct {
 
 // ListMeta contains metadata for list responses.
 type ListMeta struct {
-	Count      int
-	Pagination *Pagination
-	Meta
+	Count      int         `json:"count"`
+	Pagination *Pagination `json:"pagination"`
+	Meta       *Meta       `json:"meta"`
 }
 
-// Pagination contains pagination information.
+// Pagination contains pagination information (camelCase for Bun-Hono alignment).
 type Pagination struct {
-	Page       int   `json:"page"`
-	Limit      int   `json:"limit"`
-	Total      int64 `json:"total"`
-	TotalPages int   `json:"total_pages"`
-	HasNext    bool  `json:"has_next"`
-	HasPrev    bool  `json:"has_prev"`
+	Page            int   `json:"page"`
+	Limit           int   `json:"limit"`
+	Total           int64 `json:"total"`
+	TotalPages      int   `json:"totalPages"`
+	HasNextPage     bool  `json:"hasNextPage"`
+	HasPreviousPage bool  `json:"hasPreviousPage"`
 }
 
-// Success sends a successful response.
-func Success(c *gin.Context, statusCode int, data interface{}) {
+// Success sends a successful response with optional message.
+func Success(c *gin.Context, statusCode int, data interface{}, message ...string) {
+	msg := ""
+	if len(message) > 0 {
+		msg = message[0]
+	}
 	c.JSON(statusCode, Response{
 		Success: true,
+		Message: msg,
 		Data:    data,
 		Meta: &Meta{
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
@@ -59,13 +64,13 @@ func Success(c *gin.Context, statusCode int, data interface{}) {
 }
 
 // Created sends a 201 Created response.
-func Created(c *gin.Context, data interface{}) {
-	Success(c, http.StatusCreated, data)
+func Created(c *gin.Context, data interface{}, message ...string) {
+	Success(c, http.StatusCreated, data, message...)
 }
 
 // OK sends a 200 OK response.
-func OK(c *gin.Context, data interface{}) {
-	Success(c, http.StatusOK, data)
+func OK(c *gin.Context, data interface{}, message ...string) {
+	Success(c, http.StatusOK, data, message...)
 }
 
 // NoContent sends a 204 No Content response.
@@ -97,7 +102,8 @@ func Error(c *gin.Context, statusCode int, code, message string, details ...stri
 
 	c.JSON(statusCode, Response{
 		Success: false,
-		Error:   errBody,
+		Message: message,
+		Data:    errBody,
 		Meta: &Meta{
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 			RequestID: getRequestID(c),
@@ -206,11 +212,11 @@ func CalculatePagination(page, limit int, total int64) *Pagination {
 	}
 
 	return &Pagination{
-		Page:       page,
-		Limit:      limit,
-		Total:      total,
-		TotalPages: totalPages,
-		HasNext:    page < totalPages,
-		HasPrev:    page > 1,
+		Page:            page,
+		Limit:           limit,
+		Total:           total,
+		TotalPages:      totalPages,
+		HasNextPage:     page < totalPages,
+		HasPreviousPage: page > 1,
 	}
 }

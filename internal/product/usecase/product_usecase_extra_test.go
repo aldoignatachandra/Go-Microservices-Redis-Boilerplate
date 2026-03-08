@@ -4,6 +4,7 @@ package usecase_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -55,7 +56,7 @@ func TestListProducts_Success(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
-	assert.Equal(t, 1, len(resp.Products))
+	assert.Equal(t, 1, len(resp.Data))
 	repo.AssertExpectations(t)
 }
 
@@ -106,7 +107,7 @@ func TestUpdateProduct_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
 	assert.Equal(t, *req.Name, response.Name)
-	assert.Equal(t, *req.Price, response.Price)
+	assert.Equal(t, dto.PriceRange{Min: *req.Price, Max: *req.Price, Display: fmt.Sprintf("$%.2f", *req.Price)}, response.Price)
 
 	repo.AssertExpectations(t)
 }

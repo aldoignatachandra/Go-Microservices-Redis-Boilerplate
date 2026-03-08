@@ -1,5 +1,5 @@
-// Package user provides integration tests for the user service.
-package user_test
+// Package repository_test provides integration tests for the user repository.
+package repository_test
 
 import (
 	"context"
@@ -27,8 +27,8 @@ func (n *noopEventPublisher) Publish(_ context.Context, _ string, _ *eventbus.Ev
 	return "", nil
 }
 
-// setupTestDB creates an in-memory SQLite database for testing.
-func setupTestDB(t testing.TB) *gorm.DB {
+// setupIntegrationDB creates an in-memory SQLite database for integration testing.
+func setupIntegrationDB(t testing.TB) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared&_busy_timeout=5000"), &gorm.Config{
 		Logger: gormlogger.Default.LogMode(gormlogger.Silent),
 	})
@@ -45,9 +45,9 @@ func setupTestDB(t testing.TB) *gorm.DB {
 	return db
 }
 
-// setupTestContext creates a test context with all dependencies.
-func setupTestContext(t testing.TB) (*gorm.DB, usecase.UserUseCase, func()) {
-	db := setupTestDB(t)
+// setupIntegrationContext creates a test context with all dependencies.
+func setupIntegrationContext(t testing.TB) (*gorm.DB, usecase.UserUseCase, func()) {
+	db := setupIntegrationDB(t)
 
 	// Create repositories
 	userRepo := repository.NewUserRepository(db)
@@ -74,7 +74,7 @@ func setupTestContext(t testing.TB) (*gorm.DB, usecase.UserUseCase, func()) {
 
 // TestUserRepository_Integration tests the user repository with real database.
 func TestUserRepository_Integration(t *testing.T) {
-	db, _, cleanup := setupTestContext(t)
+	db, _, cleanup := setupIntegrationContext(t)
 	defer cleanup()
 
 	repo := repository.NewUserRepository(db)
@@ -212,7 +212,7 @@ func TestUserRepository_Integration(t *testing.T) {
 
 // TestActivityRepository_Integration tests the activity repository.
 func TestActivityRepository_Integration(t *testing.T) {
-	db, _, cleanup := setupTestContext(t)
+	db, _, cleanup := setupIntegrationContext(t)
 	defer cleanup()
 
 	repo := repository.NewActivityRepository(db)
@@ -277,7 +277,7 @@ func TestActivityRepository_Integration(t *testing.T) {
 
 // TestUserUseCase_Integration tests the user use case with real dependencies.
 func TestUserUseCase_Integration(t *testing.T) {
-	_, uc, cleanup := setupTestContext(t)
+	_, uc, cleanup := setupIntegrationContext(t)
 	defer cleanup()
 
 	t.Run("Complete User Lifecycle", func(t *testing.T) {
@@ -297,9 +297,9 @@ func TestUserUseCase_Integration(t *testing.T) {
 	})
 }
 
-// TestConcurrentOperations tests concurrent database operations.
-func TestConcurrentOperations(t *testing.T) {
-	db, _, cleanup := setupTestContext(t)
+// TestIntegrationConcurrentOperations tests concurrent database operations.
+func TestIntegrationConcurrentOperations(t *testing.T) {
+	db, _, cleanup := setupIntegrationContext(t)
 	defer cleanup()
 
 	repo := repository.NewUserRepository(db)
@@ -342,7 +342,7 @@ func TestConcurrentOperations(t *testing.T) {
 
 // BenchmarkRepositoryOperations benchmarks repository operations.
 func BenchmarkRepositoryOperations(b *testing.B) {
-	db, _, cleanup := setupTestContext(b)
+	db, _, cleanup := setupIntegrationContext(b)
 	defer cleanup()
 
 	repo := repository.NewUserRepository(db)

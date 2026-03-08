@@ -36,10 +36,8 @@ func TestRegister_Success(t *testing.T) {
 	router := setupTestRouter()
 
 	expectedResponse := &dto.AuthResponse{
-		AccessToken:  "access-token-123",
-		RefreshToken: "refresh-token-456",
-		ExpiresIn:    3600,
-		TokenType:    "Bearer",
+		Token:     "access-token-123",
+		ExpiresIn: 3600,
 		User: &dto.UserResponse{
 			ID:    "550e8400-e29b-41d4-a716-446655440001",
 			Email: "test@example.com",
@@ -71,10 +69,9 @@ func TestRegister_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
-	assert.NotEmpty(t, data["access_token"])
-	assert.NotEmpty(t, data["refresh_token"])
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
+	assert.NotEmpty(t, data["token"])
 	assert.Equal(t, "test@example.com", data["user"].(map[string]interface{})["email"])
 
 	mockUseCase.AssertExpectations(t)
@@ -158,7 +155,7 @@ func TestRegister_ValidationError(t *testing.T) {
 			var response map[string]interface{}
 			err := json.Unmarshal(w.Body.Bytes(), &response)
 			require.NoError(t, err)
-			assert.False(t, response["Success"].(bool))
+			assert.False(t, response["success"].(bool))
 		})
 	}
 }
@@ -192,8 +189,8 @@ func TestRegister_EmailAlreadyUsed(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
-	errObj := response["Error"].(map[string]interface{})
+	assert.False(t, response["success"].(bool))
+	errObj := response["data"].(map[string]interface{})
 	assert.Contains(t, errObj["message"], "already in use")
 
 	mockUseCase.AssertExpectations(t)
@@ -207,10 +204,8 @@ func TestRegister_WithRole(t *testing.T) {
 	router := setupTestRouter()
 
 	expectedResponse := &dto.AuthResponse{
-		AccessToken:  "access-token-123",
-		RefreshToken: "refresh-token-456",
-		ExpiresIn:    3600,
-		TokenType:    "Bearer",
+		Token:     "access-token-123",
+		ExpiresIn: 3600,
 		User: &dto.UserResponse{
 			ID:       "550e8400-e29b-41d4-a716-446655440001",
 			Email:    "test@example.com",
@@ -245,8 +240,8 @@ func TestRegister_WithRole(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
 	user := data["user"].(map[string]interface{})
 	assert.Equal(t, "ADMIN", user["role"])
 
@@ -261,10 +256,8 @@ func TestLogin_Success(t *testing.T) {
 	router := setupTestRouter()
 
 	expectedResponse := &dto.AuthResponse{
-		AccessToken:  "access-token-123",
-		RefreshToken: "refresh-token-456",
-		ExpiresIn:    3600,
-		TokenType:    "Bearer",
+		Token:     "access-token-123",
+		ExpiresIn: 3600,
 		User: &dto.UserResponse{
 			ID:    "550e8400-e29b-41d4-a716-446655440001",
 			Email: "test@example.com",
@@ -296,9 +289,9 @@ func TestLogin_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
-	assert.NotEmpty(t, data["access_token"])
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
+	assert.NotEmpty(t, data["token"])
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -334,7 +327,7 @@ func TestLogin_InvalidCredentials(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -370,7 +363,7 @@ func TestLogin_UserDeleted(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -405,8 +398,8 @@ func TestLogin_UserInactive(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
-	errObj := response["Error"].(map[string]interface{})
+	assert.False(t, response["success"].(bool))
+	errObj := response["data"].(map[string]interface{})
 	assert.Contains(t, errObj["message"], "inactive")
 
 	mockUseCase.AssertExpectations(t)
@@ -441,8 +434,8 @@ func TestLogout_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
 	assert.Equal(t, "Successfully logged out", data["message"])
 
 	mockUseCase.AssertExpectations(t)
@@ -469,7 +462,7 @@ func TestLogout_Unauthorized(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestRefreshToken_Success tests successful token refresh.
@@ -480,10 +473,8 @@ func TestRefreshToken_Success(t *testing.T) {
 	router := setupTestRouter()
 
 	expectedResponse := &dto.AuthResponse{
-		AccessToken:  "new-access-token",
-		RefreshToken: "new-refresh-token",
-		ExpiresIn:    3600,
-		TokenType:    "Bearer",
+		Token:     "new-access-token",
+		ExpiresIn: 3600,
 		User: &dto.UserResponse{
 			ID:    "550e8400-e29b-41d4-a716-446655440001",
 			Email: "test@example.com",
@@ -513,9 +504,9 @@ func TestRefreshToken_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
-	assert.Equal(t, "new-access-token", data["access_token"])
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
+	assert.Equal(t, "new-access-token", data["token"])
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -549,7 +540,7 @@ func TestRefreshToken_InvalidToken(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -608,8 +599,8 @@ func TestChangePassword_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
 	assert.Equal(t, "Password changed successfully", data["message"])
 
 	mockUseCase.AssertExpectations(t)
@@ -651,7 +642,7 @@ func TestChangePassword_InvalidCurrentPassword(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -711,8 +702,8 @@ func TestGetUser_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
 	assert.Equal(t, "550e8400-e29b-41d4-a716-446655440001", data["id"])
 
 	mockUseCase.AssertExpectations(t)
@@ -742,7 +733,7 @@ func TestGetUser_NotFound(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -755,17 +746,17 @@ func TestListUsers_Success(t *testing.T) {
 	router := setupTestRouter()
 
 	expectedResponse := &dto.UserListResponse{
-		Users: []*dto.UserResponse{
+		Data: []*dto.UserResponse{
 			{ID: "user-1", Email: "user1@example.com", Role: "USER"},
 			{ID: "user-2", Email: "user2@example.com", Role: "ADMIN"},
 		},
 		Pagination: &dto.PaginationMeta{
-			Page:       1,
-			Limit:      10,
-			Total:      2,
-			TotalPages: 1,
-			HasNext:    false,
-			HasPrev:    false,
+			Page:            1,
+			Limit:           10,
+			Total:           2,
+			TotalPages:      1,
+			HasNextPage:     false,
+			HasPreviousPage: false,
 		},
 	}
 
@@ -786,9 +777,9 @@ func TestListUsers_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
-	assert.NotNil(t, data["users"])
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
+	assert.NotNil(t, data["data"])
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -886,8 +877,8 @@ func TestDeleteUser_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
 	assert.Equal(t, "User deleted successfully", data["message"])
 
 	mockUseCase.AssertExpectations(t)
@@ -918,8 +909,8 @@ func TestDeleteUser_ForceDelete(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
 	assert.Equal(t, "User permanently deleted", data["message"])
 
 	mockUseCase.AssertExpectations(t)
@@ -949,7 +940,7 @@ func TestDeleteUser_NotFound(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -985,8 +976,8 @@ func TestRestoreUser_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
 	assert.Equal(t, "User restored successfully", data["message"])
 	assert.NotNil(t, data["user"])
 
@@ -1017,7 +1008,7 @@ func TestRestoreUser_NotFound(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1053,7 +1044,7 @@ func TestHandleError_ValidationError(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestHandleError_SessionExpired tests session expired error handling.
@@ -1085,7 +1076,7 @@ func TestHandleError_SessionExpired(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1120,7 +1111,7 @@ func TestHandleError_UserGone(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1156,8 +1147,8 @@ func TestRegister_InternalError(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
-	errObj := response["Error"].(map[string]interface{})
+	assert.False(t, response["success"].(bool))
+	errObj := response["data"].(map[string]interface{})
 	assert.Equal(t, "INTERNAL_ERROR", errObj["code"])
 
 	mockUseCase.AssertExpectations(t)
@@ -1171,10 +1162,8 @@ func TestRegister_WithDefaultRole(t *testing.T) {
 	router := setupTestRouter()
 
 	expectedResponse := &dto.AuthResponse{
-		AccessToken:  "access-token-123",
-		RefreshToken: "refresh-token-456",
-		ExpiresIn:    3600,
-		TokenType:    "Bearer",
+		Token:     "access-token-123",
+		ExpiresIn: 3600,
 		User: &dto.UserResponse{
 			ID:    "550e8400-e29b-41d4-a716-446655440001",
 			Email: "user@example.com",
@@ -1207,8 +1196,8 @@ func TestRegister_WithDefaultRole(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
 	user := data["user"].(map[string]interface{})
 	assert.Equal(t, "USER", user["role"])
 
@@ -1242,7 +1231,7 @@ func TestLogin_EmptyPassword(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestLogin_WithIPAndUserAgent tests login with IP address and user agent.
@@ -1253,10 +1242,8 @@ func TestLogin_WithIPAndUserAgent(t *testing.T) {
 	router := setupTestRouter()
 
 	expectedResponse := &dto.AuthResponse{
-		AccessToken:  "access-token-123",
-		RefreshToken: "refresh-token-456",
-		ExpiresIn:    3600,
-		TokenType:    "Bearer",
+		Token:     "access-token-123",
+		ExpiresIn: 3600,
 		User: &dto.UserResponse{
 			ID:    "550e8400-e29b-41d4-a716-446655440001",
 			Email: "test@example.com",
@@ -1289,7 +1276,7 @@ func TestLogin_WithIPAndUserAgent(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
+	assert.True(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1323,7 +1310,7 @@ func TestLogout_Error(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1350,7 +1337,7 @@ func TestRefreshToken_MalformedJSON(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestGetCurrentUser_Error tests getting current user with error.
@@ -1382,7 +1369,7 @@ func TestGetCurrentUser_Error(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1419,7 +1406,7 @@ func TestChangePassword_EmptyNewPassword(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestChangePassword_RepositoryError tests password change with repository error.
@@ -1457,7 +1444,7 @@ func TestChangePassword_RepositoryError(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1483,7 +1470,7 @@ func TestGetUser_InvalidUUID(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestGetUser_IncludeDeleted tests getting user with include_deleted flag.
@@ -1518,7 +1505,7 @@ func TestGetUser_IncludeDeleted(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
+	assert.True(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1568,7 +1555,7 @@ func TestListUsers_InvalidQueryParams(t *testing.T) {
 			err := json.Unmarshal(w.Body.Bytes(), &response)
 			require.NoError(t, err)
 
-			assert.False(t, response["Success"].(bool))
+			assert.False(t, response["success"].(bool))
 		})
 	}
 }
@@ -1594,7 +1581,7 @@ func TestDeleteUser_InvalidUUID(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestDeleteUser_Error tests deleting user with error.
@@ -1621,7 +1608,7 @@ func TestDeleteUser_Error(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1647,7 +1634,7 @@ func TestRestoreUser_InvalidUUID(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestHandleError_UnknownError tests handling of unknown errors.
@@ -1680,7 +1667,7 @@ func TestHandleError_UnknownError(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1724,7 +1711,7 @@ func TestHandleError_PasswordTooShort(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1758,7 +1745,7 @@ func TestHandleError_SessionRevoked(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1814,7 +1801,7 @@ func TestLogin_ValidationErrors(t *testing.T) {
 			err := json.Unmarshal(w.Body.Bytes(), &response)
 			require.NoError(t, err)
 
-			assert.False(t, response["Success"].(bool))
+			assert.False(t, response["success"].(bool))
 		})
 	}
 }
@@ -1843,7 +1830,7 @@ func TestRefreshToken_MissingToken(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestRefreshToken_EmptyToken tests refresh token with empty token.
@@ -1872,7 +1859,7 @@ func TestRefreshToken_EmptyToken(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestChangePassword_MissingFields tests password change with missing fields.
@@ -1932,7 +1919,7 @@ func TestChangePassword_MissingFields(t *testing.T) {
 			err := json.Unmarshal(w.Body.Bytes(), &response)
 			require.NoError(t, err)
 
-			assert.False(t, response["Success"].(bool))
+			assert.False(t, response["success"].(bool))
 		})
 	}
 }
@@ -1961,7 +1948,7 @@ func TestListUsers_Error(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1987,7 +1974,7 @@ func TestListUsers_InvalidLimitValue(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestDeleteUser_InvalidForceParameter tests deletion with invalid force parameter.
@@ -2011,7 +1998,7 @@ func TestDeleteUser_InvalidForceParameter(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestHandleError_MultipleErrorTypes tests comprehensive error handling.
@@ -2106,7 +2093,7 @@ func TestHandleError_MultipleErrorTypes(t *testing.T) {
 			err := json.Unmarshal(w.Body.Bytes(), &response)
 			require.NoError(t, err)
 
-			assert.False(t, response["Success"].(bool))
+			assert.False(t, response["success"].(bool))
 
 			mockUseCase.AssertExpectations(t)
 		})
@@ -2156,10 +2143,8 @@ func TestRegister_PasswordComplexity(t *testing.T) {
 
 			if tt.shouldPass {
 				expectedResponse := &dto.AuthResponse{
-					AccessToken:  "access-token-123",
-					RefreshToken: "refresh-token-456",
-					ExpiresIn:    3600,
-					TokenType:    "Bearer",
+					Token:     "access-token-123",
+					ExpiresIn: 3600,
 					User: &dto.UserResponse{
 						ID:       "550e8400-e29b-41d4-a716-446655440001",
 						Email:    "test@example.com",
@@ -2193,7 +2178,7 @@ func TestRegister_PasswordComplexity(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(w.Body.Bytes(), &response)
 				require.NoError(t, err)
-				assert.True(t, response["Success"].(bool))
+				assert.True(t, response["success"].(bool))
 				mockUseCase.AssertExpectations(t)
 			}
 		})
@@ -2221,7 +2206,7 @@ func TestGetUser_WithInvalidIncludeDeleted(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestRegister_MissingEmail tests registration with missing email field.
@@ -2250,7 +2235,7 @@ func TestRegister_MissingEmail(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestRegister_InvalidRole tests registration with invalid role.
@@ -2304,7 +2289,7 @@ func TestLogin_MissingEmailField(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestChangePassword_SameAsOldPassword tests password change when new equals old.
@@ -2345,7 +2330,7 @@ func TestChangePassword_SameAsOldPassword(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -2384,7 +2369,7 @@ func TestRegister_MalformedJSON(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestLogin_MalformedJSON tests login with malformed JSON.
@@ -2409,7 +2394,7 @@ func TestLogin_MalformedJSON(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestChangePassword_MalformedJSON tests password change with malformed JSON.
@@ -2440,7 +2425,7 @@ func TestChangePassword_MalformedJSON(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestHandleError_ContextTimeout tests handling of context timeout errors.
@@ -2474,7 +2459,7 @@ func TestHandleError_ContextTimeout(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -2510,8 +2495,8 @@ func TestHandleError_DatabaseConnectionError(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
-	errObj := response["Error"].(map[string]interface{})
+	assert.False(t, response["success"].(bool))
+	errObj := response["data"].(map[string]interface{})
 	assert.Equal(t, "INTERNAL_ERROR", errObj["code"])
 
 	mockUseCase.AssertExpectations(t)
@@ -2543,16 +2528,16 @@ func TestListUsers_DefaultParameters(t *testing.T) {
 	router := setupTestRouter()
 
 	expectedResponse := &dto.UserListResponse{
-		Users: []*dto.UserResponse{
+		Data: []*dto.UserResponse{
 			{ID: "user-1", Email: "user1@example.com", Role: "USER"},
 		},
 		Pagination: &dto.PaginationMeta{
-			Page:       1,
-			Limit:      10,
-			Total:      1,
-			TotalPages: 1,
-			HasNext:    false,
-			HasPrev:    false,
+			Page:            1,
+			Limit:           10,
+			Total:           1,
+			TotalPages:      1,
+			HasNextPage:     false,
+			HasPreviousPage: false,
 		},
 	}
 
@@ -2573,7 +2558,7 @@ func TestListUsers_DefaultParameters(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
+	assert.True(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -2586,10 +2571,8 @@ func TestRegister_Concurrency(t *testing.T) {
 	router := setupTestRouter()
 
 	expectedResponse := &dto.AuthResponse{
-		AccessToken:  "access-token-123",
-		RefreshToken: "refresh-token-456",
-		ExpiresIn:    3600,
-		TokenType:    "Bearer",
+		Token:     "access-token-123",
+		ExpiresIn: 3600,
 		User: &dto.UserResponse{
 			ID:    "550e8400-e29b-41d4-a716-446655440001",
 			Email: "test@example.com",
@@ -2679,8 +2662,8 @@ func TestRestoreUser_AlreadyActive(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
 	assert.Equal(t, "User restored successfully", data["message"])
 
 	mockUseCase.AssertExpectations(t)
@@ -2710,7 +2693,7 @@ func TestDeleteUser_AlreadyDeleted(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -2744,7 +2727,7 @@ func TestRefreshToken_Expired(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }

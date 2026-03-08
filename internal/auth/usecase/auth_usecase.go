@@ -145,11 +145,9 @@ func (uc *authUseCase) Register(ctx context.Context, req *dto.RegisterRequest) (
 	}
 
 	return &dto.AuthResponse{
-		AccessToken:  tokenPair.AccessToken,
-		RefreshToken: tokenPair.RefreshToken,
-		ExpiresIn:    tokenPair.ExpiresIn,
-		TokenType:    tokenPair.TokenType,
-		User:         dto.FromUser(user),
+		Token:     tokenPair.AccessToken,
+		ExpiresIn: tokenPair.ExpiresIn,
+		User:      dto.FromUser(user),
 	}, nil
 }
 
@@ -212,11 +210,9 @@ func (uc *authUseCase) Login(ctx context.Context, req *dto.LoginRequest, ipAddre
 	}
 
 	return &dto.AuthResponse{
-		AccessToken:  tokenPair.AccessToken,
-		RefreshToken: tokenPair.RefreshToken,
-		ExpiresIn:    tokenPair.ExpiresIn,
-		TokenType:    tokenPair.TokenType,
-		User:         dto.FromUser(user),
+		Token:     tokenPair.AccessToken,
+		ExpiresIn: tokenPair.ExpiresIn,
+		User:      dto.FromUser(user),
 	}, nil
 }
 
@@ -284,11 +280,9 @@ func (uc *authUseCase) RefreshToken(ctx context.Context, req *dto.RefreshTokenRe
 	}
 
 	return &dto.AuthResponse{
-		AccessToken:  tokenPair.AccessToken,
-		RefreshToken: tokenPair.RefreshToken,
-		ExpiresIn:    tokenPair.ExpiresIn,
-		TokenType:    tokenPair.TokenType,
-		User:         dto.FromUser(user),
+		Token:     tokenPair.AccessToken,
+		ExpiresIn: tokenPair.ExpiresIn,
+		User:      dto.FromUser(user),
 	}, nil
 }
 

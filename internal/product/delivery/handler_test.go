@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -37,11 +38,10 @@ func TestCreateProduct_Success(t *testing.T) {
 	expectedResponse := &dto.ProductResponse{
 		ID:         "550e8400-e29b-41d4-a716-446655440001",
 		Name:       "Test Product",
-		Price:      29.99,
+		Price:      dto.PriceRange{Min: 29.99, Max: 29.99, Display: fmt.Sprintf("$%.2f", 29.99)},
 		Stock:      100,
 		OwnerID:    "550e8400-e29b-41d4-a716-446655440000",
 		HasVariant: false,
-		Images:     "",
 	}
 
 	mockUseCase.On("CreateProduct", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*dto.CreateProductRequest")).
@@ -69,11 +69,14 @@ func TestCreateProduct_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
 	assert.Equal(t, "550e8400-e29b-41d4-a716-446655440001", data["id"])
 	assert.Equal(t, "Test Product", data["name"])
-	assert.Equal(t, 29.99, data["price"])
+	price := data["price"].(map[string]interface{})
+	assert.Equal(t, 29.99, price["min"])
+	assert.Equal(t, 29.99, price["max"])
+	assert.Equal(t, "$29.99", price["display"])
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -159,7 +162,7 @@ func TestCreateProduct_Conflict(t *testing.T) {
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -176,7 +179,6 @@ func TestGetProduct_Success(t *testing.T) {
 		Name:       "Test Product",
 		OwnerID:    "550e8400-e29b-41d4-a716-446655440000",
 		HasVariant: false,
-		Images:     "",
 	}
 
 	mockUseCase.On("GetProduct", mock.Anything, "", "", mock.AnythingOfType("*dto.GetProductRequest")).
@@ -196,8 +198,8 @@ func TestGetProduct_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
 	assert.Equal(t, "550e8400-e29b-41d4-a716-446655440001", data["id"])
 
 	mockUseCase.AssertExpectations(t)
@@ -227,7 +229,7 @@ func TestGetProduct_NotFound(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -243,7 +245,6 @@ func TestGetProduct_IncludeDeleted(t *testing.T) {
 		ID:         "550e8400-e29b-41d4-a716-446655440001",
 		Name:       "Deleted Product",
 		HasVariant: false,
-		Images:     "",
 	}
 
 	mockUseCase.On("GetProduct", mock.Anything, "", "", mock.MatchedBy(func(r *dto.GetProductRequest) bool {
@@ -264,7 +265,7 @@ func TestGetProduct_IncludeDeleted(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
+	assert.True(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -277,24 +278,22 @@ func TestListProducts_Success(t *testing.T) {
 	router := setupTestRouter()
 
 	expectedResponse := &dto.ProductListResponse{
-		Products: []*dto.ProductResponse{
+		Data: []*dto.ProductResponse{
 			{
 				ID:         "prod-1",
 				Name:       "Product 1",
-				Price:      10.99,
+				Price:      dto.PriceRange{Min: 10.99, Max: 10.99, Display: fmt.Sprintf("$%.2f", 10.99)},
 				Stock:      50,
 				OwnerID:    "owner-1",
 				HasVariant: false,
-				Images:     "",
 			},
 			{
 				ID:         "prod-2",
 				Name:       "Product 2",
-				Price:      20.99,
+				Price:      dto.PriceRange{Min: 20.99, Max: 20.99, Display: fmt.Sprintf("$%.2f", 20.99)},
 				Stock:      100,
 				OwnerID:    "owner-1",
 				HasVariant: false,
-				Images:     "",
 			},
 		},
 		Total:      2,
@@ -320,9 +319,9 @@ func TestListProducts_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
-	assert.NotNil(t, data["products"])
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
+	assert.NotNil(t, data["data"])
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -396,11 +395,10 @@ func TestUpdateProduct_Success(t *testing.T) {
 	expectedResponse := &dto.ProductResponse{
 		ID:         "550e8400-e29b-41d4-a716-446655440001",
 		Name:       "Updated Product",
-		Price:      39.99,
-		Stock:      150,
+		Price:      dto.PriceRange{Min: 39.99, Max: 39.99, Display: fmt.Sprintf("$%.2f", 39.99)},
+		Stock:      100,
 		OwnerID:    "550e8400-e29b-41d4-a716-446655440000",
 		HasVariant: false,
-		Images:     "",
 	}
 
 	mockUseCase.On("UpdateProduct", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("*dto.UpdateProductRequest")).
@@ -408,7 +406,7 @@ func TestUpdateProduct_Success(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"name":  "Updated Product",
+		"name":  "Test Product",
 		"price": 39.99,
 		"stock": 150,
 	}
@@ -427,8 +425,8 @@ func TestUpdateProduct_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
 	assert.Equal(t, "Updated Product", data["name"])
 
 	mockUseCase.AssertExpectations(t)
@@ -464,7 +462,7 @@ func TestUpdateProduct_NotFound(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -542,8 +540,8 @@ func TestDeleteProduct_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
 	assert.Equal(t, "Product deleted successfully", data["message"])
 
 	mockUseCase.AssertExpectations(t)
@@ -579,8 +577,8 @@ func TestDeleteProduct_ForceDelete(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
 	assert.Equal(t, "Product permanently deleted", data["message"])
 
 	mockUseCase.AssertExpectations(t)
@@ -610,7 +608,7 @@ func TestDeleteProduct_NotFound(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -625,11 +623,10 @@ func TestRestoreProduct_Success(t *testing.T) {
 	expectedResponse := &dto.ProductResponse{
 		ID:         "550e8400-e29b-41d4-a716-446655440001",
 		Name:       "Test Product",
-		Price:      29.99,
+		Price:      dto.PriceRange{Min: 29.99, Max: 29.99, Display: fmt.Sprintf("$%.2f", 29.99)},
 		Stock:      100,
 		OwnerID:    "550e8400-e29b-41d4-a716-446655440000",
 		HasVariant: false,
-		Images:     "",
 	}
 
 	mockUseCase.On("RestoreProduct", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("*dto.RestoreProductRequest")).
@@ -649,8 +646,8 @@ func TestRestoreProduct_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data := response["Data"].(map[string]interface{})
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
 	assert.Equal(t, "550e8400-e29b-41d4-a716-446655440001", data["id"])
 
 	mockUseCase.AssertExpectations(t)
@@ -680,7 +677,7 @@ func TestRestoreProduct_NotFound(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -725,8 +722,8 @@ func TestUpdateStock_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["Success"].(bool))
-	data, ok := response["Data"].(map[string]interface{})
+	assert.True(t, response["success"].(bool))
+	data, ok := response["data"].(map[string]interface{})
 	require.True(t, ok, "data field should be present and a map")
 	assert.Equal(t, float64(200), data["stock"])
 
@@ -763,7 +760,7 @@ func TestUpdateStock_NotFound(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -825,8 +822,8 @@ func TestUpdateStock_InsufficientStock(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
-	errObj := response["Error"].(map[string]interface{})
+	assert.False(t, response["success"].(bool))
+	errObj := response["data"].(map[string]interface{})
 	assert.Equal(t, "VALIDATION_ERROR", errObj["code"])
 	assert.Contains(t, errObj["message"], "insufficient stock")
 
@@ -869,8 +866,8 @@ func TestHandleError_ValidationError(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["Success"].(bool))
-	errObj := response["Error"].(map[string]interface{})
+	assert.False(t, response["success"].(bool))
+	errObj := response["data"].(map[string]interface{})
 	assert.Equal(t, "VALIDATION_ERROR", errObj["code"])
 
 	mockUseCase.AssertExpectations(t)
@@ -908,7 +905,7 @@ func TestCreateProduct_InternalError(t *testing.T) {
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -933,7 +930,7 @@ func TestGetProduct_InvalidUUID(t *testing.T) {
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestListProducts_InvalidQueryParams tests list products with invalid query params.
@@ -985,7 +982,7 @@ func TestListProducts_InvalidQueryParams(t *testing.T) {
 			var response map[string]interface{}
 			err := json.Unmarshal(w.Body.Bytes(), &response)
 			require.NoError(t, err)
-			assert.False(t, response["Success"].(bool))
+			assert.False(t, response["success"].(bool))
 		})
 	}
 }
@@ -1013,7 +1010,7 @@ func TestListProducts_InternalError(t *testing.T) {
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1045,7 +1042,7 @@ func TestUpdateProduct_InvalidUUID(t *testing.T) {
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestUpdateProduct_InternalError tests update product with internal error.
@@ -1078,7 +1075,7 @@ func TestUpdateProduct_InternalError(t *testing.T) {
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1103,7 +1100,7 @@ func TestDeleteProduct_InvalidUUID(t *testing.T) {
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestDeleteProduct_InternalError tests delete product with internal error.
@@ -1129,7 +1126,7 @@ func TestDeleteProduct_InternalError(t *testing.T) {
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1154,7 +1151,7 @@ func TestRestoreProduct_InvalidUUID(t *testing.T) {
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestRestoreProduct_InternalError tests restore product with internal error.
@@ -1180,7 +1177,7 @@ func TestRestoreProduct_InternalError(t *testing.T) {
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1211,7 +1208,7 @@ func TestUpdateStock_InvalidUUID(t *testing.T) {
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestUpdateStock_MissingStock tests update stock with missing stock field.
@@ -1238,7 +1235,7 @@ func TestUpdateStock_MissingStock(t *testing.T) {
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 }
 
 // TestUpdateStock_InternalError tests update stock with internal error.
@@ -1270,7 +1267,7 @@ func TestUpdateStock_InternalError(t *testing.T) {
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.False(t, response["Success"].(bool))
+	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }

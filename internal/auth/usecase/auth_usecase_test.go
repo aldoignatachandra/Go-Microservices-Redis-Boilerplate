@@ -231,9 +231,7 @@ func TestRegister(t *testing.T) {
 			},
 			wantErr: false,
 			checkResp: func(t *testing.T, resp *dto.AuthResponse) {
-				assert.NotEmpty(t, resp.AccessToken)
-				assert.NotEmpty(t, resp.RefreshToken)
-				assert.Equal(t, "Bearer", resp.TokenType)
+				assert.NotEmpty(t, resp.Token)
 				assert.NotNil(t, resp.User)
 				assert.Equal(t, "test@example.com", resp.User.Email)
 			},
@@ -453,7 +451,7 @@ func TestRefreshToken(t *testing.T) {
 	authResp, err := uc.Register(context.Background(), registerReq)
 	require.NoError(t, err)
 	require.NotNil(t, authResp)
-	validRefreshToken := authResp.RefreshToken
+	validRefreshToken := authResp.Token
 
 	tests := []struct {
 		name        string
@@ -671,7 +669,7 @@ func TestListUsers(t *testing.T) {
 			},
 			wantErr: false,
 			checkResp: func(t *testing.T, resp *dto.UserListResponse) {
-				assert.Len(t, resp.Users, 2)
+				assert.Len(t, resp.Data, 2)
 				assert.NotNil(t, resp.Pagination)
 				assert.Equal(t, int64(2), resp.Pagination.Total)
 			},
@@ -1088,8 +1086,8 @@ func TestLogin_Success(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	assert.NotEmpty(t, resp.AccessToken)
-	assert.NotEmpty(t, resp.RefreshToken)
+	assert.NotEmpty(t, resp.Token)
+	assert.NotEmpty(t, resp.Token)
 	assert.Equal(t, "login@example.com", resp.User.Email)
 
 	userRepo.AssertExpectations(t)
@@ -1118,7 +1116,7 @@ func TestRefreshToken_Success(t *testing.T) {
 
 	authResp, err := uc.Register(context.Background(), registerReq)
 	require.NoError(t, err)
-	validRefreshToken := authResp.RefreshToken
+	validRefreshToken := authResp.Token
 
 	// Setup mocks for refresh
 	user := buildTestUser(withID(authResp.User.ID), withEmail("refresh@example.com"))
@@ -1147,8 +1145,7 @@ func TestRefreshToken_Success(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, refreshResp)
-	assert.NotEmpty(t, refreshResp.AccessToken)
-	assert.NotEmpty(t, refreshResp.RefreshToken)
+	assert.NotEmpty(t, refreshResp.Token)
 	// Note: We don't check that tokens are different because the mock doesn't control token generation
 	// In a real scenario, each refresh should issue a new token for security
 
@@ -1399,7 +1396,7 @@ func TestListUsers_EmptyList(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	assert.Empty(t, resp.Users)
+	assert.Empty(t, resp.Data)
 	assert.NotNil(t, resp.Pagination)
 	assert.Equal(t, int64(0), resp.Pagination.Total)
 

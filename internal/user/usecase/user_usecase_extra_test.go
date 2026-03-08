@@ -48,7 +48,7 @@ func TestListUsers_Success(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
-	assert.Equal(t, 1, len(resp.Users))
+	assert.Equal(t, 1, len(resp.Data))
 	mockUserRepo.AssertExpectations(t)
 }
 
@@ -108,7 +108,7 @@ func TestGetActivityLogs_Success(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
-	assert.Equal(t, 1, len(resp.Logs))
+	assert.Equal(t, 1, len(resp.Data))
 	mockActivityRepo.AssertExpectations(t)
 }
 

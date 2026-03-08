@@ -3,6 +3,7 @@ package usecase_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -130,7 +131,7 @@ func TestCreateProduct_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
 	assert.Equal(t, req.Name, response.Name)
-	assert.Equal(t, req.Price, response.Price)
+	assert.Equal(t, dto.PriceRange{Min: req.Price, Max: req.Price, Display: fmt.Sprintf("$%.2f", req.Price)}, response.Price)
 
 	repo.AssertExpectations(t)
 }
