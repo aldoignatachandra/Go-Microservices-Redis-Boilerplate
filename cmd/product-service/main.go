@@ -38,6 +38,7 @@ import (
 	"github.com/ignata/go-microservices-boilerplate/pkg/eventbus"
 	"github.com/ignata/go-microservices-boilerplate/pkg/logger"
 	"github.com/ignata/go-microservices-boilerplate/pkg/metrics"
+	"github.com/ignata/go-microservices-boilerplate/pkg/ratelimit"
 	"github.com/ignata/go-microservices-boilerplate/pkg/server"
 )
 
@@ -187,8 +188,18 @@ func setupHTTPServer(app *App) *gin.Engine {
 	// Swagger endpoint
 	engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	// Register product routes
-	delivery.RegisterRoutes(engine, app.ProductUseCase)
+	// Register product routes with rate limiting
+	if app.Config.RateLimit.Enabled && app.Redis != nil {
+		redisLimiter := ratelimit.NewRedisRateLimiter(app.Redis, "ratelimit")
+		redisLimiter.SetLimits(map[string]ratelimit.RouteLimit{
+			"/products":           {MaxRequests: 120, WindowSeconds: 60},
+			"/products/:id":       {MaxRequests: 10, WindowSeconds: 60},
+			"/products/:id/stock": {MaxRequests: 30, WindowSeconds: 60},
+		})
+		delivery.RegisterRoutesWithRateLimit(engine, app.ProductUseCase, redisLimiter, app.Config.RateLimit.Requests, app.Config.RateLimit.Duration)
+	} else {
+		delivery.RegisterRoutes(engine, app.ProductUseCase)
+	}
 
 	return engine
 }

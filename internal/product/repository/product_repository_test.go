@@ -12,6 +12,7 @@ import (
 	"github.com/twinj/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 
 	"github.com/ignata/go-microservices-boilerplate/internal/product/domain"
 	"github.com/ignata/go-microservices-boilerplate/internal/product/dto"
@@ -24,7 +25,9 @@ func setupTestDB(t *testing.T) *gorm.DB {
 
 	// Use a unique database for each test to avoid conflicts
 	dbName := fmt.Sprintf("file:test_%s.db?mode=memory&cache=shared", uuid.NewV4().String())
-	db, err := gorm.Open(sqlite.Open(dbName), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(dbName), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
 	require.NoError(t, err, "Failed to open test database")
 
 	// Migrate the schema

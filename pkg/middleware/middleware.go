@@ -2,17 +2,20 @@
 package middleware
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ignata/go-microservices-boilerplate/pkg/config"
 	"github.com/ignata/go-microservices-boilerplate/pkg/logger"
+	"github.com/ignata/go-microservices-boilerplate/pkg/ratelimit"
 )
 
 // MiddlewareRegistry provides access to common middleware with configuration.
 type MiddlewareRegistry struct {
-	config *config.Config
-	logger logger.Logger
+	config       *config.Config
+	logger       logger.Logger
+	redisLimiter *ratelimit.RouteRateLimiter
 }
 
 // NewMiddlewareRegistry creates a new middleware registry.
@@ -20,6 +23,15 @@ func NewMiddlewareRegistry(cfg *config.Config, log logger.Logger) *MiddlewareReg
 	return &MiddlewareRegistry{
 		config: cfg,
 		logger: log,
+	}
+}
+
+// NewMiddlewareRegistryWithRedis creates a new middleware registry with Redis rate limiter.
+func NewMiddlewareRegistryWithRedis(cfg *config.Config, log logger.Logger, redisLimiter *ratelimit.RouteRateLimiter) *MiddlewareRegistry {
+	return &MiddlewareRegistry{
+		config:       cfg,
+		logger:       log,
+		redisLimiter: redisLimiter,
 	}
 }
 
@@ -76,12 +88,44 @@ func (r *MiddlewareRegistry) Auth(skipPaths ...string) gin.HandlerFunc {
 	})
 }
 
-// RateLimit returns the rate limiting middleware.
+// RedisRateLimit returns the Redis-backed rate limiting middleware with per-route limits.
+func (r *MiddlewareRegistry) RedisRateLimit(limit int, window time.Duration) gin.HandlerFunc {
+	if r.redisLimiter == nil {
+		return func(c *gin.Context) {
+			c.Next()
+		}
+	}
+
+	return RedisRateLimit(RedisRateLimiterConfig{
+		RedisLimiter: r.redisLimiter,
+		Limit:        limit,
+		Window:       int(window.Seconds()),
+		KeyFunc: func(c *gin.Context) string {
+			return fmt.Sprintf("%s:%s", c.ClientIP(), c.FullPath())
+		},
+	})
+}
+
+// RateLimit returns an in-memory rate limiting middleware (backward compatibility).
 func (r *MiddlewareRegistry) RateLimit(requestsPerSecond float64, burst int) gin.HandlerFunc {
 	return RateLimit(RateLimiterConfig{
 		RequestsPerSecond: requestsPerSecond,
 		Burst:             burst,
+		KeyFunc: func(c *gin.Context) string {
+			return c.ClientIP()
+		},
 	})
+}
+
+// RedisRateLimitPerRoute returns the Redis-backed rate limiting middleware with per-route configuration.
+func (r *MiddlewareRegistry) RedisRateLimitPerRoute(defaultLimit int, defaultWindow int) gin.HandlerFunc {
+	if r.redisLimiter == nil {
+		return func(c *gin.Context) {
+			c.Next()
+		}
+	}
+
+	return RedisRateLimitPerRoute(r.redisLimiter, defaultLimit, defaultWindow)
 }
 
 // Timeout returns the timeout middleware.

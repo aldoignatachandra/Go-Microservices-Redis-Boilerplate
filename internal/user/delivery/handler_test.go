@@ -57,8 +57,8 @@ func TestGetUser_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["success"].(bool))
-	data := response["data"].(map[string]interface{})
+	assert.True(t, response["Success"].(bool))
+	data := response["Data"].(map[string]interface{})
 	assert.Equal(t, "550e8400-e29b-41d4-a716-446655440001", data["id"])
 
 	mockUseCase.AssertExpectations(t)
@@ -89,8 +89,8 @@ func TestGetUser_NotFound(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["success"].(bool))
-	errObj := response["error"].(map[string]interface{})
+	assert.False(t, response["Success"].(bool))
+	errObj := response["Error"].(map[string]interface{})
 	assert.Contains(t, errObj["message"], "not found")
 
 	mockUseCase.AssertExpectations(t)
@@ -136,8 +136,8 @@ func TestUpdateProfile_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["success"].(bool))
-	data := response["data"].(map[string]interface{})
+	assert.True(t, response["Success"].(bool))
+	data := response["Data"].(map[string]interface{})
 	assert.Equal(t, "Profile updated successfully", data["message"])
 
 	mockUseCase.AssertExpectations(t)
@@ -176,7 +176,7 @@ func TestUpdateProfile_ValidationError(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.False(t, response["success"].(bool))
+	assert.False(t, response["Success"].(bool))
 }
 
 // TestListUsers_Success tests successful user list retrieval.
@@ -219,8 +219,8 @@ func TestListUsers_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["success"].(bool))
-	data := response["data"].(map[string]interface{})
+	assert.True(t, response["Success"].(bool))
+	data := response["Data"].(map[string]interface{})
 	assert.NotNil(t, data["users"])
 
 	mockUseCase.AssertExpectations(t)
@@ -251,8 +251,8 @@ func TestActivateUser_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["success"].(bool))
-	data := response["data"].(map[string]interface{})
+	assert.True(t, response["Success"].(bool))
+	data := response["Data"].(map[string]interface{})
 	assert.Equal(t, "User activated successfully", data["message"])
 
 	mockUseCase.AssertExpectations(t)
@@ -283,8 +283,8 @@ func TestDeactivateUser_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["success"].(bool))
-	data := response["data"].(map[string]interface{})
+	assert.True(t, response["Success"].(bool))
+	data := response["Data"].(map[string]interface{})
 	assert.Equal(t, "User deactivated successfully", data["message"])
 
 	mockUseCase.AssertExpectations(t)
@@ -315,8 +315,8 @@ func TestDeleteUser_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["success"].(bool))
-	data := response["data"].(map[string]interface{})
+	assert.True(t, response["Success"].(bool))
+	data := response["Data"].(map[string]interface{})
 	assert.Equal(t, "User deleted successfully", data["message"])
 
 	mockUseCase.AssertExpectations(t)
@@ -357,8 +357,8 @@ func TestRestoreUser_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["success"].(bool))
-	data := response["data"].(map[string]interface{})
+	assert.True(t, response["Success"].(bool))
+	data := response["Data"].(map[string]interface{})
 	assert.Equal(t, "User restored successfully", data["message"])
 
 	mockUseCase.AssertExpectations(t)
@@ -406,8 +406,8 @@ func TestGetActivityLogs_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.True(t, response["success"].(bool))
-	data := response["data"].(map[string]interface{})
+	assert.True(t, response["Success"].(bool))
+	data := response["Data"].(map[string]interface{})
 	assert.NotNil(t, data["logs"])
 
 	mockUseCase.AssertExpectations(t)

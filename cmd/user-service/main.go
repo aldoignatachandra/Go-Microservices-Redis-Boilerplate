@@ -35,6 +35,7 @@ import (
 	"github.com/ignata/go-microservices-boilerplate/pkg/config"
 	"github.com/ignata/go-microservices-boilerplate/pkg/logger"
 	"github.com/ignata/go-microservices-boilerplate/pkg/metrics"
+	"github.com/ignata/go-microservices-boilerplate/pkg/ratelimit"
 	"github.com/ignata/go-microservices-boilerplate/pkg/server"
 )
 
@@ -144,10 +145,22 @@ func setupHTTPServer(app *AppServer, cfg *config.Config) {
 		app.Engine.GET(cfg.Metrics.Path, metrics.PrometheusHandler())
 	}
 
-	// Register user routes
-	handler := delivery.NewUserHandler(app.UserUseCase)
 	// Swagger endpoint
 	app.Engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	delivery.RegisterRoutes(app.Engine, handler)
+	// Register user routes
+	handler := delivery.NewUserHandler(app.UserUseCase)
+
+	// Create Redis rate limiter if enabled
+	if cfg.RateLimit.Enabled && app.RedisClient != nil {
+		redisLimiter := ratelimit.NewRedisRateLimiter(app.RedisClient, "ratelimit")
+		redisLimiter.SetLimits(map[string]ratelimit.RouteLimit{
+			"/api/v1/users":         {MaxRequests: 120, WindowSeconds: 60},
+			"/api/v1/users/:id":     {MaxRequests: 5, WindowSeconds: 60},
+			"/api/v1/users/profile": {MaxRequests: 5, WindowSeconds: 60},
+		})
+		delivery.RegisterRoutesWithRateLimit(app.Engine, handler, redisLimiter, cfg.RateLimit.Requests, cfg.RateLimit.Duration)
+	} else {
+		delivery.RegisterRoutes(app.Engine, handler)
+	}
 }

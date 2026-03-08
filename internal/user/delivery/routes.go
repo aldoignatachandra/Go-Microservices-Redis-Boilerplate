@@ -2,7 +2,12 @@
 package delivery
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
+
+	"github.com/ignata/go-microservices-boilerplate/pkg/middleware"
+	"github.com/ignata/go-microservices-boilerplate/pkg/ratelimit"
 )
 
 // CORSMiddleware provides CORS middleware for the user service.
@@ -29,6 +34,36 @@ func RegisterRoutes(r *gin.Engine, handler *UserHandler) {
 	// User routes
 	users := v1.Group("/users")
 	// Public routes (with auth middleware in actual implementation)
+	users.GET("/:id", handler.GetUser)
+	users.GET("", handler.ListUsers)
+	users.GET("/:id/profile", handler.GetProfile)
+	// Protected routes (require auth)
+	users.PUT("/profile", handler.UpdateProfile)
+	// Admin routes
+	users.POST("/:id/activate", handler.ActivateUser)
+	users.POST("/:id/deactivate", handler.DeactivateUser)
+	users.DELETE("/:id", handler.DeleteUser)
+	users.POST("/:id/restore", handler.RestoreUser)
+	// Activity log routes
+	v1.GET("/activity-logs", handler.GetActivityLogs)
+}
+
+// RegisterRoutesWithRateLimit registers all user service routes with Redis-backed rate limiting.
+func RegisterRoutesWithRateLimit(
+	r *gin.Engine,
+	handler *UserHandler,
+	redisLimiter *ratelimit.RouteRateLimiter,
+	limit int,
+	window time.Duration,
+) {
+	rateLimitMiddleware := middleware.RedisRateLimitPerRoute(redisLimiter, limit, int(window.Seconds()))
+
+	// API v1 group
+	v1 := r.Group("/api/v1")
+	// User routes with rate limiting
+	users := v1.Group("/users")
+	users.Use(rateLimitMiddleware)
+	// Public routes
 	users.GET("/:id", handler.GetUser)
 	users.GET("", handler.ListUsers)
 	users.GET("/:id/profile", handler.GetProfile)

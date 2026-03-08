@@ -2,9 +2,13 @@
 package delivery
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/ignata/go-microservices-boilerplate/internal/auth/usecase"
+	"github.com/ignata/go-microservices-boilerplate/pkg/middleware"
+	"github.com/ignata/go-microservices-boilerplate/pkg/ratelimit"
 	"github.com/ignata/go-microservices-boilerplate/pkg/server"
 )
 
@@ -19,6 +23,49 @@ func RegisterRoutes(r *gin.Engine, authUseCase usecase.AuthUseCase, jwtSecret st
 
 	// Public auth routes
 	auth := r.Group("/auth")
+	auth.POST("/register", handler.Register)
+	auth.POST("/login", handler.Login)
+	auth.POST("/refresh", handler.RefreshToken)
+
+	// Protected auth routes (require authentication)
+	authProtected := r.Group("/auth")
+	authProtected.Use(AuthMiddleware(jwtSecret))
+	authProtected.POST("/logout", handler.Logout)
+	authProtected.GET("/me", handler.GetCurrentUser)
+	authProtected.POST("/change-password", handler.ChangePassword)
+
+	// Admin routes (require admin role)
+	admin := r.Group("/admin")
+	admin.Use(AuthMiddleware(jwtSecret))
+	admin.Use(AdminOnlyMiddleware())
+	admin.GET("/users", handler.ListUsers)
+	admin.GET("/users/:id", handler.GetUser)
+	admin.DELETE("/users/:id", handler.DeleteUser)
+	admin.POST("/users/:id/restore", handler.RestoreUser)
+}
+
+// RegisterRoutesWithRateLimit registers all auth service routes with Redis-backed rate limiting.
+func RegisterRoutesWithRateLimit(
+	r *gin.Engine,
+	authUseCase usecase.AuthUseCase,
+	jwtSecret string,
+	redisLimiter *ratelimit.RouteRateLimiter,
+	limit int,
+	window time.Duration,
+) {
+	handler := NewHandler(authUseCase)
+
+	// Health check endpoints (public)
+	r.GET("/health", handler.PublicHealth)
+	r.GET("/ready", handler.ReadyProbe)
+	r.GET("/live", handler.LiveProbe)
+
+	// Rate limiting middleware with per-route configuration
+	rateLimitMiddleware := middleware.RedisRateLimitPerRoute(redisLimiter, limit, int(window.Seconds()))
+
+	// Public auth routes with rate limiting
+	auth := r.Group("/auth")
+	auth.Use(rateLimitMiddleware)
 	auth.POST("/register", handler.Register)
 	auth.POST("/login", handler.Login)
 	auth.POST("/refresh", handler.RefreshToken)

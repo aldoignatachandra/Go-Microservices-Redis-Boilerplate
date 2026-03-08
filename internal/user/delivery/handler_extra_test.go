@@ -44,7 +44,7 @@ func TestGetProfile_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response map[string]interface{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
-	assert.True(t, response["success"].(bool))
+	assert.True(t, response["Success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -249,7 +249,7 @@ func TestGetUser_IncludeDeleted(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response map[string]interface{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
-	assert.True(t, response["success"].(bool))
+	assert.True(t, response["Success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -347,7 +347,7 @@ func TestDeleteUser_ForceDelete(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response map[string]interface{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
-	assert.True(t, response["success"].(bool))
+	assert.True(t, response["Success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -381,8 +381,8 @@ func TestRestoreUser_AlreadyActive(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response map[string]interface{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
-	assert.True(t, response["success"].(bool))
-	data := response["data"].(map[string]interface{})
+	assert.True(t, response["Success"].(bool))
+	data := response["Data"].(map[string]interface{})
 	assert.Equal(t, "User is already active", data["message"])
 
 	mockUseCase.AssertExpectations(t)

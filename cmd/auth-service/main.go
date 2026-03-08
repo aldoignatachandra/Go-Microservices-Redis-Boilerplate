@@ -38,6 +38,7 @@ import (
 	"github.com/ignata/go-microservices-boilerplate/pkg/eventbus"
 	"github.com/ignata/go-microservices-boilerplate/pkg/logger"
 	"github.com/ignata/go-microservices-boilerplate/pkg/metrics"
+	"github.com/ignata/go-microservices-boilerplate/pkg/ratelimit"
 	"github.com/ignata/go-microservices-boilerplate/pkg/server"
 )
 
@@ -187,8 +188,31 @@ func setupHTTPServer(app *App) *gin.Engine {
 	// Swagger endpoint
 	engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	// Register auth routes
-	delivery.RegisterRoutes(engine, app.AuthUseCase, app.Config.Auth.JWT.Secret)
+	// Create Redis rate limiter if enabled
+	var redisLimiter *ratelimit.RouteRateLimiter
+	if app.Config.RateLimit.Enabled && app.Redis != nil {
+		redisLimiter = ratelimit.NewRedisRateLimiter(app.Redis, "ratelimit")
+
+		redisLimiter.SetLimits(map[string]ratelimit.RouteLimit{
+			"/auth/login":    {MaxRequests: 10, WindowSeconds: 60},
+			"/auth/logout":   {MaxRequests: 30, WindowSeconds: 60},
+			"/auth/register": {MaxRequests: 10, WindowSeconds: 60},
+		})
+	}
+
+	// Register auth routes with rate limiting
+	if redisLimiter != nil && app.Config.RateLimit.Enabled {
+		delivery.RegisterRoutesWithRateLimit(
+			engine,
+			app.AuthUseCase,
+			app.Config.Auth.JWT.Secret,
+			redisLimiter,
+			app.Config.RateLimit.Requests,
+			app.Config.RateLimit.Duration,
+		)
+	} else {
+		delivery.RegisterRoutes(engine, app.AuthUseCase, app.Config.Auth.JWT.Secret)
+	}
 
 	return engine
 }

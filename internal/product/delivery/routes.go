@@ -2,9 +2,13 @@
 package delivery
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/ignata/go-microservices-boilerplate/internal/product/usecase"
+	"github.com/ignata/go-microservices-boilerplate/pkg/middleware"
+	"github.com/ignata/go-microservices-boilerplate/pkg/ratelimit"
 	"github.com/ignata/go-microservices-boilerplate/pkg/server"
 )
 
@@ -44,6 +48,40 @@ func RegisterRoutes(r *gin.Engine, productUseCase usecase.ProductUseCase) {
 	r.DELETE("/products/:id", handler.DeleteProduct)
 	r.POST("/products/:id/restore", handler.RestoreProduct)
 	r.PUT("/products/:id/stock", handler.UpdateStock)
+}
+
+// RegisterRoutesWithRateLimit registers all product service routes with Redis-backed rate limiting.
+func RegisterRoutesWithRateLimit(
+	r *gin.Engine,
+	productUseCase usecase.ProductUseCase,
+	redisLimiter *ratelimit.RouteRateLimiter,
+	limit int,
+	window time.Duration,
+) {
+	handler := NewHandler(productUseCase)
+
+	// Rate limiting middleware with per-route configuration
+	rateLimitMiddleware := middleware.RedisRateLimitPerRoute(redisLimiter, limit, int(window.Seconds()))
+
+	// Health check endpoints (public)
+	r.GET("/health", handler.PublicHealth)
+	r.GET("/ready", handler.ReadyProbe)
+	r.GET("/live", handler.LiveProbe)
+
+	// Public product routes with rate limiting
+	products := r.Group("/products")
+	products.Use(rateLimitMiddleware)
+	products.GET("", handler.ListProducts)
+	products.GET("/:id", handler.GetProduct)
+
+	// Protected product routes with rate limiting
+	protected := r.Group("")
+	protected.Use(rateLimitMiddleware)
+	protected.POST("/products", handler.CreateProduct)
+	protected.PUT("/products/:id", handler.UpdateProduct)
+	protected.DELETE("/products/:id", handler.DeleteProduct)
+	protected.POST("/products/:id/restore", handler.RestoreProduct)
+	protected.PUT("/products/:id/stock", handler.UpdateStock)
 }
 
 // PublicHealth is a public health check.
