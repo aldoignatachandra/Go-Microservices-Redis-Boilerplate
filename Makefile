@@ -11,6 +11,7 @@
 GO := go
 BINARY_DIR := bin
 SERVICES := auth-service user-service product-service
+DOCKER_SERVICES := auth user product
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS := -ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME)"
@@ -192,14 +193,14 @@ docker-build: ## Build Docker images
 	docker-compose -f deployments/docker-compose.yml build
 
 docker-build-prod: ## Build production Docker images
-	@for service in $(SERVICES); do \
+	@for service in $(DOCKER_SERVICES); do \
 		echo "  → Building $$service image..."; \
 		docker build -f deployments/docker/Dockerfile.$$service -t go-microservices/$$service:$(VERSION) .; \
 	done
 	@echo "✅ Production images built!"
 
 docker-push: ## Push Docker images to registry
-	@for service in $(SERVICES); do \
+	@for service in $(DOCKER_SERVICES); do \
 		echo "  → Pushing $$service image..."; \
 		docker push go-microservices/$$service:$(VERSION); \
 	done
