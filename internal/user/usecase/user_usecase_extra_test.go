@@ -183,10 +183,10 @@ func TestActivateUser_UpdateError(t *testing.T) {
 	uc := usecase.NewUserUseCase(mockUserRepo, mockActivityRepo, mockEventBus, logger)
 
 	req := &dto.ActivateUserRequest{ID: "user-1"}
-	user := &domain.User{IsActive: false}
+	user := &domain.User{}
 
 	mockUserRepo.On("FindByID", mock.Anything, req.ID, mock.Anything).Return(user, nil)
-	mockUserRepo.On("Update", mock.Anything, mock.Anything).Return(errors.New("update error"))
+	mockUserRepo.On("Restore", mock.Anything, req.ID).Return(errors.New("restore error"))
 
 	err := uc.ActivateUser(context.Background(), req)
 
@@ -202,10 +202,11 @@ func TestDeactivateUser_UpdateError(t *testing.T) {
 	uc := usecase.NewUserUseCase(mockUserRepo, mockActivityRepo, mockEventBus, logger)
 
 	req := &dto.DeactivateUserRequest{ID: "user-1"}
-	user := &domain.User{IsActive: true}
+	user := &domain.User{}
 
 	mockUserRepo.On("FindByID", mock.Anything, req.ID, mock.Anything).Return(user, nil)
-	mockUserRepo.On("Update", mock.Anything, mock.Anything).Return(errors.New("update error"))
+	mockUserRepo.On("Delete", mock.Anything, req.ID).Return(errors.New("delete error"))
+	mockEventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 
 	err := uc.DeactivateUser(context.Background(), req)
 

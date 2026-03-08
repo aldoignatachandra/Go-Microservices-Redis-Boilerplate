@@ -33,10 +33,9 @@ func TestGetUser_Success(t *testing.T) {
 	router := setupTestRouter(handler)
 
 	expectedUser := &dto.UserResponse{
-		ID:       "550e8400-e29b-41d4-a716-446655440001",
-		Email:    "test@example.com",
-		Role:     "USER",
-		IsActive: true,
+		ID:    "550e8400-e29b-41d4-a716-446655440001",
+		Email: "test@example.com",
+		Role:  "USER",
 	}
 
 	mockUseCase.On("GetUser", mock.Anything, mock.AnythingOfType("*dto.GetUserRequest")).
@@ -374,10 +373,10 @@ func TestGetActivityLogs_Success(t *testing.T) {
 	expectedLogs := &dto.ActivityLogListResponse{
 		Logs: []*dto.ActivityLogResponse{
 			{
-				ID:       "log-1",
-				UserID:   "550e8400-e29b-41d4-a716-446655440001",
-				Action:   "login",
-				Resource: "auth",
+				ID:     "log-1",
+				UserID: "550e8400-e29b-41d4-a716-446655440001",
+				Action: "login",
+				Entity: "auth",
 			},
 		},
 		Pagination: &dto.PaginationMeta{

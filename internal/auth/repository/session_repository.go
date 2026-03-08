@@ -23,6 +23,8 @@ type SessionRepository interface {
 	Revoke(ctx context.Context, id string) error
 	// RevokeAllForUser revokes all sessions for a user
 	RevokeAllForUser(ctx context.Context, userID string) error
+	// DeleteByUserID deletes all sessions for a user (hard delete for single session policy)
+	DeleteByUserID(ctx context.Context, userID string) error
 	// DeleteExpired deletes all expired sessions
 	DeleteExpired(ctx context.Context) error
 }
@@ -50,7 +52,7 @@ func (r *gormSessionRepository) Create(ctx context.Context, session *domain.Sess
 func (r *gormSessionRepository) FindByRefreshToken(ctx context.Context, refreshToken string) (*domain.Session, error) {
 	var session domain.Session
 	result := r.db.WithContext(ctx).
-		Where("refresh_token = ?", refreshToken).
+		Where("token = ?", refreshToken).
 		First(&session)
 
 	if result.Error != nil {
@@ -103,6 +105,19 @@ func (r *gormSessionRepository) RevokeAllForUser(ctx context.Context, userID str
 
 	if result.Error != nil {
 		return fmt.Errorf("failed to revoke sessions: %w", result.Error)
+	}
+
+	return nil
+}
+
+// DeleteByUserID deletes all sessions for a user (hard delete for single session policy).
+func (r *gormSessionRepository) DeleteByUserID(ctx context.Context, userID string) error {
+	result := r.db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Delete(&domain.Session{})
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to delete sessions: %w", result.Error)
 	}
 
 	return nil

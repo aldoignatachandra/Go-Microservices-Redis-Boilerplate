@@ -56,12 +56,12 @@ func createTestProduct(t *testing.T, db *gorm.DB) *domain.Product {
 			CreatedAt: time.Now().UTC(),
 			UpdatedAt: time.Now().UTC(),
 		},
-		Name:        fmt.Sprintf("Product_%s", uuid.NewV4().String()),
-		Description: "A test product",
-		Price:       29.99,
-		Stock:       100,
-		Status:      domain.ProductStatusActive,
-		CategoryID:  uuid.NewV4().String(),
+		Name:       fmt.Sprintf("Product_%s", uuid.NewV4().String()),
+		Price:      29.99,
+		Stock:      100,
+		OwnerID:    uuid.NewV4().String(),
+		HasVariant: false,
+		Images:     "",
 	}
 	err := db.Create(product).Error
 	require.NoError(t, err)
@@ -77,13 +77,14 @@ func TestCreate(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("successful create product", func(t *testing.T) {
+		ownerID := uuid.NewV4().String()
 		product := &domain.Product{
-			Name:        fmt.Sprintf("Product_%s", uuid.NewV4().String()),
-			Description: "A test product",
-			Price:       19.99,
-			Stock:       50,
-			Status:      domain.ProductStatusActive,
-			CategoryID:  uuid.NewV4().String(),
+			Name:       fmt.Sprintf("Product_%s", uuid.NewV4().String()),
+			Price:      19.99,
+			Stock:      50,
+			OwnerID:    ownerID,
+			HasVariant: false,
+			Images:     "",
 		}
 
 		err := repo.Create(ctx, product)
@@ -98,42 +99,43 @@ func TestCreate(t *testing.T) {
 	})
 
 	t.Run("successful create product with all fields", func(t *testing.T) {
+		ownerID := uuid.NewV4().String()
 		product := &domain.Product{
-			Name:        fmt.Sprintf("Full Product_%s", uuid.NewV4().String()),
-			Description: "A complete product with all details",
-			Price:       99.99,
-			Stock:       200,
-			Status:      domain.ProductStatusActive,
-			CategoryID:  uuid.NewV4().String(),
+			Name:       fmt.Sprintf("Full Product_%s", uuid.NewV4().String()),
+			Price:      99.99,
+			Stock:      200,
+			OwnerID:    ownerID,
+			HasVariant: true,
+			Images:     "http://example.com/image.jpg",
 		}
 
 		err := repo.Create(ctx, product)
 		require.NoError(t, err)
 	})
 
-	t.Run("successful create inactive product", func(t *testing.T) {
+	t.Run("successful create product with has_variant", func(t *testing.T) {
+		ownerID := uuid.NewV4().String()
 		product := &domain.Product{
-			Name:        fmt.Sprintf("Inactive Product_%s", uuid.NewV4().String()),
-			Description: "An inactive product",
-			Price:       49.99,
-			Stock:       30,
-			Status:      domain.ProductStatusInactive,
-			CategoryID:  uuid.NewV4().String(),
+			Name:       fmt.Sprintf("Variant Product_%s", uuid.NewV4().String()),
+			Price:      49.99,
+			Stock:      30,
+			OwnerID:    ownerID,
+			HasVariant: true,
 		}
 
 		err := repo.Create(ctx, product)
 		require.NoError(t, err)
-		assert.Equal(t, domain.ProductStatusInactive, product.Status)
+		assert.True(t, product.HasVariant)
 	})
 
 	t.Run("successful create product with zero stock", func(t *testing.T) {
+		ownerID := uuid.NewV4().String()
 		product := &domain.Product{
-			Name:        fmt.Sprintf("Zero Stock Product_%s", uuid.NewV4().String()),
-			Description: "Out of stock product",
-			Price:       29.99,
-			Stock:       0,
-			Status:      domain.ProductStatusActive,
-			CategoryID:  uuid.NewV4().String(),
+			Name:       fmt.Sprintf("Zero Stock Product_%s", uuid.NewV4().String()),
+			Price:      29.99,
+			Stock:      0,
+			OwnerID:    ownerID,
+			HasVariant: false,
 		}
 
 		err := repo.Create(ctx, product)
@@ -193,7 +195,7 @@ func TestUpdate(t *testing.T) {
 
 	t.Run("successful update product status", func(t *testing.T) {
 		product := createTestProduct(t, db)
-		product.Status = domain.ProductStatusInactive
+		product.HasVariant = true
 
 		err := repo.Update(ctx, product)
 		require.NoError(t, err)
@@ -201,14 +203,15 @@ func TestUpdate(t *testing.T) {
 		var found domain.Product
 		err = db.Where("id = ?", product.ID).First(&found).Error
 		require.NoError(t, err)
-		assert.Equal(t, domain.ProductStatusInactive, found.Status)
+		assert.True(t, found.HasVariant)
 	})
 
 	t.Run("successful update multiple fields", func(t *testing.T) {
 		product := createTestProduct(t, db)
-		product.Description = "Updated description"
 		product.Price = 59.99
 		product.Stock = 75
+		product.HasVariant = true
+		product.Images = "http://example.com/new-image.jpg"
 
 		err := repo.Update(ctx, product)
 		require.NoError(t, err)
@@ -216,19 +219,20 @@ func TestUpdate(t *testing.T) {
 		var found domain.Product
 		err = db.Where("id = ?", product.ID).First(&found).Error
 		require.NoError(t, err)
-		assert.Equal(t, "Updated description", found.Description)
 		assert.Equal(t, 59.99, found.Price)
 		assert.Equal(t, 75, found.Stock)
+		assert.True(t, found.HasVariant)
 	})
 
 	t.Run("fail - product not found", func(t *testing.T) {
+		ownerID := uuid.NewV4().String()
 		product := &domain.Product{
 			Model:      domain.Model{ID: uuid.NewV4().String()},
 			Name:       "Non-existent Product",
 			Price:      19.99,
 			Stock:      50,
-			Status:     domain.ProductStatusActive,
-			CategoryID: uuid.NewV4().String(),
+			OwnerID:    ownerID,
+			HasVariant: false,
 		}
 
 		err := repo.Update(ctx, product)
@@ -380,15 +384,15 @@ func TestFindByID(t *testing.T) {
 		assert.Equal(t, product.Price, found.Price)
 	})
 
-	t.Run("successful find inactive product", func(t *testing.T) {
+	t.Run("successful find variant product", func(t *testing.T) {
 		product := createTestProduct(t, db)
-		product.Status = domain.ProductStatusInactive
+		product.HasVariant = true
 		err := db.Save(product).Error
 		require.NoError(t, err)
 
 		found, err := repo.FindByID(ctx, product.ID, domain.DefaultParanoidOptions())
 		require.NoError(t, err)
-		assert.Equal(t, domain.ProductStatusInactive, found.Status)
+		assert.True(t, found.HasVariant)
 	})
 
 	t.Run("successful find deleted product with include deleted", func(t *testing.T) {
@@ -460,28 +464,6 @@ func TestFindAll(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, result.Products, 2)
 		assert.Equal(t, 2, result.Page)
-	})
-
-	t.Run("successful find all products with status filter ACTIVE", func(t *testing.T) {
-		inactiveProduct := createTestProduct(t, db)
-		inactiveProduct.Status = domain.ProductStatusInactive
-		err := db.Save(inactiveProduct).Error
-		require.NoError(t, err)
-
-		result, err := repo.FindAll(ctx, &dto.ListProductsRequest{Page: 1, Limit: 10, Status: "ACTIVE"})
-		require.NoError(t, err)
-		assert.Greater(t, result.Total, int64(0))
-		for _, product := range result.Products {
-			assert.Equal(t, domain.ProductStatusActive, product.Status)
-		}
-	})
-
-	t.Run("successful find all products with status filter INACTIVE", func(t *testing.T) {
-		result, err := repo.FindAll(ctx, &dto.ListProductsRequest{Page: 1, Limit: 10, Status: "INACTIVE"})
-		require.NoError(t, err)
-		for _, product := range result.Products {
-			assert.Equal(t, domain.ProductStatusInactive, product.Status)
-		}
 	})
 
 	t.Run("successful find all products with include deleted", func(t *testing.T) {
@@ -704,13 +686,14 @@ func TestProductRepositoryIntegration(t *testing.T) {
 		assert.False(t, exists)
 
 		// Create product
+		ownerID := uuid.NewV4().String()
 		product := &domain.Product{
-			Name:        productName,
-			Description: "A lifecycle test product",
-			Price:       29.99,
-			Stock:       75,
-			Status:      domain.ProductStatusActive,
-			CategoryID:  uuid.NewV4().String(),
+			Name:       productName,
+			Price:      29.99,
+			Stock:      75,
+			OwnerID:    ownerID,
+			HasVariant: false,
+			Images:     "",
 		}
 		err = repo.Create(ctx, product)
 		require.NoError(t, err)
@@ -740,13 +723,13 @@ func TestEdgeCases(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("create product with empty ID", func(t *testing.T) {
+		ownerID := uuid.NewV4().String()
 		product := &domain.Product{
-			Name:        fmt.Sprintf("Empty ID Product_%s", uuid.NewV4().String()),
-			Description: "Product with empty ID",
-			Price:       19.99,
-			Stock:       50,
-			Status:      domain.ProductStatusActive,
-			CategoryID:  uuid.NewV4().String(),
+			Name:       fmt.Sprintf("Empty ID Product_%s", uuid.NewV4().String()),
+			Price:      19.99,
+			Stock:      50,
+			OwnerID:    ownerID,
+			HasVariant: false,
 		}
 
 		err := repo.Create(ctx, product)
@@ -755,13 +738,14 @@ func TestEdgeCases(t *testing.T) {
 	})
 
 	t.Run("update non-existent product", func(t *testing.T) {
+		ownerID := uuid.NewV4().String()
 		product := &domain.Product{
 			Model:      domain.Model{ID: uuid.NewV4().String()},
 			Name:       "Non-existent Product",
 			Price:      19.99,
 			Stock:      50,
-			Status:     domain.ProductStatusActive,
-			CategoryID: uuid.NewV4().String(),
+			OwnerID:    ownerID,
+			HasVariant: false,
 		}
 
 		err := repo.Update(ctx, product)
@@ -815,14 +799,14 @@ func TestCreate_DatabaseError(t *testing.T) {
 	sqlDB, _ := db.DB()
 	sqlDB.Close()
 
+	ownerID := uuid.NewV4().String()
 	product := &domain.Product{
-		Model:       domain.Model{ID: uuid.NewV4().String()},
-		Name:        "Test Product",
-		Description: "A test product",
-		Price:       19.99,
-		Stock:       50,
-		Status:      domain.ProductStatusActive,
-		CategoryID:  uuid.NewV4().String(),
+		Model:      domain.Model{ID: uuid.NewV4().String()},
+		Name:       "Test Product",
+		Price:      19.99,
+		Stock:      50,
+		OwnerID:    ownerID,
+		HasVariant: false,
 	}
 
 	err := repo.Create(ctx, product)

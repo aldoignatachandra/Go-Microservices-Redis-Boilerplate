@@ -7,6 +7,7 @@ import (
 	"github.com/ignata/go-microservices-boilerplate/internal/product/domain"
 	"github.com/ignata/go-microservices-boilerplate/internal/product/dto"
 	"github.com/ignata/go-microservices-boilerplate/internal/product/usecase"
+	"github.com/ignata/go-microservices-boilerplate/pkg/middleware"
 	"github.com/ignata/go-microservices-boilerplate/pkg/utils"
 )
 
@@ -40,7 +41,8 @@ func (h *Handler) CreateProduct(c *gin.Context) {
 		return
 	}
 
-	response, err := h.productUseCase.CreateProduct(c.Request.Context(), &req)
+	userID, _ := middleware.GetUserID(c)
+	response, err := h.productUseCase.CreateProduct(c.Request.Context(), userID, &req)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -72,7 +74,9 @@ func (h *Handler) GetProduct(c *gin.Context) {
 		return
 	}
 
-	response, err := h.productUseCase.GetProduct(c.Request.Context(), &req)
+	userID, _ := middleware.GetUserID(c)
+	userRole, _ := middleware.GetUserRole(c)
+	response, err := h.productUseCase.GetProduct(c.Request.Context(), userID, string(userRole), &req)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -101,7 +105,9 @@ func (h *Handler) ListProducts(c *gin.Context) {
 		return
 	}
 
-	response, err := h.productUseCase.ListProducts(c.Request.Context(), &req)
+	userID, _ := middleware.GetUserID(c)
+	userRole, _ := middleware.GetUserRole(c)
+	response, err := h.productUseCase.ListProducts(c.Request.Context(), userID, string(userRole), &req)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -134,7 +140,9 @@ func (h *Handler) UpdateProduct(c *gin.Context) {
 		return
 	}
 
-	response, err := h.productUseCase.UpdateProduct(c.Request.Context(), c.Param("id"), &req)
+	userID, _ := middleware.GetUserID(c)
+	userRole, _ := middleware.GetUserRole(c)
+	response, err := h.productUseCase.UpdateProduct(c.Request.Context(), userID, string(userRole), c.Param("id"), &req)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -166,7 +174,9 @@ func (h *Handler) DeleteProduct(c *gin.Context) {
 		return
 	}
 
-	response, err := h.productUseCase.DeleteProduct(c.Request.Context(), &req)
+	userID, _ := middleware.GetUserID(c)
+	userRole, _ := middleware.GetUserRole(c)
+	response, err := h.productUseCase.DeleteProduct(c.Request.Context(), userID, string(userRole), &req)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -192,7 +202,9 @@ func (h *Handler) RestoreProduct(c *gin.Context) {
 		return
 	}
 
-	response, err := h.productUseCase.RestoreProduct(c.Request.Context(), &req)
+	userID, _ := middleware.GetUserID(c)
+	userRole, _ := middleware.GetUserRole(c)
+	response, err := h.productUseCase.RestoreProduct(c.Request.Context(), userID, string(userRole), &req)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -240,7 +252,9 @@ func (h *Handler) UpdateStock(c *gin.Context) {
 		Stock: jsonBody.Stock,
 	}
 
-	response, err := h.productUseCase.UpdateStock(c.Request.Context(), &req)
+	userID, _ := middleware.GetUserID(c)
+	userRole, _ := middleware.GetUserRole(c)
+	response, err := h.productUseCase.UpdateStock(c.Request.Context(), userID, string(userRole), &req)
 	if err != nil {
 		h.handleError(c, err)
 		return

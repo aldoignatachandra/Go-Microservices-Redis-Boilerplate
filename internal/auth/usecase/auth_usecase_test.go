@@ -79,6 +79,19 @@ func (m *MockUserRepository) ExistsByEmail(ctx context.Context, email string) (b
 	return args.Bool(0), args.Error(1)
 }
 
+func (m *MockUserRepository) FindByUsername(ctx context.Context, username string, opts *domain.ParanoidOptions) (*domain.User, error) {
+	args := m.Called(ctx, username, opts)
+	if user, ok := args.Get(0).(*domain.User); ok {
+		return user, args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *MockUserRepository) ExistsByUsername(ctx context.Context, username string) (bool, error) {
+	args := m.Called(ctx, username)
+	return args.Bool(0), args.Error(1)
+}
+
 // MockSessionRepository is a mock for repository.SessionRepository.
 type MockSessionRepository struct {
 	mock.Mock
@@ -120,6 +133,11 @@ func (m *MockSessionRepository) DeleteExpired(ctx context.Context) error {
 	return args.Error(0)
 }
 
+func (m *MockSessionRepository) DeleteByUserID(ctx context.Context, userID string) error {
+	args := m.Called(ctx, userID)
+	return args.Error(0)
+}
+
 // MockEventPublisher is a mock for eventbus.EventPublisher.
 type MockEventPublisher struct {
 	mock.Mock
@@ -156,9 +174,9 @@ func buildTestUser(opts ...func(*domain.User)) *domain.User {
 			UpdatedAt: time.Now(),
 		},
 		Email:        "test@example.com",
+		Username:     "testuser",
 		PasswordHash: "$2a$04$test", // Will be replaced in tests
 		Role:         domain.RoleUser,
-		IsActive:     true,
 	}
 	for _, opt := range opts {
 		opt(user)
@@ -168,10 +186,6 @@ func buildTestUser(opts ...func(*domain.User)) *domain.User {
 
 func withEmail(email string) func(*domain.User) {
 	return func(u *domain.User) { u.Email = email }
-}
-
-func withActive(active bool) func(*domain.User) {
-	return func(u *domain.User) { u.IsActive = active }
 }
 
 func withID(id string) func(*domain.User) {
@@ -204,11 +218,13 @@ func TestRegister(t *testing.T) {
 			name: "successful registration",
 			req: &dto.RegisterRequest{
 				Email:    "test@example.com",
+				Username: "testuser",
 				Password: "SecureP@ss123",
 				Role:     "USER",
 			},
 			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
 				userRepo.On("ExistsByEmail", mock.Anything, "test@example.com").Return(false, nil)
+				userRepo.On("ExistsByUsername", mock.Anything, "testuser").Return(false, nil)
 				userRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.User")).Return(nil)
 				sessionRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Session")).Return(nil)
 				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil).Maybe()
@@ -249,10 +265,12 @@ func TestRegister(t *testing.T) {
 			name: "repository error on create",
 			req: &dto.RegisterRequest{
 				Email:    "test@example.com",
+				Username: "testuser",
 				Password: "SecureP@ss123",
 			},
 			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
 				userRepo.On("ExistsByEmail", mock.Anything, "test@example.com").Return(false, nil)
+				userRepo.On("ExistsByUsername", mock.Anything, "testuser").Return(false, nil)
 				userRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.User")).Return(errors.New("create failed"))
 			},
 			wantErr: true,
@@ -313,19 +331,6 @@ func TestLogin(t *testing.T) {
 			},
 			wantErr:     true,
 			expectedErr: domain.ErrInvalidCredentials,
-		},
-		{
-			name: "inactive user",
-			req: &dto.LoginRequest{
-				Email:    "inactive@example.com",
-				Password: "password",
-			},
-			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
-				user := buildTestUser(withEmail("inactive@example.com"), withActive(false))
-				userRepo.On("FindByEmail", mock.Anything, "inactive@example.com", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
-			},
-			wantErr:     true,
-			expectedErr: domain.ErrUserInactive,
 		},
 		{
 			name: "deleted user",
@@ -434,9 +439,11 @@ func TestRefreshToken(t *testing.T) {
 	// First register a user to get valid tokens
 	registerReq := &dto.RegisterRequest{
 		Email:    "refresh@example.com",
+		Username: "refreshuser",
 		Password: "TestP@ss123",
 	}
 	userRepo.On("ExistsByEmail", mock.Anything, "refresh@example.com").Return(false, nil)
+	userRepo.On("ExistsByUsername", mock.Anything, "refreshuser").Return(false, nil)
 	userRepo.On("Create", mock.Anything, mock.MatchedBy(func(u *domain.User) bool {
 		return u.Email == "refresh@example.com"
 	})).Return(nil)
@@ -766,10 +773,10 @@ func TestUpdateUser(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:   "successful update is active",
+			name:   "successful update name",
 			userID: "test-user-id",
 			req: &dto.UpdateUserRequest{
-				IsActive: boolPtr(false),
+				Name: "Updated Name",
 			},
 			setupMocks: func(userRepo *MockUserRepository, eventBus *MockEventPublisher) {
 				user := buildTestUser(withID("test-user-id"))
@@ -1068,6 +1075,7 @@ func TestLogin_Success(t *testing.T) {
 
 	userRepo.On("FindByEmail", mock.Anything, "login@example.com", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
 	sessionRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Session")).Return(nil)
+	sessionRepo.On("DeleteByUserID", mock.Anything, mock.AnythingOfType("string")).Return(nil)
 	userRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.User")).Return(nil)
 	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil).Maybe()
 
@@ -1099,9 +1107,11 @@ func TestRefreshToken_Success(t *testing.T) {
 	// First register to get valid tokens
 	registerReq := &dto.RegisterRequest{
 		Email:    "refresh@example.com",
+		Username: "refreshuser",
 		Password: "TestP@ss123",
 	}
 	userRepo.On("ExistsByEmail", mock.Anything, "refresh@example.com").Return(false, nil)
+	userRepo.On("ExistsByUsername", mock.Anything, "refreshuser").Return(false, nil)
 	userRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.User")).Return(nil)
 	sessionRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Session")).Return(nil)
 	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil).Maybe()
@@ -1116,11 +1126,12 @@ func TestRefreshToken_Success(t *testing.T) {
 	user.PasswordHash = "$2a$10$hashedpassword"
 
 	session := &domain.Session{
-		ID:           "session-123",
-		UserID:       authResp.User.ID,
-		RefreshToken: validRefreshToken,
-		ExpiresAt:    time.Now().Add(24 * time.Hour),
-		RevokedAt:    nil,
+		ID:         "session-123",
+		UserID:     authResp.User.ID,
+		Token:      validRefreshToken,
+		ExpiresAt:  time.Now().Add(24 * time.Hour),
+		RevokedAt:  nil,
+		LastUsedAt: time.Now(),
 	}
 
 	sessionRepo.On("FindByRefreshToken", mock.Anything, validRefreshToken).Return(session, nil)
@@ -1158,10 +1169,11 @@ func TestRefreshToken_SessionExpired(t *testing.T) {
 
 	// Setup expired session
 	expiredSession := &domain.Session{
-		ID:           "session-expired",
-		UserID:       "user-123",
-		RefreshToken: validToken,
-		ExpiresAt:    time.Now().Add(-1 * time.Hour), // Expired
+		ID:         "session-expired",
+		UserID:     "user-123",
+		Token:      validToken,
+		ExpiresAt:  time.Now().Add(-1 * time.Hour), // Expired
+		LastUsedAt: time.Now(),
 	}
 
 	sessionRepo.On("FindByRefreshToken", mock.Anything, validToken).Return(expiredSession, nil)
@@ -1191,10 +1203,11 @@ func TestRefreshToken_UserMismatch(t *testing.T) {
 
 	// Setup session with different user ID
 	session := &domain.Session{
-		ID:           "session-123",
-		UserID:       "user-456", // Different from token user ID
-		RefreshToken: validToken,
-		ExpiresAt:    time.Now().Add(1 * time.Hour),
+		ID:         "session-123",
+		UserID:     "user-456", // Different from token user ID
+		Token:      validToken,
+		ExpiresAt:  time.Now().Add(1 * time.Hour),
+		LastUsedAt: time.Now(),
 	}
 
 	sessionRepo.On("FindByRefreshToken", mock.Anything, validToken).Return(session, nil)
@@ -1278,6 +1291,7 @@ func TestRegister_PasswordHashError(t *testing.T) {
 	uc := newTestAuthUseCase(userRepo, sessionRepo, eventBus)
 
 	userRepo.On("ExistsByEmail", mock.Anything, "test@example.com").Return(false, nil)
+	userRepo.On("ExistsByUsername", mock.Anything, mock.Anything).Return(false, nil)
 	// Add Create mock expectation - simply return nil (no error)
 	userRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.User")).Return(nil)
 	// Add session creation mock
@@ -1320,6 +1334,7 @@ func TestLogin_SessionCreationError(t *testing.T) {
 	user.PasswordHash = passwordHash
 
 	userRepo.On("FindByEmail", mock.Anything, "login@example.com", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
+	sessionRepo.On("DeleteByUserID", mock.Anything, "test-user-id").Return(nil)
 	sessionRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Session")).Return(errors.New("session creation failed"))
 	// Note: Update is not called when session creation fails, so we don't set up that expectation
 	// userRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.User")).Return(nil)

@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
+	"github.com/ignata/go-microservices-boilerplate/internal/common/constants"
 	"github.com/ignata/go-microservices-boilerplate/internal/product/domain"
 	"github.com/ignata/go-microservices-boilerplate/internal/product/dto"
 	"github.com/ignata/go-microservices-boilerplate/internal/product/repository"
@@ -18,19 +19,19 @@ import (
 // ProductUseCase defines the interface for product business logic.
 type ProductUseCase interface {
 	// CreateProduct creates a new product
-	CreateProduct(ctx context.Context, req *dto.CreateProductRequest) (*dto.ProductResponse, error)
+	CreateProduct(ctx context.Context, ownerID string, req *dto.CreateProductRequest) (*dto.ProductResponse, error)
 	// GetProduct gets a product by ID
-	GetProduct(ctx context.Context, req *dto.GetProductRequest) (*dto.ProductResponse, error)
+	GetProduct(ctx context.Context, userID, userRole string, req *dto.GetProductRequest) (*dto.ProductResponse, error)
 	// ListProducts lists products with pagination
-	ListProducts(ctx context.Context, req *dto.ListProductsRequest) (*dto.ProductListResponse, error)
+	ListProducts(ctx context.Context, userID, userRole string, req *dto.ListProductsRequest) (*dto.ProductListResponse, error)
 	// UpdateProduct updates a product
-	UpdateProduct(ctx context.Context, productID string, req *dto.UpdateProductRequest) (*dto.ProductResponse, error)
+	UpdateProduct(ctx context.Context, userID, userRole string, productID string, req *dto.UpdateProductRequest) (*dto.ProductResponse, error)
 	// DeleteProduct deletes a product
-	DeleteProduct(ctx context.Context, req *dto.DeleteProductRequest) (*dto.DeleteResponse, error)
+	DeleteProduct(ctx context.Context, userID, userRole string, req *dto.DeleteProductRequest) (*dto.DeleteResponse, error)
 	// RestoreProduct restores a deleted product
-	RestoreProduct(ctx context.Context, req *dto.RestoreProductRequest) (*dto.ProductResponse, error)
+	RestoreProduct(ctx context.Context, userID, userRole string, req *dto.RestoreProductRequest) (*dto.ProductResponse, error)
 	// UpdateStock updates product stock
-	UpdateStock(ctx context.Context, req *dto.UpdateStockRequest) (*dto.UpdateStockResponse, error)
+	UpdateStock(ctx context.Context, userID, userRole string, req *dto.UpdateStockRequest) (*dto.UpdateStockResponse, error)
 }
 
 // Config holds usecase configuration.
@@ -62,9 +63,9 @@ func NewProductUseCase(
 }
 
 // CreateProduct creates a new product.
-func (uc *productUseCase) CreateProduct(ctx context.Context, req *dto.CreateProductRequest) (*dto.ProductResponse, error) {
-	// Check if product already exists
-	exists, err := uc.productRepo.ExistsByName(ctx, req.Name)
+func (uc *productUseCase) CreateProduct(ctx context.Context, ownerID string, req *dto.CreateProductRequest) (*dto.ProductResponse, error) {
+	// Check if product already exists for this owner
+	exists, err := uc.productRepo.ExistsByNameAndOwner(ctx, req.Name, ownerID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check product existence: %w", err)
 	}
@@ -74,12 +75,12 @@ func (uc *productUseCase) CreateProduct(ctx context.Context, req *dto.CreateProd
 
 	// Create product
 	product := &domain.Product{
-		Name:        req.Name,
-		Description: req.Description,
-		Price:       req.Price,
-		Stock:       req.Stock,
-		Status:      domain.ProductStatusActive,
-		CategoryID:  req.CategoryID,
+		Name:       req.Name,
+		Price:      req.Price,
+		Stock:      req.Stock,
+		OwnerID:    ownerID,
+		HasVariant: req.HasVariant,
+		Images:     req.Images,
 	}
 
 	if err := uc.productRepo.Create(ctx, product); err != nil {
@@ -94,17 +95,31 @@ func (uc *productUseCase) CreateProduct(ctx context.Context, req *dto.CreateProd
 	return dto.FromProduct(product), nil
 }
 
+// ErrAccessDenied is returned when a user tries to access a resource they don't own.
+var ErrAccessDenied = errors.New("access denied: you do not have permission to perform this action")
+
 // GetProduct gets a product by ID.
-func (uc *productUseCase) GetProduct(ctx context.Context, req *dto.GetProductRequest) (*dto.ProductResponse, error) {
+func (uc *productUseCase) GetProduct(ctx context.Context, userID, userRole string, req *dto.GetProductRequest) (*dto.ProductResponse, error) {
 	product, err := uc.productRepo.FindByID(ctx, req.ID, req.GetParanoidOptions())
 	if err != nil {
 		return nil, err
 	}
+
+	// IDOR PROTECTION: Non-admin users can only access their own products
+	if userRole != constants.RoleAdmin && product.OwnerID != userID {
+		return nil, ErrAccessDenied
+	}
+
 	return dto.FromProduct(product), nil
 }
 
 // ListProducts lists products with pagination.
-func (uc *productUseCase) ListProducts(ctx context.Context, req *dto.ListProductsRequest) (*dto.ProductListResponse, error) {
+func (uc *productUseCase) ListProducts(ctx context.Context, userID, userRole string, req *dto.ListProductsRequest) (*dto.ProductListResponse, error) {
+	// For non-admin users, filter by their user ID (owned products only)
+	if userRole != constants.RoleAdmin && req.OwnerID == "" {
+		req.OwnerID = userID
+	}
+
 	list, err := uc.productRepo.FindAll(ctx, req)
 	if err != nil {
 		return nil, err
@@ -113,37 +128,43 @@ func (uc *productUseCase) ListProducts(ctx context.Context, req *dto.ListProduct
 }
 
 // UpdateProduct updates a product.
-func (uc *productUseCase) UpdateProduct(ctx context.Context, productID string, req *dto.UpdateProductRequest) (*dto.ProductResponse, error) {
+func (uc *productUseCase) UpdateProduct(ctx context.Context, userID, _ string, productID string, req *dto.UpdateProductRequest) (*dto.ProductResponse, error) {
 	product, err := uc.productRepo.FindByID(ctx, productID, domain.DefaultParanoidOptions())
 	if err != nil {
 		return nil, err
 	}
 
+	// IDOR PROTECTION: Only owner can update (admin CANNOT update user products)
+	if product.OwnerID != userID {
+		return nil, ErrAccessDenied
+	}
+
 	// Update fields
 	if req.Name != nil {
-		// Check if name is already used by another product
+		// Check if name is already used by another product of same owner
 		if *req.Name != product.Name {
-			existingProduct, err := uc.productRepo.ExistsByName(ctx, *req.Name)
-			if err == nil && existingProduct {
+			exists, err := uc.productRepo.ExistsByNameAndOwner(ctx, *req.Name, product.OwnerID)
+			if err == nil && exists {
 				return nil, domain.ErrProductNameAlreadyUsed
 			}
 		}
 		product.Name = *req.Name
 	}
 
-	if req.Description != nil {
-		product.Description = *req.Description
-	}
-
 	if req.Price != nil {
 		product.Price = *req.Price
 	}
 
-	if req.Status != nil {
-		status := domain.ProductStatus(*req.Status)
-		if status.IsValid() {
-			product.Status = status
-		}
+	if req.Stock != nil {
+		product.Stock = *req.Stock
+	}
+
+	if req.HasVariant != nil {
+		product.HasVariant = *req.HasVariant
+	}
+
+	if req.Images != nil {
+		product.Images = *req.Images
 	}
 
 	if err := uc.productRepo.Update(ctx, product); err != nil {
@@ -159,11 +180,17 @@ func (uc *productUseCase) UpdateProduct(ctx context.Context, productID string, r
 }
 
 // DeleteProduct deletes a product.
-func (uc *productUseCase) DeleteProduct(ctx context.Context, req *dto.DeleteProductRequest) (*dto.DeleteResponse, error) {
+// DeleteProduct deletes a product.
+func (uc *productUseCase) DeleteProduct(ctx context.Context, userID, _ string, req *dto.DeleteProductRequest) (*dto.DeleteResponse, error) {
 	// Check if product exists
 	product, err := uc.productRepo.FindByID(ctx, req.ID, &domain.ParanoidOptions{IncludeDeleted: true})
 	if err != nil {
 		return nil, err
+	}
+
+	// IDOR PROTECTION: Only owner can delete
+	if product.OwnerID != userID {
+		return nil, ErrAccessDenied
 	}
 
 	// Delete product
@@ -194,13 +221,25 @@ func (uc *productUseCase) DeleteProduct(ctx context.Context, req *dto.DeleteProd
 }
 
 // RestoreProduct restores a deleted product.
-func (uc *productUseCase) RestoreProduct(ctx context.Context, req *dto.RestoreProductRequest) (*dto.ProductResponse, error) {
+// RestoreProduct restores a deleted product.
+func (uc *productUseCase) RestoreProduct(ctx context.Context, userID, _ string, req *dto.RestoreProductRequest) (*dto.ProductResponse, error) {
+	// Check if product exists
+	product, err := uc.productRepo.FindByID(ctx, req.ID, &domain.ParanoidOptions{IncludeDeleted: true})
+	if err != nil {
+		return nil, err
+	}
+
+	// IDOR PROTECTION: Only owner can restore
+	if product.OwnerID != userID {
+		return nil, ErrAccessDenied
+	}
+
 	if err := uc.productRepo.Restore(ctx, req.ID); err != nil {
 		return nil, err
 	}
 
 	// Get restored product
-	product, err := uc.productRepo.FindByID(ctx, req.ID, domain.DefaultParanoidOptions())
+	product, err = uc.productRepo.FindByID(ctx, req.ID, domain.DefaultParanoidOptions())
 	if err != nil {
 		return nil, err
 	}
@@ -214,10 +253,16 @@ func (uc *productUseCase) RestoreProduct(ctx context.Context, req *dto.RestorePr
 }
 
 // UpdateStock updates product stock.
-func (uc *productUseCase) UpdateStock(ctx context.Context, req *dto.UpdateStockRequest) (*dto.UpdateStockResponse, error) {
+// UpdateStock updates product stock.
+func (uc *productUseCase) UpdateStock(ctx context.Context, userID, _ string, req *dto.UpdateStockRequest) (*dto.UpdateStockResponse, error) {
 	product, err := uc.productRepo.FindByID(ctx, req.ID, domain.DefaultParanoidOptions())
 	if err != nil {
 		return nil, err
+	}
+
+	// IDOR PROTECTION: Only owner can update stock
+	if product.OwnerID != userID {
+		return nil, ErrAccessDenied
 	}
 
 	if err := product.ReduceStock(req.Stock); err != nil {

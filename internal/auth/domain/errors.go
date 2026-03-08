@@ -6,13 +6,14 @@ import "errors"
 // Common domain errors.
 var (
 	// User errors
-	ErrUserNotFound       = errors.New("user not found")
-	ErrUserAlreadyExists  = errors.New("user already exists")
-	ErrUserDeleted        = errors.New("user has been deleted")
-	ErrUserInactive       = errors.New("user is inactive")
-	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrInvalidPassword    = errors.New("invalid password")
-	ErrEmailAlreadyUsed   = errors.New("email already in use")
+	ErrUserNotFound        = errors.New("user not found")
+	ErrUserAlreadyExists   = errors.New("user already exists")
+	ErrUserDeleted         = errors.New("user has been deleted")
+	ErrUserInactive        = errors.New("user is inactive")
+	ErrInvalidCredentials  = errors.New("invalid credentials")
+	ErrInvalidPassword     = errors.New("invalid password")
+	ErrEmailAlreadyUsed    = errors.New("email already in use")
+	ErrUsernameAlreadyUsed = errors.New("username already in use")
 
 	// Session errors
 	ErrSessionNotFound = errors.New("session not found")

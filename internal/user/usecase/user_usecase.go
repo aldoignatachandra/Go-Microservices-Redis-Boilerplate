@@ -168,13 +168,13 @@ func (uc *userUseCase) ListUsers(ctx context.Context, req *dto.ListUsersRequest)
 	return dto.FromUserList(list), nil
 }
 
-// ActivateUser activates a user account.
+// ActivateUser activates a user account (restores soft-deleted user).
 func (uc *userUseCase) ActivateUser(ctx context.Context, req *dto.ActivateUserRequest) error {
 	if err := req.Validate(); err != nil {
 		return fmt.Errorf("%w: %v", domain.ErrValidationError, err)
 	}
 
-	user, err := uc.userRepo.FindByID(ctx, req.ID, dto.DefaultParanoidOptions())
+	_, err := uc.userRepo.FindByID(ctx, req.ID, &dto.ParanoidOptions{IncludeDeleted: true})
 	if err != nil {
 		if errors.Is(err, domain.ErrUserNotFound) {
 			return domain.ErrUserNotFound
@@ -182,31 +182,22 @@ func (uc *userUseCase) ActivateUser(ctx context.Context, req *dto.ActivateUserRe
 		return fmt.Errorf("failed to get user: %w", err)
 	}
 
-	if user.IsActive {
-		return nil // Already active
-	}
-
-	user.IsActive = true
-	if err := uc.userRepo.Update(ctx, user); err != nil {
+	restoreReq := &dto.RestoreUserRequest{ID: req.ID}
+	_, err = uc.RestoreUser(ctx, restoreReq)
+	if err != nil {
 		return fmt.Errorf("failed to activate user: %w", err)
-	}
-
-	// Publish event
-	event := domain.NewUserActivatedEvent(req.ID, user.Email)
-	if _, err := uc.eventBus.Publish(ctx, eventbus.StreamUserEvents, event); err != nil {
-		uc.logger.Error("failed to publish user activated event", zap.Error(err))
 	}
 
 	return nil
 }
 
-// DeactivateUser deactivates a user account.
+// DeactivateUser deactivates a user account (soft deletes user).
 func (uc *userUseCase) DeactivateUser(ctx context.Context, req *dto.DeactivateUserRequest) error {
 	if err := req.Validate(); err != nil {
 		return fmt.Errorf("%w: %v", domain.ErrValidationError, err)
 	}
 
-	user, err := uc.userRepo.FindByID(ctx, req.ID, dto.DefaultParanoidOptions())
+	_, err := uc.userRepo.FindByID(ctx, req.ID, dto.DefaultParanoidOptions())
 	if err != nil {
 		if errors.Is(err, domain.ErrUserNotFound) {
 			return domain.ErrUserNotFound
@@ -214,19 +205,9 @@ func (uc *userUseCase) DeactivateUser(ctx context.Context, req *dto.DeactivateUs
 		return fmt.Errorf("failed to get user: %w", err)
 	}
 
-	if !user.IsActive {
-		return nil // Already inactive
-	}
-
-	user.IsActive = false
-	if err := uc.userRepo.Update(ctx, user); err != nil {
+	deleteReq := &dto.DeleteUserRequest{ID: req.ID, Force: false}
+	if err := uc.DeleteUser(ctx, deleteReq); err != nil {
 		return fmt.Errorf("failed to deactivate user: %w", err)
-	}
-
-	// Publish event
-	event := domain.NewUserDeactivatedEvent(req.ID, user.Email)
-	if _, err := uc.eventBus.Publish(ctx, eventbus.StreamUserEvents, event); err != nil {
-		uc.logger.Error("failed to publish user deactivated event", zap.Error(err))
 	}
 
 	return nil

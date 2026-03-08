@@ -11,8 +11,9 @@ import (
 type UserResponse struct {
 	ID          string           `json:"id"`
 	Email       string           `json:"email"`
+	Username    string           `json:"username"`
+	Name        string           `json:"name"`
 	Role        string           `json:"role"`
-	IsActive    bool             `json:"is_active"`
 	Profile     *ProfileResponse `json:"profile,omitempty"`
 	CreatedAt   time.Time        `json:"created_at"`
 	UpdatedAt   time.Time        `json:"updated_at"`
@@ -39,8 +40,9 @@ func FromUser(user *domain.User) *UserResponse {
 	resp := &UserResponse{
 		ID:          user.ID,
 		Email:       user.Email,
+		Username:    user.Username,
+		Name:        user.Name,
 		Role:        string(user.Role),
-		IsActive:    user.IsActive,
 		CreatedAt:   user.CreatedAt,
 		UpdatedAt:   user.UpdatedAt,
 		LastLoginAt: user.LastLoginAt,
@@ -115,15 +117,15 @@ func FromUserList(list *domain.UserList) *UserListResponse {
 
 // ActivityLogResponse represents an activity log in responses.
 type ActivityLogResponse struct {
-	ID         string                 `json:"id"`
-	UserID     string                 `json:"user_id"`
-	Action     string                 `json:"action"`
-	Resource   string                 `json:"resource,omitempty"`
-	ResourceID string                 `json:"resource_id,omitempty"`
-	IPAddress  string                 `json:"ip_address,omitempty"`
-	UserAgent  string                 `json:"user_agent,omitempty"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt  time.Time              `json:"created_at"`
+	ID        string                 `json:"id"`
+	UserID    string                 `json:"user_id"`
+	Action    string                 `json:"action"`
+	Entity    string                 `json:"entity,omitempty"`
+	EntityID  string                 `json:"entity_id,omitempty"`
+	IPAddress string                 `json:"ip_address,omitempty"`
+	UserAgent string                 `json:"user_agent,omitempty"`
+	Details   map[string]interface{} `json:"details,omitempty"`
+	CreatedAt time.Time              `json:"created_at"`
 }
 
 // FromActivityLog creates an ActivityLogResponse from a domain.ActivityLog.
@@ -133,15 +135,15 @@ func FromActivityLog(log *domain.ActivityLog) *ActivityLogResponse {
 	}
 
 	return &ActivityLogResponse{
-		ID:         log.ID,
-		UserID:     log.UserID,
-		Action:     log.Action,
-		Resource:   log.Resource,
-		ResourceID: log.ResourceID,
-		IPAddress:  log.IPAddress,
-		UserAgent:  log.UserAgent,
-		Metadata:   log.Metadata,
-		CreatedAt:  log.CreatedAt,
+		ID:        log.ID,
+		UserID:    log.UserID,
+		Action:    log.Action,
+		Entity:    log.Entity,
+		EntityID:  log.EntityID,
+		IPAddress: log.IPAddress,
+		UserAgent: log.UserAgent,
+		Details:   log.Details,
+		CreatedAt: log.CreatedAt,
 	}
 }
 

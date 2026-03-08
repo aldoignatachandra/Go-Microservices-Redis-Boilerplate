@@ -58,7 +58,7 @@ func (r *gormActivityRepository) FindByUserID(ctx context.Context, req *dto.List
 		query = query.Where("action = ?", req.Action)
 	}
 	if req.Resource != "" {
-		query = query.Where("resource = ?", req.Resource)
+		query = query.Where("entity = ?", req.Resource)
 	}
 
 	// Count total
@@ -109,7 +109,7 @@ func (r *gormActivityRepository) FindAll(ctx context.Context, req *dto.ListActiv
 		query = query.Where("action = ?", req.Action)
 	}
 	if req.Resource != "" {
-		query = query.Where("resource = ?", req.Resource)
+		query = query.Where("entity = ?", req.Resource)
 	}
 
 	// Count total

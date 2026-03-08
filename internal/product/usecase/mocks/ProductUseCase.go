@@ -14,9 +14,9 @@ type ProductUseCase struct {
 	mock.Mock
 }
 
-// CreateProduct provides a mock function with given fields: ctx, req
-func (_m *ProductUseCase) CreateProduct(ctx context.Context, req *dto.CreateProductRequest) (*dto.ProductResponse, error) {
-	ret := _m.Called(ctx, req)
+// CreateProduct provides a mock function with given fields: ctx, ownerID, req
+func (_m *ProductUseCase) CreateProduct(ctx context.Context, ownerID string, req *dto.CreateProductRequest) (*dto.ProductResponse, error) {
+	ret := _m.Called(ctx, ownerID, req)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CreateProduct")
@@ -24,19 +24,19 @@ func (_m *ProductUseCase) CreateProduct(ctx context.Context, req *dto.CreateProd
 
 	var r0 *dto.ProductResponse
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *dto.CreateProductRequest) (*dto.ProductResponse, error)); ok {
-		return rf(ctx, req)
+	if rf, ok := ret.Get(0).(func(context.Context, string, *dto.CreateProductRequest) (*dto.ProductResponse, error)); ok {
+		return rf(ctx, ownerID, req)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *dto.CreateProductRequest) *dto.ProductResponse); ok {
-		r0 = rf(ctx, req)
+	if rf, ok := ret.Get(0).(func(context.Context, string, *dto.CreateProductRequest) *dto.ProductResponse); ok {
+		r0 = rf(ctx, ownerID, req)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*dto.ProductResponse)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *dto.CreateProductRequest) error); ok {
-		r1 = rf(ctx, req)
+	if rf, ok := ret.Get(1).(func(context.Context, string, *dto.CreateProductRequest) error); ok {
+		r1 = rf(ctx, ownerID, req)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -44,9 +44,9 @@ func (_m *ProductUseCase) CreateProduct(ctx context.Context, req *dto.CreateProd
 	return r0, r1
 }
 
-// DeleteProduct provides a mock function with given fields: ctx, req
-func (_m *ProductUseCase) DeleteProduct(ctx context.Context, req *dto.DeleteProductRequest) (*dto.DeleteResponse, error) {
-	ret := _m.Called(ctx, req)
+// DeleteProduct provides a mock function with given fields: ctx, userID, userRole, req
+func (_m *ProductUseCase) DeleteProduct(ctx context.Context, userID string, userRole string, req *dto.DeleteProductRequest) (*dto.DeleteResponse, error) {
+	ret := _m.Called(ctx, userID, userRole, req)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DeleteProduct")
@@ -54,19 +54,19 @@ func (_m *ProductUseCase) DeleteProduct(ctx context.Context, req *dto.DeleteProd
 
 	var r0 *dto.DeleteResponse
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *dto.DeleteProductRequest) (*dto.DeleteResponse, error)); ok {
-		return rf(ctx, req)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, *dto.DeleteProductRequest) (*dto.DeleteResponse, error)); ok {
+		return rf(ctx, userID, userRole, req)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *dto.DeleteProductRequest) *dto.DeleteResponse); ok {
-		r0 = rf(ctx, req)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, *dto.DeleteProductRequest) *dto.DeleteResponse); ok {
+		r0 = rf(ctx, userID, userRole, req)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*dto.DeleteResponse)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *dto.DeleteProductRequest) error); ok {
-		r1 = rf(ctx, req)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, *dto.DeleteProductRequest) error); ok {
+		r1 = rf(ctx, userID, userRole, req)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -74,9 +74,9 @@ func (_m *ProductUseCase) DeleteProduct(ctx context.Context, req *dto.DeleteProd
 	return r0, r1
 }
 
-// GetProduct provides a mock function with given fields: ctx, req
-func (_m *ProductUseCase) GetProduct(ctx context.Context, req *dto.GetProductRequest) (*dto.ProductResponse, error) {
-	ret := _m.Called(ctx, req)
+// GetProduct provides a mock function with given fields: ctx, userID, userRole, req
+func (_m *ProductUseCase) GetProduct(ctx context.Context, userID string, userRole string, req *dto.GetProductRequest) (*dto.ProductResponse, error) {
+	ret := _m.Called(ctx, userID, userRole, req)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetProduct")
@@ -84,19 +84,19 @@ func (_m *ProductUseCase) GetProduct(ctx context.Context, req *dto.GetProductReq
 
 	var r0 *dto.ProductResponse
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *dto.GetProductRequest) (*dto.ProductResponse, error)); ok {
-		return rf(ctx, req)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, *dto.GetProductRequest) (*dto.ProductResponse, error)); ok {
+		return rf(ctx, userID, userRole, req)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *dto.GetProductRequest) *dto.ProductResponse); ok {
-		r0 = rf(ctx, req)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, *dto.GetProductRequest) *dto.ProductResponse); ok {
+		r0 = rf(ctx, userID, userRole, req)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*dto.ProductResponse)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *dto.GetProductRequest) error); ok {
-		r1 = rf(ctx, req)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, *dto.GetProductRequest) error); ok {
+		r1 = rf(ctx, userID, userRole, req)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -104,9 +104,9 @@ func (_m *ProductUseCase) GetProduct(ctx context.Context, req *dto.GetProductReq
 	return r0, r1
 }
 
-// ListProducts provides a mock function with given fields: ctx, req
-func (_m *ProductUseCase) ListProducts(ctx context.Context, req *dto.ListProductsRequest) (*dto.ProductListResponse, error) {
-	ret := _m.Called(ctx, req)
+// ListProducts provides a mock function with given fields: ctx, userID, userRole, req
+func (_m *ProductUseCase) ListProducts(ctx context.Context, userID string, userRole string, req *dto.ListProductsRequest) (*dto.ProductListResponse, error) {
+	ret := _m.Called(ctx, userID, userRole, req)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ListProducts")
@@ -114,19 +114,19 @@ func (_m *ProductUseCase) ListProducts(ctx context.Context, req *dto.ListProduct
 
 	var r0 *dto.ProductListResponse
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *dto.ListProductsRequest) (*dto.ProductListResponse, error)); ok {
-		return rf(ctx, req)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, *dto.ListProductsRequest) (*dto.ProductListResponse, error)); ok {
+		return rf(ctx, userID, userRole, req)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *dto.ListProductsRequest) *dto.ProductListResponse); ok {
-		r0 = rf(ctx, req)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, *dto.ListProductsRequest) *dto.ProductListResponse); ok {
+		r0 = rf(ctx, userID, userRole, req)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*dto.ProductListResponse)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *dto.ListProductsRequest) error); ok {
-		r1 = rf(ctx, req)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, *dto.ListProductsRequest) error); ok {
+		r1 = rf(ctx, userID, userRole, req)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -134,9 +134,9 @@ func (_m *ProductUseCase) ListProducts(ctx context.Context, req *dto.ListProduct
 	return r0, r1
 }
 
-// RestoreProduct provides a mock function with given fields: ctx, req
-func (_m *ProductUseCase) RestoreProduct(ctx context.Context, req *dto.RestoreProductRequest) (*dto.ProductResponse, error) {
-	ret := _m.Called(ctx, req)
+// RestoreProduct provides a mock function with given fields: ctx, userID, userRole, req
+func (_m *ProductUseCase) RestoreProduct(ctx context.Context, userID string, userRole string, req *dto.RestoreProductRequest) (*dto.ProductResponse, error) {
+	ret := _m.Called(ctx, userID, userRole, req)
 
 	if len(ret) == 0 {
 		panic("no return value specified for RestoreProduct")
@@ -144,19 +144,19 @@ func (_m *ProductUseCase) RestoreProduct(ctx context.Context, req *dto.RestorePr
 
 	var r0 *dto.ProductResponse
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *dto.RestoreProductRequest) (*dto.ProductResponse, error)); ok {
-		return rf(ctx, req)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, *dto.RestoreProductRequest) (*dto.ProductResponse, error)); ok {
+		return rf(ctx, userID, userRole, req)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *dto.RestoreProductRequest) *dto.ProductResponse); ok {
-		r0 = rf(ctx, req)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, *dto.RestoreProductRequest) *dto.ProductResponse); ok {
+		r0 = rf(ctx, userID, userRole, req)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*dto.ProductResponse)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *dto.RestoreProductRequest) error); ok {
-		r1 = rf(ctx, req)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, *dto.RestoreProductRequest) error); ok {
+		r1 = rf(ctx, userID, userRole, req)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -164,9 +164,9 @@ func (_m *ProductUseCase) RestoreProduct(ctx context.Context, req *dto.RestorePr
 	return r0, r1
 }
 
-// UpdateProduct provides a mock function with given fields: ctx, productID, req
-func (_m *ProductUseCase) UpdateProduct(ctx context.Context, productID string, req *dto.UpdateProductRequest) (*dto.ProductResponse, error) {
-	ret := _m.Called(ctx, productID, req)
+// UpdateProduct provides a mock function with given fields: ctx, userID, userRole, productID, req
+func (_m *ProductUseCase) UpdateProduct(ctx context.Context, userID string, userRole string, productID string, req *dto.UpdateProductRequest) (*dto.ProductResponse, error) {
+	ret := _m.Called(ctx, userID, userRole, productID, req)
 
 	if len(ret) == 0 {
 		panic("no return value specified for UpdateProduct")
@@ -174,19 +174,19 @@ func (_m *ProductUseCase) UpdateProduct(ctx context.Context, productID string, r
 
 	var r0 *dto.ProductResponse
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, *dto.UpdateProductRequest) (*dto.ProductResponse, error)); ok {
-		return rf(ctx, productID, req)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, *dto.UpdateProductRequest) (*dto.ProductResponse, error)); ok {
+		return rf(ctx, userID, userRole, productID, req)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, *dto.UpdateProductRequest) *dto.ProductResponse); ok {
-		r0 = rf(ctx, productID, req)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, *dto.UpdateProductRequest) *dto.ProductResponse); ok {
+		r0 = rf(ctx, userID, userRole, productID, req)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*dto.ProductResponse)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string, *dto.UpdateProductRequest) error); ok {
-		r1 = rf(ctx, productID, req)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, string, *dto.UpdateProductRequest) error); ok {
+		r1 = rf(ctx, userID, userRole, productID, req)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -194,9 +194,9 @@ func (_m *ProductUseCase) UpdateProduct(ctx context.Context, productID string, r
 	return r0, r1
 }
 
-// UpdateStock provides a mock function with given fields: ctx, req
-func (_m *ProductUseCase) UpdateStock(ctx context.Context, req *dto.UpdateStockRequest) (*dto.UpdateStockResponse, error) {
-	ret := _m.Called(ctx, req)
+// UpdateStock provides a mock function with given fields: ctx, userID, userRole, req
+func (_m *ProductUseCase) UpdateStock(ctx context.Context, userID string, userRole string, req *dto.UpdateStockRequest) (*dto.UpdateStockResponse, error) {
+	ret := _m.Called(ctx, userID, userRole, req)
 
 	if len(ret) == 0 {
 		panic("no return value specified for UpdateStock")
@@ -204,19 +204,19 @@ func (_m *ProductUseCase) UpdateStock(ctx context.Context, req *dto.UpdateStockR
 
 	var r0 *dto.UpdateStockResponse
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *dto.UpdateStockRequest) (*dto.UpdateStockResponse, error)); ok {
-		return rf(ctx, req)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, *dto.UpdateStockRequest) (*dto.UpdateStockResponse, error)); ok {
+		return rf(ctx, userID, userRole, req)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *dto.UpdateStockRequest) *dto.UpdateStockResponse); ok {
-		r0 = rf(ctx, req)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, *dto.UpdateStockRequest) *dto.UpdateStockResponse); ok {
+		r0 = rf(ctx, userID, userRole, req)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*dto.UpdateStockResponse)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *dto.UpdateStockRequest) error); ok {
-		r1 = rf(ctx, req)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, *dto.UpdateStockRequest) error); ok {
+		r1 = rf(ctx, userID, userRole, req)
 	} else {
 		r1 = ret.Error(1)
 	}

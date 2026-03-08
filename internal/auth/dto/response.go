@@ -20,8 +20,9 @@ type AuthResponse struct {
 type UserResponse struct {
 	ID          string     `json:"id"`
 	Email       string     `json:"email"`
+	Username    string     `json:"username"`
+	Name        string     `json:"name"`
 	Role        string     `json:"role"`
-	IsActive    bool       `json:"is_active"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
@@ -37,8 +38,9 @@ func FromUser(user *domain.User) *UserResponse {
 	resp := &UserResponse{
 		ID:          user.ID,
 		Email:       user.Email,
+		Username:    user.Username,
+		Name:        user.Name,
 		Role:        string(user.Role),
-		IsActive:    user.IsActive,
 		CreatedAt:   user.CreatedAt,
 		UpdatedAt:   user.UpdatedAt,
 		LastLoginAt: user.LastLoginAt,

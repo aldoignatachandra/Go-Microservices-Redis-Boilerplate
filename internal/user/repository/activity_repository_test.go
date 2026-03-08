@@ -36,10 +36,10 @@ func TestActivityRepository_Create(t *testing.T) {
 				CreatedAt: time.Now().UTC(),
 				UpdatedAt: time.Now().UTC(),
 			},
-			UserID:   uuid.New().String(),
-			Action:   "user.login",
-			Resource: "auth",
-			Metadata: map[string]interface{}{"ip": "192.168.1.1"},
+			UserID:  uuid.New().String(),
+			Action:  "user.login",
+			Entity:  "auth",
+			Details: map[string]interface{}{"ip": "192.168.1.1"},
 		}
 
 		err := repo.Create(ctx, log)
@@ -49,9 +49,9 @@ func TestActivityRepository_Create(t *testing.T) {
 
 	t.Run("create with nil db context", func(t *testing.T) {
 		log := &domain.ActivityLog{
-			UserID:   uuid.New().String(),
-			Action:   "user.logout",
-			Resource: "auth",
+			UserID: uuid.New().String(),
+			Action: "user.logout",
+			Entity: "auth",
 		}
 
 		// Create a canceled context
@@ -85,9 +85,9 @@ func TestActivityRepository_FindByUserID(t *testing.T) {
 				CreatedAt: time.Now().UTC(),
 				UpdatedAt: time.Now().UTC(),
 			},
-			UserID:   userID,
-			Action:   fmt.Sprintf("action.%d", i),
-			Resource: "test",
+			UserID: userID,
+			Action: fmt.Sprintf("action.%d", i),
+			Entity: "test",
 		}
 		err := db.Create(log).Error
 		require.NoError(t, err)
@@ -184,19 +184,19 @@ func TestActivityRepository_FindAll(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		log1 := &domain.ActivityLog{
-			Model:    domain.Model{ID: uuid.New().String(), CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()},
-			UserID:   userID1,
-			Action:   "user.action",
-			Resource: "resource",
+			Model:  domain.Model{ID: uuid.New().String(), CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()},
+			UserID: userID1,
+			Action: "user.action",
+			Entity: "resource",
 		}
 		err := db.Create(log1).Error
 		require.NoError(t, err)
 
 		log2 := &domain.ActivityLog{
-			Model:    domain.Model{ID: uuid.New().String(), CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()},
-			UserID:   userID2,
-			Action:   "admin.action",
-			Resource: "admin",
+			Model:  domain.Model{ID: uuid.New().String(), CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()},
+			UserID: userID2,
+			Action: "admin.action",
+			Entity: "admin",
 		}
 		err = db.Create(log2).Error
 		require.NoError(t, err)
@@ -286,19 +286,19 @@ func TestActivityRepository_DeleteOlderThan(t *testing.T) {
 	recentTime := time.Now().UTC().Add(-1 * 24 * time.Hour) // 1 day ago
 
 	oldLog := &domain.ActivityLog{
-		Model:    domain.Model{ID: uuid.New().String(), CreatedAt: oldTime, UpdatedAt: oldTime},
-		UserID:   uuid.New().String(),
-		Action:   "old.action",
-		Resource: "test",
+		Model:  domain.Model{ID: uuid.New().String(), CreatedAt: oldTime, UpdatedAt: oldTime},
+		UserID: uuid.New().String(),
+		Action: "old.action",
+		Entity: "test",
 	}
 	err = db.Create(oldLog).Error
 	require.NoError(t, err)
 
 	recentLog := &domain.ActivityLog{
-		Model:    domain.Model{ID: uuid.New().String(), CreatedAt: recentTime, UpdatedAt: recentTime},
-		UserID:   uuid.New().String(),
-		Action:   "recent.action",
-		Resource: "test",
+		Model:  domain.Model{ID: uuid.New().String(), CreatedAt: recentTime, UpdatedAt: recentTime},
+		UserID: uuid.New().String(),
+		Action: "recent.action",
+		Entity: "test",
 	}
 	err = db.Create(recentLog).Error
 	require.NoError(t, err)

@@ -27,8 +27,10 @@ type ProductRepository interface {
 	FindByID(ctx context.Context, id string, opts *domain.ParanoidOptions) (*domain.Product, error)
 	// FindAll finds all products with pagination
 	FindAll(ctx context.Context, req *dto.ListProductsRequest) (*domain.ProductList, error)
-	// ExistsByName checks if a product exists by name
+	// ExistsByName checks if a product exists by name (global)
 	ExistsByName(ctx context.Context, name string) (bool, error)
+	// ExistsByNameAndOwner checks if a product exists by name for a specific owner
+	ExistsByNameAndOwner(ctx context.Context, name string, ownerID string) (bool, error)
 	// UpdateStock updates product stock
 	UpdateStock(ctx context.Context, id string, stock int) error
 }
@@ -159,8 +161,8 @@ func (r *gormProductRepository) FindAll(ctx context.Context, req *dto.ListProduc
 	}
 
 	// Apply filters
-	if req.Status != "" {
-		query = query.Where("status = ?", req.Status)
+	if req.OwnerID != "" {
+		query = query.Where("owner_id = ?", req.OwnerID)
 	}
 	if req.Search != "" {
 		// Use LIKE for SQLite compatibility (case-insensitive for ASCII)
@@ -202,6 +204,21 @@ func (r *gormProductRepository) ExistsByName(ctx context.Context, name string) (
 	result := r.db.WithContext(ctx).
 		Model(&domain.Product{}).
 		Where("name = ?", name).
+		Count(&count)
+
+	if result.Error != nil {
+		return false, fmt.Errorf("failed to check product existence: %w", result.Error)
+	}
+
+	return count > 0, nil
+}
+
+// ExistsByNameAndOwner checks if a product exists by name for a specific owner.
+func (r *gormProductRepository) ExistsByNameAndOwner(ctx context.Context, name string, ownerID string) (bool, error) {
+	var count int64
+	result := r.db.WithContext(ctx).
+		Model(&domain.Product{}).
+		Where("name = ? AND owner_id = ?", name, ownerID).
 		Count(&count)
 
 	if result.Error != nil {

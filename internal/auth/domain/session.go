@@ -10,14 +10,17 @@ import (
 
 // Session represents a user session.
 type Session struct {
-	ID           string     `gorm:"type:uuid;primary_key;" json:"id"`
-	UserID       string     `gorm:"type:uuid;not null;index" json:"user_id"`
-	RefreshToken string     `gorm:"type:text;not null" json:"-"`
-	ExpiresAt    time.Time  `gorm:"not null" json:"expires_at"`
-	CreatedAt    time.Time  `gorm:"not null" json:"created_at"`
-	RevokedAt    *time.Time `json:"revoked_at,omitempty"`
-	UserAgent    string     `gorm:"type:text" json:"user_agent,omitempty"`
-	IPAddress    string     `gorm:"type:varchar(45)" json:"ip_address,omitempty"`
+	ID         string         `gorm:"type:uuid;primary_key;" json:"id"`
+	UserID     string         `gorm:"type:uuid;not null;index" json:"user_id"`
+	Token      string         `gorm:"type:text;not null" json:"-"`
+	ExpiresAt  time.Time      `gorm:"not null" json:"expires_at"`
+	CreatedAt  time.Time      `gorm:"not null" json:"created_at"`
+	RevokedAt  *time.Time     `json:"revoked_at,omitempty"`
+	LastUsedAt time.Time      `gorm:"not null" json:"last_used_at"`
+	DeviceType string         `gorm:"type:varchar(50)" json:"device_type"`
+	UserAgent  string         `gorm:"type:text" json:"user_agent,omitempty"`
+	IPAddress  string         `gorm:"type:varchar(45)" json:"ip_address,omitempty"`
+	DeletedAt  gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
 }
 
 // TableName specifies the table name for Session.
@@ -46,12 +49,19 @@ func (s *Session) Revoke() {
 	s.RevokedAt = &now
 }
 
+// UpdateLastUsed updates the last used timestamp.
+func (s *Session) UpdateLastUsed() {
+	s.LastUsedAt = time.Now().UTC()
+}
+
 // BeforeCreate is a GORM hook that runs before creating a session.
 func (s *Session) BeforeCreate(_ *gorm.DB) error {
 	if s.ID == "" {
 		s.ID = uuid.New().String()
 	}
-	s.CreatedAt = time.Now().UTC()
+	now := time.Now().UTC()
+	s.CreatedAt = now
+	s.LastUsedAt = now
 	return nil
 }
 

@@ -87,7 +87,6 @@ func TestUserRepository_Integration(t *testing.T) {
 			Email:        "test@example.com",
 			PasswordHash: "hashed_password",
 			Role:         domain.RoleUser,
-			IsActive:     true,
 		}
 
 		err := repo.Create(ctx, user)
@@ -112,9 +111,9 @@ func TestUserRepository_Integration(t *testing.T) {
 		// Create user
 		user := &domain.User{
 			Email:        "delete@example.com",
+			Username:     "deleteuser",
 			PasswordHash: "hashed_password",
 			Role:         domain.RoleUser,
-			IsActive:     true,
 		}
 
 		err := repo.Create(ctx, user)
@@ -149,23 +148,23 @@ func TestUserRepository_Integration(t *testing.T) {
 		// Create user
 		user := &domain.User{
 			Email:        "update@example.com",
+			Username:     "updateuser",
 			PasswordHash: "hashed_password",
 			Role:         domain.RoleUser,
-			IsActive:     true,
 		}
 
 		err := repo.Create(ctx, user)
 		require.NoError(t, err)
 
-		// Update
-		user.IsActive = false
+		// Update role
+		user.Role = domain.RoleAdmin
 		err = repo.Update(ctx, user)
 		require.NoError(t, err)
 
 		// Verify
 		found, err := repo.FindByID(ctx, user.ID, dto.DefaultParanoidOptions())
 		require.NoError(t, err)
-		assert.False(t, found.IsActive)
+		assert.Equal(t, domain.RoleAdmin, found.Role)
 	})
 
 	t.Run("Profile Management", func(t *testing.T) {
@@ -174,9 +173,9 @@ func TestUserRepository_Integration(t *testing.T) {
 		// Create user
 		user := &domain.User{
 			Email:        "profile@example.com",
+			Username:     "profileuser",
 			PasswordHash: "hashed_password",
 			Role:         domain.RoleUser,
-			IsActive:     true,
 		}
 
 		err := repo.Create(ctx, user)
@@ -315,9 +314,9 @@ func TestConcurrentOperations(t *testing.T) {
 			go func(index int) {
 				user := &domain.User{
 					Email:        fmt.Sprintf("concurrent%d@example.com", index),
+					Username:     fmt.Sprintf("concurrentuser%d", index),
 					PasswordHash: "hashed_password",
 					Role:         domain.RoleUser,
-					IsActive:     true,
 				}
 				errChan <- repo.Create(ctx, user)
 			}(i)
@@ -356,7 +355,6 @@ func BenchmarkRepositoryOperations(b *testing.B) {
 				Email:        fmt.Sprintf("bench%d@example.com", i),
 				PasswordHash: "hashed_password",
 				Role:         domain.RoleUser,
-				IsActive:     true,
 			}
 			_ = repo.Create(ctx, user)
 		}
@@ -368,7 +366,6 @@ func BenchmarkRepositoryOperations(b *testing.B) {
 			Email:        "find@example.com",
 			PasswordHash: "hashed_password",
 			Role:         domain.RoleUser,
-			IsActive:     true,
 		}
 		_ = repo.Create(ctx, user)
 

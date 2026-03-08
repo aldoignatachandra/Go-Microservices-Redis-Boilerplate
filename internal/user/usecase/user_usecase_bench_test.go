@@ -64,9 +64,7 @@ func BenchmarkActivateUser(b *testing.B) {
 	activityRepo := new(mocks.MockActivityRepository)
 	eventBus := new(MockEventPublisher)
 
-	inactiveUser := *getTestUser()
-	inactiveUser.IsActive = false
-	userRepo.On("FindByID", mock.Anything, mock.Anything, mock.Anything).Return(&inactiveUser, nil)
+	userRepo.On("FindByID", mock.Anything, mock.Anything, mock.Anything).Return(getTestUser(), nil)
 	userRepo.On("Update", mock.Anything, mock.Anything).Return(nil)
 	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 

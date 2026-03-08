@@ -42,9 +42,10 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			updated_at DATETIME NOT NULL,
 			deleted_at DATETIME,
 			email TEXT NOT NULL UNIQUE,
+			username TEXT NOT NULL UNIQUE,
+			name TEXT,
 			password_hash TEXT NOT NULL,
 			role TEXT NOT NULL DEFAULT 'USER',
-			is_active INTEGER DEFAULT 1,
 			last_login_at DATETIME
 		)
 	`).Error
@@ -59,12 +60,16 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		CREATE TABLE IF NOT EXISTS sessions (
 			id TEXT PRIMARY KEY,
 			user_id TEXT NOT NULL,
-			refresh_token TEXT NOT NULL,
+			token TEXT NOT NULL,
 			expires_at DATETIME NOT NULL,
 			created_at DATETIME NOT NULL,
+			updated_at DATETIME,
 			revoked_at DATETIME,
+			last_used_at DATETIME NOT NULL,
+			device_type VARCHAR(50),
 			user_agent TEXT,
-			ip_address TEXT
+			ip_address TEXT,
+			deleted_at DATETIME
 		)
 	`).Error
 	require.NoError(t, err, "Failed to create sessions table")
@@ -72,6 +77,10 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	// Create index on user_id for sessions
 	err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`).Error
 	require.NoError(t, err, "Failed to create index on sessions user_id")
+
+	// Create index on deleted_at for sessions
+	err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_sessions_deleted_at ON sessions(deleted_at)`).Error
+	require.NoError(t, err, "Failed to create index on sessions deleted_at")
 
 	return db
 }
@@ -96,9 +105,10 @@ func createTestUser(t *testing.T, db *gorm.DB) *domain.User {
 			UpdatedAt: time.Now().UTC(),
 		},
 		Email:        fmt.Sprintf("user_%s@example.com", uuid.New().String()),
+		Username:     fmt.Sprintf("user_%s", uuid.New().String()),
+		Name:         "Test User",
 		PasswordHash: "hashedpassword",
 		Role:         domain.RoleUser,
-		IsActive:     true,
 	}
 	err := db.Create(user).Error
 	require.NoError(t, err)
@@ -122,9 +132,10 @@ func TestCreate(t *testing.T) {
 				UpdatedAt: time.Now().UTC(),
 			},
 			Email:        fmt.Sprintf("test_%s@example.com", uuid.New().String()),
+			Username:     fmt.Sprintf("test_%s", uuid.New().String()),
+			Name:         "Test User",
 			PasswordHash: "hashedpassword",
 			Role:         domain.RoleUser,
-			IsActive:     true,
 		}
 
 		// Act
@@ -141,7 +152,6 @@ func TestCreate(t *testing.T) {
 		assert.Equal(t, user.Email, found.Email)
 		assert.Equal(t, user.PasswordHash, found.PasswordHash)
 		assert.Equal(t, user.Role, found.Role)
-		assert.Equal(t, user.IsActive, found.IsActive)
 	})
 
 	t.Run("successful create admin user", func(t *testing.T) {
@@ -153,9 +163,10 @@ func TestCreate(t *testing.T) {
 				UpdatedAt: time.Now().UTC(),
 			},
 			Email:        fmt.Sprintf("admin_%s@example.com", uuid.New().String()),
+			Username:     fmt.Sprintf("admin_%s", uuid.New().String()),
+			Name:         "Admin User",
 			PasswordHash: "hashedpassword",
 			Role:         domain.RoleAdmin,
-			IsActive:     true,
 		}
 
 		// Act
@@ -176,9 +187,10 @@ func TestCreate(t *testing.T) {
 				UpdatedAt: time.Now().UTC(),
 			},
 			Email:        fmt.Sprintf("inactive_%s@example.com", uuid.New().String()),
+			Username:     fmt.Sprintf("inactive_%s", uuid.New().String()),
+			Name:         "Inactive User",
 			PasswordHash: "hashedpassword",
 			Role:         domain.RoleUser,
-			IsActive:     false,
 		}
 
 		// Act
@@ -186,14 +198,10 @@ func TestCreate(t *testing.T) {
 
 		// Assert
 		require.NoError(t, err)
-		// Note: The BeforeCreate hook might override IsActive depending on implementation
 		// Verify the user was created
 		assert.NotEmpty(t, user.ID)
-		// CanLogin should be false if either IsActive is false or user is deleted
-		// Since we just created the user, it should be based on IsActive
-		if !user.IsActive {
-			assert.False(t, user.CanLogin())
-		}
+		// User can login since soft delete is not applied
+		assert.True(t, user.CanLogin())
 	})
 
 	t.Run("successful create with default role", func(t *testing.T) {
@@ -205,6 +213,8 @@ func TestCreate(t *testing.T) {
 				UpdatedAt: time.Now().UTC(),
 			},
 			Email:        fmt.Sprintf("default_%s@example.com", uuid.New().String()),
+			Username:     fmt.Sprintf("default_%s", uuid.New().String()),
+			Name:         "Default User",
 			PasswordHash: "hashedpassword",
 		}
 
@@ -226,6 +236,8 @@ func TestCreate(t *testing.T) {
 				UpdatedAt: time.Now().UTC(),
 			},
 			Email:        email,
+			Username:     fmt.Sprintf("user1_%s", uuid.New().String()),
+			Name:         "User 1",
 			PasswordHash: "hashedpassword",
 			Role:         domain.RoleUser,
 		}
@@ -239,6 +251,8 @@ func TestCreate(t *testing.T) {
 				UpdatedAt: time.Now().UTC(),
 			},
 			Email:        email,
+			Username:     fmt.Sprintf("user2_%s", uuid.New().String()),
+			Name:         "User 2",
 			PasswordHash: "hashedpassword",
 			Role:         domain.RoleUser,
 		}
@@ -264,6 +278,8 @@ func TestCreate(t *testing.T) {
 				UpdatedAt: time.Now().UTC(),
 			},
 			Email:        fmt.Sprintf("timestamp_%s@example.com", uuid.New().String()),
+			Username:     fmt.Sprintf("timestamp_%s", uuid.New().String()),
+			Name:         "Timestamp User",
 			PasswordHash: "hashedpassword",
 		}
 
@@ -347,11 +363,11 @@ func TestUpdate(t *testing.T) {
 		assert.False(t, found.IsAdmin())
 	})
 
-	t.Run("successful update user active status to inactive", func(t *testing.T) {
+	t.Run("successful update user - change email", func(t *testing.T) {
 		// Arrange
 		user := createTestUser(t, db)
 		assert.True(t, user.CanLogin())
-		user.IsActive = false
+		user.Email = "newemail@example.com"
 
 		// Act
 		err := repo.Update(ctx, user)
@@ -362,29 +378,26 @@ func TestUpdate(t *testing.T) {
 		var found domain.User
 		err = db.Where("id = ?", user.ID).First(&found).Error
 		require.NoError(t, err)
-		assert.False(t, found.IsActive)
-		assert.False(t, found.CanLogin())
+		assert.Equal(t, "newemail@example.com", found.Email)
+		assert.True(t, found.CanLogin())
 	})
 
-	t.Run("successful update user active status to active", func(t *testing.T) {
+	t.Run("successful delete user (soft delete)", func(t *testing.T) {
 		// Arrange
 		user := createTestUser(t, db)
-		user.IsActive = false
-		err := db.Save(user).Error
-		require.NoError(t, err)
-
-		user.IsActive = true
+		assert.True(t, user.CanLogin())
 
 		// Act
-		err = repo.Update(ctx, user)
+		err := repo.Delete(ctx, user.ID)
 
 		// Assert
 		require.NoError(t, err)
 
+		// User should not be found with normal query (soft delete)
 		var found domain.User
-		err = db.Where("id = ?", user.ID).First(&found).Error
+		err = db.Unscoped().Where("id = ?", user.ID).First(&found).Error
 		require.NoError(t, err)
-		assert.True(t, found.IsActive)
+		assert.NotNil(t, found.DeletedAt)
 	})
 
 	t.Run("successful update last login", func(t *testing.T) {
@@ -431,7 +444,6 @@ func TestUpdate(t *testing.T) {
 		user := createTestUser(t, db)
 		user.Email = fmt.Sprintf("multi_%s@example.com", uuid.New().String())
 		user.Role = domain.RoleAdmin
-		user.IsActive = false
 		now := time.Now().UTC()
 		user.LastLoginAt = &now
 
@@ -446,7 +458,7 @@ func TestUpdate(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, user.Email, found.Email)
 		assert.Equal(t, domain.RoleAdmin, found.Role)
-		assert.False(t, found.IsActive)
+		assert.True(t, found.CanLogin())
 		assert.NotNil(t, found.LastLoginAt)
 	})
 
@@ -561,15 +573,12 @@ func TestDelete(t *testing.T) {
 		assert.Error(t, err)
 	})
 
-	t.Run("successful soft delete inactive user", func(t *testing.T) {
+	t.Run("successful soft delete user", func(t *testing.T) {
 		// Arrange
 		user := createTestUser(t, db)
-		user.IsActive = false
-		err := db.Save(user).Error
-		require.NoError(t, err)
 
 		// Act
-		err = repo.Delete(ctx, user.ID)
+		err := repo.Delete(ctx, user.ID)
 
 		// Assert
 		require.NoError(t, err)
@@ -760,14 +769,10 @@ func TestRestore(t *testing.T) {
 		assert.Equal(t, domain.RoleAdmin, found.Role)
 	})
 
-	t.Run("successful restore inactive user", func(t *testing.T) {
+	t.Run("successful restore soft-deleted user", func(t *testing.T) {
 		// Arrange
 		user := createTestUser(t, db)
-		user.IsActive = false
-		err := db.Save(user).Error
-		require.NoError(t, err)
-
-		err = db.Delete(user).Error
+		err := db.Delete(user).Error
 		require.NoError(t, err)
 
 		// Act
@@ -779,7 +784,7 @@ func TestRestore(t *testing.T) {
 		var found domain.User
 		err = db.Where("id = ?", user.ID).First(&found).Error
 		require.NoError(t, err)
-		assert.False(t, found.IsActive)
+		assert.True(t, found.CanLogin())
 	})
 
 	t.Run("successful restore clears deleted_at timestamp", func(t *testing.T) {
@@ -822,7 +827,7 @@ func TestFindByID(t *testing.T) {
 		assert.Equal(t, user.ID, found.ID)
 		assert.Equal(t, user.Email, found.Email)
 		assert.Equal(t, user.Role, found.Role)
-		assert.Equal(t, user.IsActive, found.IsActive)
+		assert.True(t, found.CanLogin())
 	})
 
 	t.Run("successful find admin user by ID", func(t *testing.T) {
@@ -841,19 +846,18 @@ func TestFindByID(t *testing.T) {
 		assert.True(t, found.IsAdmin())
 	})
 
-	t.Run("successful find inactive user by ID", func(t *testing.T) {
+	t.Run("successful find deleted user by ID with include deleted", func(t *testing.T) {
 		// Arrange
 		user := createTestUser(t, db)
-		user.IsActive = false
-		err := db.Save(user).Error
+		err := db.Delete(user).Error
 		require.NoError(t, err)
 
 		// Act
-		found, err := repo.FindByID(ctx, user.ID, domain.DefaultParanoidOptions())
+		found, err := repo.FindByID(ctx, user.ID, &domain.ParanoidOptions{IncludeDeleted: true})
 
 		// Assert
 		require.NoError(t, err)
-		assert.False(t, found.IsActive)
+		assert.True(t, found.DeletedAt.Valid)
 	})
 
 	t.Run("successful find deleted user with include deleted", func(t *testing.T) {
@@ -978,19 +982,16 @@ func TestFindByEmail(t *testing.T) {
 		assert.Equal(t, domain.RoleAdmin, found.Role)
 	})
 
-	t.Run("successful find inactive user by email", func(t *testing.T) {
+	t.Run("successful find user by email", func(t *testing.T) {
 		// Arrange
 		user := createTestUser(t, db)
-		user.IsActive = false
-		err := db.Save(user).Error
-		require.NoError(t, err)
 
 		// Act
 		found, err := repo.FindByEmail(ctx, user.Email, domain.DefaultParanoidOptions())
 
 		// Assert
 		require.NoError(t, err)
-		assert.False(t, found.IsActive)
+		assert.Equal(t, user.Email, found.Email)
 	})
 
 	t.Run("successful find deleted user with include deleted", func(t *testing.T) {
@@ -1345,11 +1346,10 @@ func TestExistsByEmail(t *testing.T) {
 		assert.True(t, exists)
 	})
 
-	t.Run("inactive user email exists", func(t *testing.T) {
+	t.Run("deleted user email still exists", func(t *testing.T) {
 		// Arrange
 		user := createTestUser(t, db)
-		user.IsActive = false
-		err := db.Save(user).Error
+		err := db.Delete(user).Error
 		require.NoError(t, err)
 
 		// Act
@@ -1357,7 +1357,8 @@ func TestExistsByEmail(t *testing.T) {
 
 		// Assert
 		require.NoError(t, err)
-		assert.True(t, exists)
+		// After soft delete, ExistsByEmail should return false (GORM filters deleted records)
+		assert.False(t, exists)
 	})
 
 	t.Run("case sensitive email check", func(t *testing.T) {
@@ -1408,7 +1409,6 @@ func TestUserRepositoryIntegration(t *testing.T) {
 			Email:        fmt.Sprintf("lifecycle_%s@example.com", uuid.New().String()),
 			PasswordHash: "hashedpassword",
 			Role:         domain.RoleUser,
-			IsActive:     true,
 		}
 
 		// Create
@@ -1482,7 +1482,6 @@ func TestUserRepositoryIntegration(t *testing.T) {
 			Email:        email,
 			PasswordHash: "hashedpassword",
 			Role:         domain.RoleUser,
-			IsActive:     true,
 		}
 		err = repo.Create(ctx, user)
 		require.NoError(t, err)
@@ -1521,6 +1520,7 @@ func TestUserRepositoryIntegration(t *testing.T) {
 					UpdatedAt: time.Now().UTC(),
 				},
 				Email:        fmt.Sprintf("user%d_%s@example.com", i, uuid.New().String()),
+				Username:     fmt.Sprintf("user%d_%s", i, uuid.New().String()),
 				PasswordHash: "hash",
 				Role:         domain.RoleUser,
 			}
@@ -1536,6 +1536,7 @@ func TestUserRepositoryIntegration(t *testing.T) {
 					UpdatedAt: time.Now().UTC(),
 				},
 				Email:        fmt.Sprintf("admin%d_%s@example.com", i, uuid.New().String()),
+				Username:     fmt.Sprintf("admin%d_%s", i, uuid.New().String()),
 				PasswordHash: "hash",
 				Role:         domain.RoleAdmin,
 			}
@@ -1580,7 +1581,6 @@ func TestEdgeCases(t *testing.T) {
 			Email:        fmt.Sprintf("emptyid_%s@example.com", uuid.New().String()),
 			PasswordHash: "hashedpassword",
 			Role:         domain.RoleUser,
-			IsActive:     true,
 		}
 
 		// Act
@@ -1609,9 +1609,9 @@ func TestEdgeCases(t *testing.T) {
 				UpdatedAt: time.Now().UTC(),
 			},
 			Email:        "nonexistent@example.com",
+			Username:     "nonexistent_" + nonExistentID,
 			PasswordHash: "hash",
 			Role:         domain.RoleUser,
-			IsActive:     true,
 		}
 
 		// Act
@@ -1717,6 +1717,7 @@ func TestEdgeCases(t *testing.T) {
 		longEmail := fmt.Sprintf("a_%s@%s.com", uuid.New().String(), uuid.New().String())
 		user := &domain.User{
 			Email:        longEmail,
+			Username:     "user_" + uuid.New().String(),
 			PasswordHash: "hashedpassword",
 			Role:         domain.RoleUser,
 		}
@@ -1984,11 +1985,11 @@ func TestSessionCreate_ErrorPaths(t *testing.T) {
 		// Arrange
 		user := createTestUser(t, db)
 		session := &domain.Session{
-			ID:           uuid.New().String(),
-			UserID:       user.ID,
-			RefreshToken: "refresh_token",
-			ExpiresAt:    time.Now().UTC().Add(24 * time.Hour),
-			CreatedAt:    time.Now().UTC(),
+			ID:        uuid.New().String(),
+			UserID:    user.ID,
+			Token:     "refresh_token",
+			ExpiresAt: time.Now().UTC().Add(24 * time.Hour),
+			CreatedAt: time.Now().UTC(),
 		}
 
 		// Close database to force error
@@ -2082,11 +2083,13 @@ func TestSessionRevokeAllForUser_ErrorPaths(t *testing.T) {
 func createTestSession(t *testing.T, db *gorm.DB, userID string) *domain.Session {
 	t.Helper()
 	session := &domain.Session{
-		ID:           uuid.New().String(),
-		UserID:       userID,
-		RefreshToken: fmt.Sprintf("refresh_token_%s", uuid.New().String()),
-		ExpiresAt:    time.Now().UTC().Add(24 * time.Hour),
-		CreatedAt:    time.Now().UTC(),
+		ID:         uuid.New().String(),
+		UserID:     userID,
+		Token:      fmt.Sprintf("refresh_token_%s", uuid.New().String()),
+		ExpiresAt:  time.Now().UTC().Add(24 * time.Hour),
+		CreatedAt:  time.Now().UTC(),
+		LastUsedAt: time.Now().UTC(),
+		DeviceType: "web",
 	}
 	err := db.Create(session).Error
 	require.NoError(t, err)
@@ -2105,13 +2108,15 @@ func TestSessionRepository_Create(t *testing.T) {
 		// Arrange
 		user := createTestUser(t, db)
 		session := &domain.Session{
-			ID:           uuid.New().String(),
-			UserID:       user.ID,
-			RefreshToken: fmt.Sprintf("refresh_%s", uuid.New().String()),
-			ExpiresAt:    time.Now().UTC().Add(24 * time.Hour),
-			CreatedAt:    time.Now().UTC(),
-			UserAgent:    "Mozilla/5.0",
-			IPAddress:    "192.168.1.1",
+			ID:         uuid.New().String(),
+			UserID:     user.ID,
+			Token:      fmt.Sprintf("refresh_%s", uuid.New().String()),
+			ExpiresAt:  time.Now().UTC().Add(24 * time.Hour),
+			CreatedAt:  time.Now().UTC(),
+			LastUsedAt: time.Now().UTC(),
+			DeviceType: "web",
+			UserAgent:  "Mozilla/5.0",
+			IPAddress:  "192.168.1.1",
 		}
 
 		// Act
@@ -2126,13 +2131,15 @@ func TestSessionRepository_Create(t *testing.T) {
 		// Arrange
 		user := createTestUser(t, db)
 		session := &domain.Session{
-			ID:           uuid.New().String(),
-			UserID:       user.ID,
-			RefreshToken: fmt.Sprintf("refresh_%s", uuid.New().String()),
-			ExpiresAt:    time.Now().UTC().Add(48 * time.Hour),
-			CreatedAt:    time.Now().UTC(),
-			UserAgent:    "Test Agent",
-			IPAddress:    "10.0.0.1",
+			ID:         uuid.New().String(),
+			UserID:     user.ID,
+			Token:      fmt.Sprintf("refresh_%s", uuid.New().String()),
+			ExpiresAt:  time.Now().UTC().Add(48 * time.Hour),
+			CreatedAt:  time.Now().UTC(),
+			LastUsedAt: time.Now().UTC(),
+			DeviceType: "web",
+			UserAgent:  "Test Agent",
+			IPAddress:  "10.0.0.1",
 		}
 
 		// Act
@@ -2145,7 +2152,7 @@ func TestSessionRepository_Create(t *testing.T) {
 		var found domain.Session
 		err = db.Where("id = ?", session.ID).First(&found).Error
 		require.NoError(t, err)
-		assert.Equal(t, session.RefreshToken, found.RefreshToken)
+		assert.Equal(t, session.Token, found.Token)
 		assert.Equal(t, session.UserAgent, found.UserAgent)
 		assert.Equal(t, session.IPAddress, found.IPAddress)
 	})
@@ -2165,12 +2172,12 @@ func TestSessionRepository_FindByRefreshToken(t *testing.T) {
 		session := createTestSession(t, db, user.ID)
 
 		// Act
-		found, err := repo.FindByRefreshToken(ctx, session.RefreshToken)
+		found, err := repo.FindByRefreshToken(ctx, session.Token)
 
 		// Assert
 		require.NoError(t, err)
 		assert.Equal(t, session.ID, found.ID)
-		assert.Equal(t, session.RefreshToken, found.RefreshToken)
+		assert.Equal(t, session.Token, found.Token)
 		assert.Equal(t, session.UserID, found.UserID)
 	})
 
@@ -2190,7 +2197,7 @@ func TestSessionRepository_FindByRefreshToken(t *testing.T) {
 		session := createTestSession(t, db, user.ID)
 
 		// Act
-		found, err := repo.FindByRefreshToken(ctx, session.RefreshToken)
+		found, err := repo.FindByRefreshToken(ctx, session.Token)
 
 		// Assert
 		require.NoError(t, err)
@@ -2209,7 +2216,7 @@ func TestSessionRepository_FindByRefreshToken(t *testing.T) {
 		require.NoError(t, err)
 
 		// Act
-		found, err := repo.FindByRefreshToken(ctx, session.RefreshToken)
+		found, err := repo.FindByRefreshToken(ctx, session.Token)
 
 		// Assert
 		require.NoError(t, err)
@@ -2653,19 +2660,19 @@ func TestSessionRepository_Integration(t *testing.T) {
 
 		// Create session
 		session := &domain.Session{
-			ID:           uuid.New().String(),
-			UserID:       user.ID,
-			RefreshToken: fmt.Sprintf("refresh_%s", uuid.New().String()),
-			ExpiresAt:    time.Now().UTC().Add(24 * time.Hour),
-			CreatedAt:    time.Now().UTC(),
-			UserAgent:    "TestAgent",
-			IPAddress:    "127.0.0.1",
+			ID:        uuid.New().String(),
+			UserID:    user.ID,
+			Token:     fmt.Sprintf("refresh_%s", uuid.New().String()),
+			ExpiresAt: time.Now().UTC().Add(24 * time.Hour),
+			CreatedAt: time.Now().UTC(),
+			UserAgent: "TestAgent",
+			IPAddress: "127.0.0.1",
 		}
 		err = sessionRepo.Create(ctx, session)
 		require.NoError(t, err)
 
 		// Find by refresh token
-		found, err := sessionRepo.FindByRefreshToken(ctx, session.RefreshToken)
+		found, err := sessionRepo.FindByRefreshToken(ctx, session.Token)
 		require.NoError(t, err)
 		assert.Equal(t, session.ID, found.ID)
 
@@ -2684,7 +2691,7 @@ func TestSessionRepository_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify session is revoked
-		found, err = sessionRepo.FindByRefreshToken(ctx, session.RefreshToken)
+		found, err = sessionRepo.FindByRefreshToken(ctx, session.Token)
 		require.NoError(t, err)
 		assert.True(t, found.IsRevoked())
 		assert.False(t, found.IsValid())

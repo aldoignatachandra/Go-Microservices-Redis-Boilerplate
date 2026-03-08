@@ -11,23 +11,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// ProductStatus represents the product status enum.
-type ProductStatus string
-
-const (
-	// ProductStatusActive represents an active product.
-	ProductStatusActive ProductStatus = "ACTIVE"
-	// ProductStatusInactive represents an inactive product.
-	ProductStatusInactive ProductStatus = "INACTIVE"
-	// ProductStatusDeleted represents a deleted product.
-	ProductStatusDeleted ProductStatus = "DELETED"
-)
-
-// IsValid checks if the status is valid.
-func (s ProductStatus) IsValid() bool {
-	return s == ProductStatusActive || s == ProductStatusInactive || s == ProductStatusDeleted
-}
-
 // Model is the base model for all entities.
 type Model struct {
 	ID        string         `gorm:"type:uuid;primary_key;" json:"id"`
@@ -47,12 +30,12 @@ func (m *Model) BeforeCreate(_ *gorm.DB) error {
 // Product represents a product entity.
 type Product struct {
 	Model
-	Name        string        `gorm:"type:varchar(255);not null" json:"name"`
-	Description string        `gorm:"type:text" json:"description"`
-	Price       float64       `gorm:"type:decimal(10,2);not null" json:"price"`
-	Stock       int           `gorm:"type:int;not null;default:0" json:"stock"`
-	Status      ProductStatus `gorm:"type:varchar(50);not null;default:'ACTIVE'" json:"status"`
-	CategoryID  string        `gorm:"type:uuid;not null" json:"category_id"`
+	Name       string  `gorm:"type:varchar(255);not null" json:"name"`
+	Price      float64 `gorm:"type:decimal(10,2);not null" json:"price"`
+	Stock      int     `gorm:"type:int;not null;default:0" json:"stock"`
+	OwnerID    string  `gorm:"type:uuid;not null;index" json:"owner_id"`
+	HasVariant bool    `gorm:"default:false" json:"has_variant"`
+	Images     string  `gorm:"type:text" json:"images"`
 }
 
 // TableName specifies the table name for Product.
@@ -62,7 +45,7 @@ func (Product) TableName() string {
 
 // IsAvailable checks if the product is available for purchase.
 func (p *Product) IsAvailable() bool {
-	return p.Status == ProductStatusActive && p.Stock > 0 && !p.DeletedAt.Valid
+	return p.Stock > 0 && !p.DeletedAt.Valid
 }
 
 // ReduceStock reduces the product stock by the given amount.
@@ -107,29 +90,29 @@ func (p *Product) BeforeUpdate(_ *gorm.DB) error {
 // ToSafeProduct returns a copy of the product without sensitive fields.
 func (p *Product) ToSafeProduct() *SafeProduct {
 	return &SafeProduct{
-		ID:          p.ID,
-		Name:        p.Name,
-		Description: p.Description,
-		Price:       p.Price,
-		Stock:       p.Stock,
-		Status:      p.Status,
-		CategoryID:  p.CategoryID,
-		CreatedAt:   p.CreatedAt,
-		UpdatedAt:   p.UpdatedAt,
+		ID:         p.ID,
+		Name:       p.Name,
+		Price:      p.Price,
+		Stock:      p.Stock,
+		OwnerID:    p.OwnerID,
+		HasVariant: p.HasVariant,
+		Images:     p.Images,
+		CreatedAt:  p.CreatedAt,
+		UpdatedAt:  p.UpdatedAt,
 	}
 }
 
 // SafeProduct represents a product without sensitive fields.
 type SafeProduct struct {
-	ID          string        `json:"id"`
-	Name        string        `json:"name"`
-	Description string        `json:"description"`
-	Price       float64       `json:"price"`
-	Stock       int           `json:"stock"`
-	Status      ProductStatus `json:"status"`
-	CategoryID  string        `json:"category_id"`
-	CreatedAt   time.Time     `json:"created_at"`
-	UpdatedAt   time.Time     `json:"updated_at"`
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Price      float64   `json:"price"`
+	Stock      int       `json:"stock"`
+	OwnerID    string    `json:"owner_id"`
+	HasVariant bool      `json:"has_variant"`
+	Images     string    `json:"images"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // ProductList represents a list of products with pagination info.
@@ -178,6 +161,8 @@ func (p *ParanoidOptions) ShouldOnlyDeleted() bool {
 var (
 	ErrProductNotFound        = errors.New("product not found")
 	ErrProductNameAlreadyUsed = errors.New("product name already used")
+	ErrInvalidStockReduction  = errors.New("invalid stock reduction amount")
+	ErrInsufficientStock      = errors.New("insufficient stock")
 )
 
 // IsNotFoundError checks if the error is a not found error.

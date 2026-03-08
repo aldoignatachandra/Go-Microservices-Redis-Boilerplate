@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -84,13 +85,22 @@ func NewAuthUseCase(
 
 // Register registers a new user.
 func (uc *authUseCase) Register(ctx context.Context, req *dto.RegisterRequest) (*dto.AuthResponse, error) {
-	// Check if user already exists
+	// Check if user already exists by email
 	exists, err := uc.userRepo.ExistsByEmail(ctx, req.Email)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check user existence: %w", err)
 	}
 	if exists {
 		return nil, domain.ErrEmailAlreadyUsed
+	}
+
+	// Check if username already exists
+	exists, err = uc.userRepo.ExistsByUsername(ctx, req.Username)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check username existence: %w", err)
+	}
+	if exists {
+		return nil, domain.ErrUsernameAlreadyUsed
 	}
 
 	// Hash password
@@ -102,9 +112,10 @@ func (uc *authUseCase) Register(ctx context.Context, req *dto.RegisterRequest) (
 	// Create user
 	user := &domain.User{
 		Email:        req.Email,
+		Username:     req.Username,
+		Name:         req.Name,
 		PasswordHash: passwordHash,
 		Role:         req.ToRole(),
-		IsActive:     true,
 	}
 
 	if err = uc.userRepo.Create(ctx, user); err != nil {
@@ -118,11 +129,11 @@ func (uc *authUseCase) Register(ctx context.Context, req *dto.RegisterRequest) (
 		return nil, fmt.Errorf("failed to generate tokens: %w", err)
 	}
 
-	// Create session
+	// Create session (with Token field instead of RefreshToken)
 	session := &domain.Session{
-		UserID:       user.ID,
-		RefreshToken: tokenPair.RefreshToken,
-		ExpiresAt:    time.Now().UTC().Add(uc.config.RefreshExpiresIn),
+		UserID:    user.ID,
+		Token:     tokenPair.RefreshToken,
+		ExpiresAt: time.Now().UTC().Add(uc.config.RefreshExpiresIn),
 	}
 	if err = uc.sessionRepo.Create(ctx, session); err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
@@ -153,13 +164,10 @@ func (uc *authUseCase) Login(ctx context.Context, req *dto.LoginRequest, ipAddre
 		return nil, fmt.Errorf("failed to find user: %w", err)
 	}
 
-	// Check if user can login
+	// Check if user can login (soft delete based)
 	if !user.CanLogin() {
 		if user.DeletedAt.Valid {
 			return nil, domain.ErrUserDeleted
-		}
-		if !user.IsActive {
-			return nil, domain.ErrUserInactive
 		}
 		return nil, domain.ErrInvalidCredentials
 	}
@@ -169,6 +177,11 @@ func (uc *authUseCase) Login(ctx context.Context, req *dto.LoginRequest, ipAddre
 		return nil, domain.ErrInvalidCredentials
 	}
 
+	// SINGLE SESSION POLICY: Delete ALL existing sessions before creating new one
+	if err := uc.sessionRepo.DeleteByUserID(ctx, user.ID); err != nil {
+		return nil, fmt.Errorf("failed to delete existing sessions: %w", err)
+	}
+
 	// Generate tokens
 	var tokenPair *utils.TokenPair
 	tokenPair, err = uc.jwtManager.GenerateTokenPair(user.ID, user.Email, string(user.Role))
@@ -176,13 +189,14 @@ func (uc *authUseCase) Login(ctx context.Context, req *dto.LoginRequest, ipAddre
 		return nil, fmt.Errorf("failed to generate tokens: %w", err)
 	}
 
-	// Create session
+	// Create session (with Token field instead of RefreshToken)
 	session := &domain.Session{
-		UserID:       user.ID,
-		RefreshToken: tokenPair.RefreshToken,
-		ExpiresAt:    time.Now().UTC().Add(uc.config.RefreshExpiresIn),
-		IPAddress:    ipAddress,
-		UserAgent:    userAgent,
+		UserID:     user.ID,
+		Token:      tokenPair.RefreshToken,
+		ExpiresAt:  time.Now().UTC().Add(uc.config.RefreshExpiresIn),
+		IPAddress:  ipAddress,
+		UserAgent:  userAgent,
+		DeviceType: detectDeviceType(userAgent),
 	}
 	if err = uc.sessionRepo.Create(ctx, session); err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
@@ -261,9 +275,9 @@ func (uc *authUseCase) RefreshToken(ctx context.Context, req *dto.RefreshTokenRe
 
 	// Create new session
 	newSession := &domain.Session{
-		UserID:       user.ID,
-		RefreshToken: tokenPair.RefreshToken,
-		ExpiresAt:    time.Now().UTC().Add(uc.config.RefreshExpiresIn),
+		UserID:    user.ID,
+		Token:     tokenPair.RefreshToken,
+		ExpiresAt: time.Now().UTC().Add(uc.config.RefreshExpiresIn),
 	}
 	if err := uc.sessionRepo.Create(ctx, newSession); err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
@@ -322,16 +336,16 @@ func (uc *authUseCase) UpdateUser(ctx context.Context, userID string, req *dto.U
 		user.Email = req.Email
 	}
 
+	if req.Name != "" {
+		user.Name = req.Name
+	}
+
 	if req.Password != "" {
 		passwordHash, err := utils.HashPasswordWithCost(req.Password, uc.config.BcryptCost)
 		if err != nil {
 			return nil, fmt.Errorf("failed to hash password: %w", err)
 		}
 		user.PasswordHash = passwordHash
-	}
-
-	if req.IsActive != nil {
-		user.IsActive = *req.IsActive
 	}
 
 	if err := uc.userRepo.Update(ctx, user); err != nil {
@@ -454,4 +468,22 @@ func (uc *authUseCase) ValidateToken(token string) (*utils.Claims, error) {
 // GenerateUUID generates a new UUID.
 func GenerateUUID() string {
 	return uuid.New().String()
+}
+
+// detectDeviceType determines the device type from user agent.
+func detectDeviceType(userAgent string) string {
+	if userAgent == "" {
+		return "unknown"
+	}
+	lowerUA := strings.ToLower(userAgent)
+	if strings.Contains(lowerUA, "mobile") || strings.Contains(lowerUA, "android") || strings.Contains(lowerUA, "iphone") {
+		return "mobile"
+	}
+	if strings.Contains(lowerUA, "tablet") || strings.Contains(lowerUA, "ipad") {
+		return "tablet"
+	}
+	if strings.Contains(lowerUA, "bot") || strings.Contains(lowerUA, "spider") || strings.Contains(lowerUA, "crawler") {
+		return "bot"
+	}
+	return "desktop"
 }

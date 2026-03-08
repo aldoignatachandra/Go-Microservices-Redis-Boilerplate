@@ -67,6 +67,11 @@ func (m *MockProductRepository) ExistsByName(ctx context.Context, name string) (
 	return args.Bool(0), args.Error(1)
 }
 
+func (m *MockProductRepository) ExistsByNameAndOwner(ctx context.Context, name string, ownerID string) (bool, error) {
+	args := m.Called(ctx, name, ownerID)
+	return args.Bool(0), args.Error(1)
+}
+
 func (m *MockProductRepository) UpdateStock(ctx context.Context, id string, stock int) error {
 	args := m.Called(ctx, id, stock)
 	return args.Error(0)
@@ -108,18 +113,19 @@ func TestCreateProduct_Success(t *testing.T) {
 	repo := new(MockProductRepository)
 	uc := newTestProductUseCase(repo)
 
+	testUserID := "user-123"
+
 	req := &dto.CreateProductRequest{
-		Name:        "Test Product",
-		Description: "A test product",
-		Price:       29.99,
-		Stock:       100,
-		CategoryID:  "cat-1",
+		Name:       "Test Product",
+		Price:      29.99,
+		Stock:      100,
+		HasVariant: false,
 	}
 
-	repo.On("ExistsByName", mock.Anything, req.Name).Return(false, nil)
+	repo.On("ExistsByNameAndOwner", mock.Anything, req.Name, testUserID).Return(false, nil)
 	repo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Product")).Return(nil)
 
-	response, err := uc.CreateProduct(context.Background(), req)
+	response, err := uc.CreateProduct(context.Background(), testUserID, req)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
@@ -133,14 +139,16 @@ func TestCreateProduct_NameAlreadyUsed(t *testing.T) {
 	repo := new(MockProductRepository)
 	uc := newTestProductUseCase(repo)
 
+	testUserID := "user-123"
+
 	req := &dto.CreateProductRequest{
 		Name:  "Existing Product",
 		Price: 9.99,
 	}
 
-	repo.On("ExistsByName", mock.Anything, req.Name).Return(true, nil)
+	repo.On("ExistsByNameAndOwner", mock.Anything, req.Name, testUserID).Return(true, nil)
 
-	response, err := uc.CreateProduct(context.Background(), req)
+	response, err := uc.CreateProduct(context.Background(), testUserID, req)
 
 	assert.Error(t, err)
 	assert.Nil(t, response)
@@ -153,17 +161,21 @@ func TestGetProduct_Success(t *testing.T) {
 	repo := new(MockProductRepository)
 	uc := newTestProductUseCase(repo)
 
+	testUserID := "user-123"
+	testUserRole := "USER"
+
 	testProduct := &domain.Product{
-		Name:  "Found Product",
-		Price: 19.99,
-		Stock: 50,
+		Name:    "Found Product",
+		Price:   19.99,
+		Stock:   50,
+		OwnerID: testUserID,
 	}
 
 	req := &dto.GetProductRequest{ID: "prod-1"}
 
 	repo.On("FindByID", mock.Anything, req.ID, mock.Anything).Return(testProduct, nil)
 
-	response, err := uc.GetProduct(context.Background(), req)
+	response, err := uc.GetProduct(context.Background(), testUserID, testUserRole, req)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
@@ -176,8 +188,12 @@ func TestDeleteProduct_SoftDelete(t *testing.T) {
 	repo := new(MockProductRepository)
 	uc := newTestProductUseCase(repo)
 
+	testUserID := "user-123"
+	testUserRole := "USER"
+
 	testProduct := &domain.Product{
-		Name: "Delete Me",
+		Name:    "Delete Me",
+		OwnerID: testUserID,
 	}
 	testProduct.ID = "prod-del-1"
 
@@ -189,7 +205,7 @@ func TestDeleteProduct_SoftDelete(t *testing.T) {
 	repo.On("FindByID", mock.Anything, req.ID, mock.Anything).Return(testProduct, nil)
 	repo.On("Delete", mock.Anything, req.ID).Return(nil)
 
-	response, err := uc.DeleteProduct(context.Background(), req)
+	response, err := uc.DeleteProduct(context.Background(), testUserID, testUserRole, req)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
@@ -203,8 +219,12 @@ func TestDeleteProduct_HardDelete(t *testing.T) {
 	repo := new(MockProductRepository)
 	uc := newTestProductUseCase(repo)
 
+	testUserID := "user-123"
+	testUserRole := "USER"
+
 	testProduct := &domain.Product{
-		Name: "Hard Delete Me",
+		Name:    "Hard Delete Me",
+		OwnerID: testUserID,
 	}
 	testProduct.ID = "prod-hard-del"
 
@@ -216,7 +236,7 @@ func TestDeleteProduct_HardDelete(t *testing.T) {
 	repo.On("FindByID", mock.Anything, req.ID, mock.Anything).Return(testProduct, nil)
 	repo.On("HardDelete", mock.Anything, req.ID).Return(nil)
 
-	response, err := uc.DeleteProduct(context.Background(), req)
+	response, err := uc.DeleteProduct(context.Background(), testUserID, testUserRole, req)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
@@ -230,10 +250,13 @@ func TestRestoreProduct_Success(t *testing.T) {
 	repo := new(MockProductRepository)
 	uc := newTestProductUseCase(repo)
 
+	testUserID := "user-123"
+	testUserRole := "USER"
+
 	restoredProduct := &domain.Product{
-		Name:   "Restored Product",
-		Price:  14.99,
-		Status: domain.ProductStatusActive,
+		Name:    "Restored Product",
+		Price:   14.99,
+		OwnerID: testUserID,
 	}
 
 	req := &dto.RestoreProductRequest{ID: "restore-me"}
@@ -241,7 +264,7 @@ func TestRestoreProduct_Success(t *testing.T) {
 	repo.On("Restore", mock.Anything, req.ID).Return(nil)
 	repo.On("FindByID", mock.Anything, req.ID, mock.Anything).Return(restoredProduct, nil)
 
-	response, err := uc.RestoreProduct(context.Background(), req)
+	response, err := uc.RestoreProduct(context.Background(), testUserID, testUserRole, req)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, response)

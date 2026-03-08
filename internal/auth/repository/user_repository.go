@@ -27,10 +27,14 @@ type UserRepository interface {
 	FindByID(ctx context.Context, id string, opts *domain.ParanoidOptions) (*domain.User, error)
 	// FindByEmail finds a user by email
 	FindByEmail(ctx context.Context, email string, opts *domain.ParanoidOptions) (*domain.User, error)
+	// FindByUsername finds a user by username
+	FindByUsername(ctx context.Context, username string, opts *domain.ParanoidOptions) (*domain.User, error)
 	// FindAll finds all users with pagination
 	FindAll(ctx context.Context, req *dto.ListUsersRequest) (*domain.UserList, error)
 	// ExistsByEmail checks if a user exists by email
 	ExistsByEmail(ctx context.Context, email string) (bool, error)
+	// ExistsByUsername checks if a user exists by username
+	ExistsByUsername(ctx context.Context, username string) (bool, error)
 }
 
 // gormUserRepository implements UserRepository using GORM.
@@ -232,4 +236,41 @@ func (r *gormUserRepository) ExistsByEmail(ctx context.Context, email string) (b
 	}
 
 	return count > 0, nil
+}
+
+// ExistsByUsername checks if a user exists by username.
+func (r *gormUserRepository) ExistsByUsername(ctx context.Context, username string) (bool, error) {
+	var count int64
+	result := r.db.WithContext(ctx).
+		Model(&domain.User{}).
+		Where("username = ?", username).
+		Count(&count)
+
+	if result.Error != nil {
+		return false, fmt.Errorf("failed to check username existence: %w", result.Error)
+	}
+
+	return count > 0, nil
+}
+
+// FindByUsername finds a user by username.
+func (r *gormUserRepository) FindByUsername(ctx context.Context, username string, opts *domain.ParanoidOptions) (*domain.User, error) {
+	var user domain.User
+
+	query := r.db.WithContext(ctx).Where("username = ?", username)
+
+	// Apply paranoid options
+	if opts != nil && !opts.ShouldIncludeDeleted() {
+		query = query.Where("deleted_at IS NULL")
+	}
+
+	result := query.First(&user)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrUserNotFound
+		}
+		return nil, fmt.Errorf("failed to find user by username: %w", result.Error)
+	}
+
+	return &user, nil
 }

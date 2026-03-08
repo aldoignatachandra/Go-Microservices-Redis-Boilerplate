@@ -38,9 +38,10 @@ func (m *Model) BeforeCreate(_ *gorm.DB) error {
 type User struct {
 	Model
 	Email        string     `gorm:"type:varchar(255);not null;uniqueIndex" json:"email"`
+	Username     string     `gorm:"type:varchar(50);not null;uniqueIndex" json:"username"`
+	Name         string     `gorm:"type:varchar(255)" json:"name"`
 	PasswordHash string     `gorm:"type:text;not null" json:"-"`
 	Role         Role       `gorm:"type:varchar(50);not null;default:'USER'" json:"role"`
-	IsActive     bool       `gorm:"default:true" json:"is_active"`
 	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
 	Profile      *Profile   `gorm:"foreignKey:UserID" json:"profile,omitempty"`
 }
@@ -52,7 +53,7 @@ func (u *User) IsAdmin() bool {
 
 // CanLogin checks if user can login.
 func (u *User) CanLogin() bool {
-	return u.IsActive && !u.DeletedAt.Valid
+	return !u.DeletedAt.Valid
 }
 
 // TouchLastLogin updates the last login timestamp.
@@ -92,36 +93,36 @@ func (p *Profile) FullName() string {
 // ActivityLog represents an activity log entry.
 type ActivityLog struct {
 	Model
-	UserID     string                 `gorm:"type:uuid;not null;index" json:"user_id"`
-	Action     string                 `gorm:"type:varchar(100);not null" json:"action"`
-	Resource   string                 `gorm:"type:varchar(100)" json:"resource,omitempty"`
-	ResourceID string                 `gorm:"type:uuid" json:"resource_id,omitempty"`
-	IPAddress  string                 `gorm:"type:varchar(45)" json:"ip_address,omitempty"`
-	UserAgent  string                 `gorm:"type:text" json:"user_agent,omitempty"`
-	Metadata   map[string]interface{} `gorm:"type:jsonb;serializer:json" json:"metadata,omitempty"`
+	UserID    string                 `gorm:"type:uuid;not null;index" json:"user_id"`
+	Action    string                 `gorm:"type:varchar(255);not null" json:"action"`
+	Entity    string                 `gorm:"type:varchar(100)" json:"entity,omitempty"`
+	EntityID  string                 `gorm:"type:uuid" json:"entity_id,omitempty"`
+	IPAddress string                 `gorm:"type:varchar(45)" json:"ip_address,omitempty"`
+	UserAgent string                 `gorm:"type:text" json:"user_agent,omitempty"`
+	Details   map[string]interface{} `gorm:"type:jsonb;serializer:json" json:"details,omitempty"`
 }
 
 // TableName specifies the table name for ActivityLog.
 func (ActivityLog) TableName() string {
-	return "activity_logs"
+	return "user_activity_logs"
 }
 
 // NewActivityLog creates a new activity log entry.
-func NewActivityLog(userID, action, resource, resourceID string) *ActivityLog {
+func NewActivityLog(userID, action, entity, entityID string) *ActivityLog {
 	return &ActivityLog{
-		UserID:     userID,
-		Action:     action,
-		Resource:   resource,
-		ResourceID: resourceID,
+		UserID:   userID,
+		Action:   action,
+		Entity:   entity,
+		EntityID: entityID,
 	}
 }
 
 // WithMetadata adds metadata to the activity log.
 func (a *ActivityLog) WithMetadata(key string, value interface{}) *ActivityLog {
-	if a.Metadata == nil {
-		a.Metadata = make(map[string]interface{})
+	if a.Details == nil {
+		a.Details = make(map[string]interface{})
 	}
-	a.Metadata[key] = value
+	a.Details[key] = value
 	return a
 }
 
@@ -134,10 +135,10 @@ func (a *ActivityLog) WithRequestInfo(ipAddress, userAgent string) *ActivityLog 
 
 // WithDetails adds details to the activity log metadata.
 func (a *ActivityLog) WithDetails(details string) *ActivityLog {
-	if a.Metadata == nil {
-		a.Metadata = make(map[string]interface{})
+	if a.Details == nil {
+		a.Details = make(map[string]interface{})
 	}
-	a.Metadata["details"] = details
+	a.Details["details"] = details
 	return a
 }
 

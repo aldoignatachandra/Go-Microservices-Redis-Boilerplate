@@ -142,13 +142,13 @@ func (e *ActivityEvent) ToMap() map[string]interface{} {
 // ToActivityLog converts the activity event to an ActivityLog entity.
 func (e *ActivityEvent) ToActivityLog() *ActivityLog {
 	log := &ActivityLog{
-		UserID:     e.UserID,
-		Action:     e.Action,
-		Resource:   e.Resource,
-		ResourceID: e.ResourceID,
-		IPAddress:  e.IPAddress,
-		UserAgent:  e.UserAgent,
-		Metadata:   e.Metadata,
+		UserID:    e.UserID,
+		Action:    e.Action,
+		Entity:    e.Resource,
+		EntityID:  e.ResourceID,
+		IPAddress: e.IPAddress,
+		UserAgent: e.UserAgent,
+		Details:   e.Metadata,
 	}
 	return log
 }

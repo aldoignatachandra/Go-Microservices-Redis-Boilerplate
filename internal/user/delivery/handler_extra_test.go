@@ -232,7 +232,6 @@ func TestGetUser_IncludeDeleted(t *testing.T) {
 		ID:        "550e8400-e29b-41d4-a716-446655440001",
 		Email:     "deleted@example.com",
 		Role:      "USER",
-		IsActive:  false,
 		DeletedAt: &deletedTime,
 	}
 
@@ -362,10 +361,9 @@ func TestRestoreUser_AlreadyActive(t *testing.T) {
 		Success: false,
 		Message: "User is already active",
 		User: &dto.UserResponse{
-			ID:       "550e8400-e29b-41d4-a716-446655440001",
-			Email:    "test@example.com",
-			Role:     "USER",
-			IsActive: true,
+			ID:    "550e8400-e29b-41d4-a716-446655440001",
+			Email: "test@example.com",
+			Role:  "USER",
 		},
 	}
 

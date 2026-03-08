@@ -6,22 +6,23 @@ import (
 )
 
 // CreateProductRequest represents a product creation request.
+// OwnerID is extracted from JWT token, not from request body.
 type CreateProductRequest struct {
-	Name        string  `json:"name" binding:"required,min=3,max=255"`
-	Description string  `json:"description" binding:"omitempty,max=1000"`
-	Price       float64 `json:"price" binding:"required,gt=0"`
-	Stock       int     `json:"stock" binding:"required,gt=-1"`
-	CategoryID  string  `json:"category_id" binding:"required,uuid"`
+	Name       string  `json:"name" binding:"required,min=1,max=255"`
+	Price      float64 `json:"price" binding:"required,gt=0"`
+	Stock      int     `json:"stock" binding:"omitempty,min=0"`
+	HasVariant bool    `json:"has_variant" binding:"omitempty"`
+	Images     string  `json:"images" binding:"omitempty"`
 }
 
 // UpdateProductRequest represents a product update request.
 type UpdateProductRequest struct {
-	ID          string   `uri:"id" binding:"required,uuid"`
-	Name        *string  `json:"name" binding:"omitempty,min=3,max=255"`
-	Description *string  `json:"description" binding:"omitempty,max=1000"`
-	Price       *float64 `json:"price" binding:"omitempty,gt=0"`
-	Stock       *int     `json:"stock" binding:"omitempty,gt=-1"`
-	Status      *string  `json:"status" binding:"omitempty,oneof=ACTIVE INACTIVE"`
+	ID         string   `uri:"id" binding:"required,uuid"`
+	Name       *string  `json:"name" binding:"omitempty,min=1,max=255"`
+	Price      *float64 `json:"price" binding:"omitempty,gt=0"`
+	Stock      *int     `json:"stock" binding:"omitempty,min=0"`
+	HasVariant *bool    `json:"has_variant" binding:"omitempty"`
+	Images     *string  `json:"images" binding:"omitempty"`
 }
 
 // GetProductRequest represents a request to get a product.
@@ -42,8 +43,9 @@ func (r *GetProductRequest) GetParanoidOptions() *domain.ParanoidOptions {
 type ListProductsRequest struct {
 	Page           int    `form:"page" binding:"omitempty,min=1"`
 	Limit          int    `form:"limit" binding:"omitempty,min=1,max=100"`
-	Status         string `form:"status" binding:"omitempty,oneof=ACTIVE INACTIVE"`
+	OwnerID        string `form:"owner_id" binding:"omitempty,uuid"`
 	Search         string `form:"search" binding:"omitempty"`
+	Status         string `form:"status" binding:"omitempty,oneof=ACTIVE INACTIVE"`
 	IncludeDeleted bool   `form:"include_deleted"`
 	OnlyDeleted    bool   `form:"only_deleted"`
 }
@@ -79,7 +81,7 @@ func (r *ListProductsRequest) GetParanoidOptions() *domain.ParanoidOptions {
 // DeleteProductRequest represents a request to delete a product.
 type DeleteProductRequest struct {
 	ID    string `uri:"id" binding:"required,uuid"`
-	Force bool   `form:"force"` // Force hard delete
+	Force bool   `form:"force"`
 }
 
 // RestoreProductRequest represents a request to restore a deleted product.
@@ -90,5 +92,5 @@ type RestoreProductRequest struct {
 // UpdateStockRequest represents a request to update product stock.
 type UpdateStockRequest struct {
 	ID    string `uri:"id" binding:"required,uuid"`
-	Stock int    `json:"stock" binding:"required,gt=-1"`
+	Stock int    `json:"stock" binding:"required,min=0"`
 }

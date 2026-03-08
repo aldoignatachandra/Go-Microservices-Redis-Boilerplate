@@ -9,15 +9,15 @@ import (
 
 // ProductResponse represents a product response.
 type ProductResponse struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	Price       float64 `json:"price"`
-	Stock       int     `json:"stock"`
-	Status      string  `json:"status"`
-	CategoryID  string  `json:"category_id"`
-	CreatedAt   string  `json:"created_at"`
-	UpdatedAt   string  `json:"updated_at"`
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Price      float64   `json:"price"`
+	Stock      int       `json:"stock"`
+	OwnerID    string    `json:"owner_id"`
+	HasVariant bool      `json:"has_variant"`
+	Images     string    `json:"images"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // ProductListResponse represents a list of products with pagination info.
@@ -32,15 +32,15 @@ type ProductListResponse struct {
 // FromProduct converts a domain Product to a ProductResponse.
 func FromProduct(product *domain.Product) *ProductResponse {
 	return &ProductResponse{
-		ID:          product.ID,
-		Name:        product.Name,
-		Description: product.Description,
-		Price:       product.Price,
-		Stock:       product.Stock,
-		Status:      string(product.Status),
-		CategoryID:  product.CategoryID,
-		CreatedAt:   product.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:   product.UpdatedAt.Format(time.RFC3339),
+		ID:         product.ID,
+		Name:       product.Name,
+		Price:      product.Price,
+		Stock:      product.Stock,
+		OwnerID:    product.OwnerID,
+		HasVariant: product.HasVariant,
+		Images:     product.Images,
+		CreatedAt:  product.CreatedAt,
+		UpdatedAt:  product.UpdatedAt,
 	}
 }
 

@@ -34,9 +34,10 @@ type Model struct {
 type User struct {
 	Model
 	Email        string     `gorm:"type:varchar(255);not null;uniqueIndex" json:"email"`
+	Username     string     `gorm:"type:varchar(50);not null;uniqueIndex" json:"username"`
+	Name         string     `gorm:"type:varchar(255)" json:"name"`
 	PasswordHash string     `gorm:"type:text;not null" json:"-"`
 	Role         Role       `gorm:"type:varchar(50);not null;default:'USER'" json:"role"`
-	IsActive     bool       `gorm:"default:true" json:"is_active"`
 	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
 }
 
@@ -52,7 +53,7 @@ func (u *User) IsAdmin() bool {
 
 // CanLogin checks if the user can login.
 func (u *User) CanLogin() bool {
-	return u.IsActive && !u.DeletedAt.Valid
+	return !u.DeletedAt.Valid
 }
 
 // TouchLastLogin updates the last login timestamp.
@@ -86,8 +87,9 @@ func (u *User) ToSafeUser() *SafeUser {
 	return &SafeUser{
 		ID:        u.ID,
 		Email:     u.Email,
+		Username:  u.Username,
+		Name:      u.Name,
 		Role:      u.Role,
-		IsActive:  u.IsActive,
 		CreatedAt: u.CreatedAt,
 		UpdatedAt: u.UpdatedAt,
 	}
@@ -97,8 +99,9 @@ func (u *User) ToSafeUser() *SafeUser {
 type SafeUser struct {
 	ID        string    `json:"id"`
 	Email     string    `json:"email"`
+	Username  string    `json:"username"`
+	Name      string    `json:"name"`
 	Role      Role      `json:"role"`
-	IsActive  bool      `json:"is_active"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

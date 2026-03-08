@@ -20,8 +20,8 @@ type ProductEvent struct {
 	Name       string                 `json:"name,omitempty"`
 	Price      float64                `json:"price,omitempty"`
 	Stock      int                    `json:"stock,omitempty"`
-	Status     string                 `json:"status,omitempty"`
-	CategoryID string                 `json:"category_id,omitempty"`
+	OwnerID    string                 `json:"owner_id,omitempty"`
+	HasVariant bool                   `json:"has_variant,omitempty"`
 	Timestamp  time.Time              `json:"timestamp"`
 	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 }
@@ -34,8 +34,8 @@ func NewProductCreatedEvent(product *Product) *ProductEvent {
 		Name:       product.Name,
 		Price:      product.Price,
 		Stock:      product.Stock,
-		Status:     string(product.Status),
-		CategoryID: product.CategoryID,
+		OwnerID:    product.OwnerID,
+		HasVariant: product.HasVariant,
 		Timestamp:  time.Now().UTC(),
 		Metadata:   make(map[string]interface{}),
 	}
@@ -49,8 +49,8 @@ func NewProductUpdatedEvent(product *Product) *ProductEvent {
 		Name:       product.Name,
 		Price:      product.Price,
 		Stock:      product.Stock,
-		Status:     string(product.Status),
-		CategoryID: product.CategoryID,
+		OwnerID:    product.OwnerID,
+		HasVariant: product.HasVariant,
 		Timestamp:  time.Now().UTC(),
 		Metadata:   make(map[string]interface{}),
 	}
@@ -74,8 +74,8 @@ func NewProductRestoredEvent(product *Product) *ProductEvent {
 		Name:       product.Name,
 		Price:      product.Price,
 		Stock:      product.Stock,
-		Status:     string(product.Status),
-		CategoryID: product.CategoryID,
+		OwnerID:    product.OwnerID,
+		HasVariant: product.HasVariant,
 		Timestamp:  time.Now().UTC(),
 		Metadata:   make(map[string]interface{}),
 	}
@@ -118,11 +118,8 @@ func (e *ProductEvent) ToMap() map[string]interface{} {
 	if e.Stock != 0 {
 		result["stock"] = e.Stock
 	}
-	if e.Status != "" {
-		result["status"] = e.Status
-	}
-	if e.CategoryID != "" {
-		result["category_id"] = e.CategoryID
+	if e.OwnerID != "" {
+		result["owner_id"] = e.OwnerID
 	}
 	if e.Metadata != nil {
 		result["metadata"] = e.Metadata

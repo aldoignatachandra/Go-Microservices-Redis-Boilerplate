@@ -66,9 +66,10 @@ func createTestUser(t *testing.T, db *gorm.DB) *domain.User {
 			UpdatedAt: time.Now().UTC(),
 		},
 		Email:        fmt.Sprintf("user_%s@example.com", uuid.New().String()),
+		Username:     fmt.Sprintf("user_%s", uuid.New().String()),
+		Name:         "Test User",
 		PasswordHash: "hashedpassword",
 		Role:         domain.RoleUser,
-		IsActive:     true,
 	}
 	err := db.Create(user).Error
 	require.NoError(t, err)
@@ -104,9 +105,9 @@ func TestCreate(t *testing.T) {
 	t.Run("successful create user", func(t *testing.T) {
 		user := &domain.User{
 			Email:        fmt.Sprintf("test_%s@example.com", uuid.New().String()),
+			Username:     fmt.Sprintf("testuser_%s", uuid.New().String()),
 			PasswordHash: "hashedpassword",
 			Role:         domain.RoleUser,
-			IsActive:     true,
 		}
 
 		err := repo.Create(ctx, user)
@@ -132,9 +133,9 @@ func TestCreate(t *testing.T) {
 		user := &domain.User{
 			Model:        domain.Model{ID: profile.UserID},
 			Email:        fmt.Sprintf("test_%s@example.com", uuid.New().String()),
+			Username:     fmt.Sprintf("testuser_%s", uuid.New().String()),
 			PasswordHash: "hashedpassword",
 			Role:         domain.RoleUser,
-			IsActive:     true,
 			Profile:      profile,
 		}
 
@@ -145,9 +146,9 @@ func TestCreate(t *testing.T) {
 	t.Run("successful create admin user", func(t *testing.T) {
 		user := &domain.User{
 			Email:        fmt.Sprintf("admin_%s@example.com", uuid.New().String()),
+			Username:     fmt.Sprintf("admin_%s", uuid.New().String()),
 			PasswordHash: "hashedpassword",
 			Role:         domain.RoleAdmin,
-			IsActive:     true,
 		}
 
 		err := repo.Create(ctx, user)
@@ -190,19 +191,6 @@ func TestUpdate(t *testing.T) {
 		err = db.Where("id = ?", user.ID).First(&found).Error
 		require.NoError(t, err)
 		assert.Equal(t, domain.RoleAdmin, found.Role)
-	})
-
-	t.Run("successful update user active status", func(t *testing.T) {
-		user := createTestUser(t, db)
-		user.IsActive = false
-
-		err := repo.Update(ctx, user)
-		require.NoError(t, err)
-
-		var found domain.User
-		err = db.Where("id = ?", user.ID).First(&found).Error
-		require.NoError(t, err)
-		assert.False(t, found.IsActive)
 	})
 
 	t.Run("successful update last login", func(t *testing.T) {
@@ -835,7 +823,6 @@ func TestUserRepositoryIntegration(t *testing.T) {
 			Email:        "lifecycle@example.com",
 			PasswordHash: "hashedpassword",
 			Role:         domain.RoleUser,
-			IsActive:     true,
 		}
 		err = repo.Create(ctx, user)
 		require.NoError(t, err)
@@ -869,7 +856,6 @@ func TestEdgeCases(t *testing.T) {
 			Email:        fmt.Sprintf("emptyid_%s@example.com", uuid.New().String()),
 			PasswordHash: "hashedpassword",
 			Role:         domain.RoleUser,
-			IsActive:     true,
 		}
 
 		err := repo.Create(ctx, user)
@@ -884,9 +870,9 @@ func TestEdgeCases(t *testing.T) {
 		user := &domain.User{
 			Model:        domain.Model{ID: uuid.New().String()},
 			Email:        "nonexistent@example.com",
+			Username:     fmt.Sprintf("testuser_%s", uuid.New().String()),
 			PasswordHash: "hash",
 			Role:         domain.RoleUser,
-			IsActive:     true,
 		}
 
 		err := repo.Update(ctx, user)
@@ -1089,7 +1075,6 @@ func TestRepositoryErrorPaths(t *testing.T) {
 			Email:        "nonexistent@example.com",
 			PasswordHash: "hash",
 			Role:         domain.RoleUser,
-			IsActive:     true,
 		}
 
 		// Note: GORM's Save will insert the record if it doesn't exist
@@ -1325,9 +1310,9 @@ func TestTransactionBehavior(t *testing.T) {
 		// Create user within transaction
 		user := &domain.User{
 			Email:        fmt.Sprintf("tx_%s@example.com", uuid.New().String()),
+			Username:     fmt.Sprintf("testuser_%s", uuid.New().String()),
 			PasswordHash: "hashedpassword",
 			Role:         domain.RoleUser,
-			IsActive:     true,
 		}
 		err := tx.Create(user).Error
 		require.NoError(t, err)
@@ -1350,9 +1335,9 @@ func TestTransactionBehavior(t *testing.T) {
 		// Create user within transaction
 		user := &domain.User{
 			Email:        fmt.Sprintf("rollback_%s@example.com", uuid.New().String()),
+			Username:     fmt.Sprintf("testuser_%s", uuid.New().String()),
 			PasswordHash: "hashedpassword",
 			Role:         domain.RoleUser,
-			IsActive:     true,
 		}
 		err := tx.Create(user).Error
 		require.NoError(t, err)
