@@ -536,6 +536,7 @@ curl -X POST http://localhost:3100/auth/login \
       "email": "john@example.com",
       "username": "johndoe",
       "name": "John Doe",
+      "role": "USER",
       "createdAt": "2026-03-09T12:00:00Z",
       "updatedAt": "2026-03-09T12:00:00Z"
     }
