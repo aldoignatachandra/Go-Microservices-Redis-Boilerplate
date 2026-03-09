@@ -644,17 +644,10 @@ const docTemplate = `{
         "github_com_ignata_go-microservices-boilerplate_internal_auth_dto.AuthResponse": {
             "type": "object",
             "properties": {
-                "access_token": {
-                    "type": "string"
-                },
                 "expires_in": {
-                    "description": "seconds",
                     "type": "integer"
                 },
-                "refresh_token": {
-                    "type": "string"
-                },
-                "token_type": {
+                "token": {
                     "type": "string"
                 },
                 "user": {
@@ -665,16 +658,15 @@ const docTemplate = `{
         "github_com_ignata_go-microservices-boilerplate_internal_auth_dto.ChangePasswordRequest": {
             "type": "object",
             "required": [
-                "current_password",
-                "new_password"
+                "new_password",
+                "old_password"
             ],
             "properties": {
-                "current_password": {
+                "new_password": {
                     "type": "string"
                 },
-                "new_password": {
-                    "type": "string",
-                    "minLength": 8
+                "old_password": {
+                    "type": "string"
                 }
             }
         },
@@ -707,10 +699,10 @@ const docTemplate = `{
         "github_com_ignata_go-microservices-boilerplate_internal_auth_dto.PaginationMeta": {
             "type": "object",
             "properties": {
-                "has_next": {
+                "hasNextPage": {
                     "type": "boolean"
                 },
-                "has_prev": {
+                "hasPreviousPage": {
                     "type": "boolean"
                 },
                 "limit": {
@@ -722,7 +714,7 @@ const docTemplate = `{
                 "total": {
                     "type": "integer"
                 },
-                "total_pages": {
+                "totalPages": {
                     "type": "integer"
                 }
             }
@@ -730,10 +722,10 @@ const docTemplate = `{
         "github_com_ignata_go-microservices-boilerplate_internal_auth_dto.RefreshTokenRequest": {
             "type": "object",
             "required": [
-                "refresh_token"
+                "token"
             ],
             "properties": {
-                "refresh_token": {
+                "token": {
                     "type": "string"
                 }
             }
@@ -742,22 +734,25 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "email",
-                "password"
+                "password",
+                "username"
             ],
             "properties": {
                 "email": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255
                 },
                 "password": {
-                    "type": "string",
-                    "minLength": 8
+                    "type": "string"
                 },
-                "role": {
+                "username": {
                     "type": "string",
-                    "enum": [
-                        "ADMIN",
-                        "USER"
-                    ]
+                    "maxLength": 50,
+                    "minLength": 3
                 }
             }
         },
@@ -778,24 +773,24 @@ const docTemplate = `{
         "github_com_ignata_go-microservices-boilerplate_internal_auth_dto.UserListResponse": {
             "type": "object",
             "properties": {
-                "pagination": {
-                    "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_internal_auth_dto.PaginationMeta"
-                },
-                "users": {
+                "data": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_internal_auth_dto.UserResponse"
                     }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_internal_auth_dto.PaginationMeta"
                 }
             }
         },
         "github_com_ignata_go-microservices-boilerplate_internal_auth_dto.UserResponse": {
             "type": "object",
             "properties": {
-                "created_at": {
+                "createdAt": {
                     "type": "string"
                 },
-                "deleted_at": {
+                "deletedAt": {
                     "type": "string"
                 },
                 "email": {
@@ -804,41 +799,16 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "last_login_at": {
+                "name": {
                     "type": "string"
                 },
                 "role": {
                     "type": "string"
                 },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_ignata_go-microservices-boilerplate_pkg_utils.ErrorBody": {
-            "type": "object",
-            "properties": {
-                "code": {
+                "updatedAt": {
                     "type": "string"
                 },
-                "details": {
-                    "type": "string"
-                },
-                "message": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_ignata_go-microservices-boilerplate_pkg_utils.Meta": {
-            "type": "object",
-            "properties": {
-                "request_id": {
-                    "type": "string"
-                },
-                "timestamp": {
+                "username": {
                     "type": "string"
                 }
             }
@@ -847,12 +817,10 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "data": {},
-                "error": {
-                    "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.ErrorBody"
+                "message": {
+                    "type": "string"
                 },
-                "meta": {
-                    "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Meta"
-                },
+                "meta": {},
                 "success": {
                     "type": "boolean"
                 }

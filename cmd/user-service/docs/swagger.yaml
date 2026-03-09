@@ -2,33 +2,33 @@ basePath: /
 definitions:
   github_com_ignata_go-microservices-boilerplate_internal_user_dto.ActivityLogListResponse:
     properties:
-      logs:
+      data:
         items:
           $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.ActivityLogResponse'
         type: array
-      pagination:
+      meta:
         $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.PaginationMeta'
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_user_dto.ActivityLogResponse:
     properties:
       action:
         type: string
-      created_at:
+      createdAt:
+        type: string
+      details:
+        additionalProperties: true
+        type: object
+      entity:
+        type: string
+      entityId:
         type: string
       id:
         type: string
-      ip_address:
+      ipAddress:
         type: string
-      metadata:
-        additionalProperties: true
-        type: object
-      resource:
+      userAgent:
         type: string
-      resource_id:
-        type: string
-      user_agent:
-        type: string
-      user_id:
+      userId:
         type: string
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_user_dto.MessageResponse:
@@ -38,9 +38,9 @@ definitions:
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_user_dto.PaginationMeta:
     properties:
-      has_next:
+      hasNextPage:
         type: boolean
-      has_prev:
+      hasPreviousPage:
         type: boolean
       limit:
         type: integer
@@ -48,22 +48,14 @@ definitions:
         type: integer
       total:
         type: integer
-      total_pages:
+      totalPages:
         type: integer
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_user_dto.ProfileResponse:
     properties:
-      avatar:
-        type: string
-      bio:
-        type: string
-      first_name:
-        type: string
-      full_name:
-        type: string
       id:
         type: string
-      last_name:
+      name:
         type: string
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_user_dto.RestoreResponse:
@@ -77,71 +69,49 @@ definitions:
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_user_dto.UpdateProfileRequest:
     properties:
-      avatar:
+      name:
+        maxLength: 255
+        minLength: 2
         type: string
-      bio:
-        maxLength: 500
-        type: string
-      first_name:
-        maxLength: 100
-        type: string
-      last_name:
-        maxLength: 100
+      username:
+        maxLength: 50
+        minLength: 3
         type: string
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_user_dto.UserListResponse:
     properties:
-      pagination:
-        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.PaginationMeta'
-      users:
+      data:
         items:
           $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.UserResponse'
         type: array
+      meta:
+        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.PaginationMeta'
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_user_dto.UserResponse:
     properties:
-      created_at:
+      createdAt:
         type: string
-      deleted_at:
+      deletedAt:
         type: string
       email:
         type: string
       id:
         type: string
-      is_active:
-        type: boolean
-      last_login_at:
+      name:
         type: string
-      profile:
-        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.ProfileResponse'
       role:
         type: string
-      updated_at:
+      updatedAt:
         type: string
-    type: object
-  github_com_ignata_go-microservices-boilerplate_pkg_utils.ErrorBody:
-    properties:
-      code:
-        type: string
-      details:
-        type: string
-      message:
-        type: string
-    type: object
-  github_com_ignata_go-microservices-boilerplate_pkg_utils.Meta:
-    properties:
-      request_id:
-        type: string
-      timestamp:
+      username:
         type: string
     type: object
   github_com_ignata_go-microservices-boilerplate_pkg_utils.Response:
     properties:
       data: {}
-      error:
-        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.ErrorBody'
-      meta:
-        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Meta'
+      message:
+        type: string
+      meta: {}
       success:
         type: boolean
     type: object

@@ -75,7 +75,7 @@ air -c .air.toml
 
 ```http
 GET /api/v1/users/:id/profile
-Authorization: Bearer <access_token>
+Authorization: Bearer <token>
 ```
 
 **Response:**
@@ -83,13 +83,8 @@ Authorization: Bearer <access_token>
 {
   "success": true,
   "data": {
-    "user_id": "uuid",
-    "first_name": "John",
-    "last_name": "Doe",
-    "avatar": "https://example.com/avatar.jpg",
-    "bio": "Software Developer",
-    "created_at": "2024-01-01T00:00:00Z",
-    "updated_at": "2024-01-01T00:00:00Z"
+    "id": "uuid",
+    "name": "John Doe"
   }
 }
 ```
@@ -98,14 +93,19 @@ Authorization: Bearer <access_token>
 
 ```http
 PUT /api/v1/users/profile
-Authorization: Bearer <access_token>
+Authorization: Bearer <token>
 Content-Type: application/json
 
 {
-  "first_name": "John",
-  "last_name": "Doe",
-  "avatar": "https://example.com/avatar.jpg",
-  "bio": "Updated bio"
+  "name": "John Doe"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Profile updated successfully"
 }
 ```
 
@@ -115,7 +115,7 @@ Content-Type: application/json
 
 ```http
 GET /api/v1/users?page=1&limit=20&role=USER&search=john
-Authorization: Bearer <access_token>
+Authorization: Bearer <token>
 ```
 
 **Query Parameters:**
@@ -124,7 +124,7 @@ Authorization: Bearer <access_token>
 | `page`           | int     | Page number (default: 1)       |
 | `limit`          | int     | Items per page (default: 20)   |
 | `role`           | string  | Filter by role (USER, ADMIN)   |
-| `search`         | string  | Search by email or name        |
+| `search`         | string  | Search by email or username    |
 | `include_deleted`| bool    | Include soft-deleted users     |
 | `only_deleted`   | bool    | Only show deleted users        |
 
@@ -132,12 +132,24 @@ Authorization: Bearer <access_token>
 ```json
 {
   "success": true,
-  "data": {
-    "users": [...],
-    "total": 100,
+  "data": [
+    {
+      "id": "uuid",
+      "email": "user@example.com",
+      "username": "johndoe",
+      "name": "John Doe",
+      "role": "USER",
+      "createdAt": "2024-01-01T00:00:00Z",
+      "updatedAt": "2024-01-01T00:00:00Z"
+    }
+  ],
+  "meta": {
     "page": 1,
     "limit": 20,
-    "total_pages": 5
+    "total": 100,
+    "totalPages": 5,
+    "hasNextPage": true,
+    "hasPreviousPage": false
   }
 }
 ```
@@ -146,40 +158,7 @@ Authorization: Bearer <access_token>
 
 ```http
 GET /api/v1/users/:id
-Authorization: Bearer <access_token>
-```
-
-#### Activate User
-
-```http
-POST /api/v1/users/:id/activate
-Authorization: Bearer <access_token>
-```
-
-#### Deactivate User
-
-```http
-POST /api/v1/users/:id/deactivate
-Authorization: Bearer <access_token>
-```
-
-#### Delete User (Soft Delete)
-
-```http
-DELETE /api/v1/users/:id
-Authorization: Bearer <access_token>
-```
-
-**Query Parameters:**
-| Parameter | Type | Description                    |
-| :-------- | :--- | :----------------------------- |
-| `force`   | bool | Hard delete if true            |
-
-#### Restore Deleted User
-
-```http
-POST /api/v1/users/:id/restore
-Authorization: Bearer <access_token>
+Authorization: Bearer <token>
 ```
 
 **Response:**
@@ -187,13 +166,79 @@ Authorization: Bearer <access_token>
 {
   "success": true,
   "data": {
-    "user": {
-      "id": "uuid",
-      "email": "user@example.com",
-      "is_active": true
-    },
-    "message": "User restored successfully"
+    "id": "uuid",
+    "email": "user@example.com",
+    "username": "johndoe",
+    "name": "John Doe",
+    "role": "USER",
+    "createdAt": "2024-01-01T00:00:00Z",
+    "updatedAt": "2024-01-01T00:00:00Z"
   }
+}
+```
+
+#### Activate User
+
+```http
+POST /api/v1/users/:id/activate
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "User activated successfully"
+}
+```
+
+#### Deactivate User
+
+```http
+POST /api/v1/users/:id/deactivate
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "User deactivated successfully"
+}
+```
+
+#### Delete User (Soft Delete)
+
+```http
+DELETE /api/v1/users/:id
+Authorization: Bearer <token>
+```
+
+**Query Parameters:**
+| Parameter | Type | Description                    |
+| :-------- | :--- | :----------------------------- |
+| `force`   | bool | Hard delete if true            |
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "User deleted successfully"
+}
+```
+
+#### Restore Deleted User
+
+```http
+POST /api/v1/users/:id/restore
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "User restored successfully"
 }
 ```
 
@@ -202,8 +247,8 @@ Authorization: Bearer <access_token>
 #### Get Activity Logs
 
 ```http
-GET /api/v1/activity-logs?user_id=uuid&action=login&page=1&limit=20
-Authorization: Bearer <access_token>
+GET /api/v1/activity-logs?page=1&limit=20
+Authorization: Bearer <token>
 ```
 
 **Query Parameters:**
@@ -211,9 +256,41 @@ Authorization: Bearer <access_token>
 | :-------- | :------ | :----------------------------- |
 | `user_id` | string  | Filter by user ID              |
 | `action`  | string  | Filter by action type          |
-| `resource`| string  | Filter by resource type        |
+| `entity`  | string  | Filter by entity type          |
 | `page`    | int     | Page number                    |
 | `limit`   | int     | Items per page                 |
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "userId": "user-uuid",
+      "action": "profile_updated",
+      "entity": "profile",
+      "entityId": "profile-uuid",
+      "details": {
+        "field": "name",
+        "old_value": "John",
+        "new_value": "John Doe"
+      },
+      "ipAddress": "192.168.1.1",
+      "userAgent": "Mozilla/5.0...",
+      "createdAt": "2024-01-01T00:00:00Z"
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 50,
+    "totalPages": 3,
+    "hasNextPage": true,
+    "hasPreviousPage": false
+  }
+}
+```
 
 ### Health Endpoints
 

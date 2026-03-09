@@ -1,25 +1,90 @@
 basePath: /
 definitions:
+  github_com_ignata_go-microservices-boilerplate_internal_product_dto.AttributeResponse:
+    properties:
+      displayOrder:
+        type: integer
+      id:
+        type: string
+      name:
+        type: string
+      values:
+        items:
+          type: string
+        type: array
+    type: object
+  github_com_ignata_go-microservices-boilerplate_internal_product_dto.CreateAttributeRequest:
+    properties:
+      displayOrder:
+        minimum: 0
+        type: integer
+      name:
+        maxLength: 100
+        minLength: 1
+        type: string
+      values:
+        items:
+          type: string
+        minItems: 1
+        type: array
+    required:
+    - name
+    - values
+    type: object
   github_com_ignata_go-microservices-boilerplate_internal_product_dto.CreateProductRequest:
     properties:
-      category_id:
-        type: string
-      description:
-        maxLength: 1000
+      attributes:
+        items:
+          $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.CreateAttributeRequest'
+        type: array
+      images:
         type: string
       name:
         maxLength: 255
-        minLength: 3
+        minLength: 2
+        type: string
+      ownerId:
         type: string
       price:
         type: number
       stock:
+        minimum: 0
+        type: integer
+      variants:
+        items:
+          $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.CreateVariantRequest'
+        type: array
+    required:
+    - name
+    - ownerId
+    - price
+    type: object
+  github_com_ignata_go-microservices-boilerplate_internal_product_dto.CreateVariantRequest:
+    properties:
+      attributeValues:
+        additionalProperties:
+          type: string
+        type: object
+      images:
+        type: string
+      isActive:
+        type: boolean
+      name:
+        maxLength: 255
+        minLength: 1
+        type: string
+      price:
+        type: number
+      sku:
+        maxLength: 100
+        minLength: 1
+        type: string
+      stockQuantity:
+        minimum: 0
         type: integer
     required:
-    - category_id
     - name
-    - price
-    - stock
+    - sku
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_product_dto.DeleteResponse:
     properties:
@@ -28,62 +93,86 @@ definitions:
       success:
         type: boolean
     type: object
+  github_com_ignata_go-microservices-boilerplate_internal_product_dto.PriceRange:
+    properties:
+      display:
+        type: string
+      max:
+        type: number
+      min:
+        type: number
+    type: object
   github_com_ignata_go-microservices-boilerplate_internal_product_dto.ProductListResponse:
     properties:
+      data:
+        items:
+          $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.ProductResponse'
+        type: array
+      hasNextPage:
+        type: boolean
+      hasPreviousPage:
+        type: boolean
       limit:
         type: integer
       page:
         type: integer
-      products:
-        items:
-          $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.ProductResponse'
-        type: array
       total:
         type: integer
-      total_pages:
+      totalPages:
         type: integer
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_product_dto.ProductResponse:
     properties:
-      category_id:
+      attributes:
+        items:
+          $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.AttributeResponse'
+        type: array
+      createdAt:
         type: string
-      created_at:
+      deletedAt:
         type: string
-      description:
-        type: string
+      hasVariant:
+        type: boolean
       id:
         type: string
       name:
         type: string
-      price:
-        type: number
-      status:
+      ownerId:
         type: string
+      price:
+        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.PriceRange'
       stock:
         type: integer
-      updated_at:
+      updatedAt:
         type: string
+      variants:
+        items:
+          $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.VariantResponse'
+        type: array
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_product_dto.UpdateProductRequest:
     properties:
-      description:
-        maxLength: 1000
-        type: string
+      attributes:
+        items:
+          $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.CreateAttributeRequest'
+        type: array
       id:
+        type: string
+      images:
         type: string
       name:
         maxLength: 255
-        minLength: 3
+        minLength: 2
         type: string
       price:
         type: number
-      status:
-        enum:
-        - ACTIVE
-        - INACTIVE
-        type: string
       stock:
+        minimum: 0
         type: integer
+      variants:
+        items:
+          $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.CreateVariantRequest'
+        type: array
     required:
     - id
     type: object
@@ -92,6 +181,7 @@ definitions:
       id:
         type: string
       stock:
+        minimum: 0
         type: integer
     required:
     - id
@@ -106,29 +196,33 @@ definitions:
       success:
         type: boolean
     type: object
-  github_com_ignata_go-microservices-boilerplate_pkg_utils.ErrorBody:
+  github_com_ignata_go-microservices-boilerplate_internal_product_dto.VariantResponse:
     properties:
-      code:
+      attributeValues:
+        additionalProperties:
+          type: string
+        type: object
+      availableStock:
+        type: integer
+      id:
         type: string
-      details:
+      images:
         type: string
-      message:
+      isActive:
+        type: boolean
+      price:
+        type: number
+      sku:
         type: string
-    type: object
-  github_com_ignata_go-microservices-boilerplate_pkg_utils.Meta:
-    properties:
-      request_id:
-        type: string
-      timestamp:
-        type: string
+      stockQuantity:
+        type: integer
     type: object
   github_com_ignata_go-microservices-boilerplate_pkg_utils.Response:
     properties:
       data: {}
-      error:
-        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.ErrorBody'
-      meta:
-        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Meta'
+      message:
+        type: string
+      meta: {}
       success:
         type: boolean
     type: object

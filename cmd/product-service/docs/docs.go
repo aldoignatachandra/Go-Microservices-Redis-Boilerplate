@@ -494,32 +494,126 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "github_com_ignata_go-microservices-boilerplate_internal_product_dto.AttributeResponse": {
+            "type": "object",
+            "properties": {
+                "displayOrder": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "values": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "github_com_ignata_go-microservices-boilerplate_internal_product_dto.CreateAttributeRequest": {
+            "type": "object",
+            "required": [
+                "name",
+                "values"
+            ],
+            "properties": {
+                "displayOrder": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
+                },
+                "values": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "github_com_ignata_go-microservices-boilerplate_internal_product_dto.CreateProductRequest": {
             "type": "object",
             "required": [
-                "category_id",
                 "name",
-                "price",
-                "stock"
+                "ownerId",
+                "price"
             ],
             "properties": {
-                "category_id": {
-                    "type": "string"
+                "attributes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.CreateAttributeRequest"
+                    }
                 },
-                "description": {
-                    "type": "string",
-                    "maxLength": 1000
+                "images": {
+                    "type": "string"
                 },
                 "name": {
                     "type": "string",
                     "maxLength": 255,
-                    "minLength": 3
+                    "minLength": 2
+                },
+                "ownerId": {
+                    "type": "string"
                 },
                 "price": {
                     "type": "number"
                 },
                 "stock": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "variants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.CreateVariantRequest"
+                    }
+                }
+            }
+        },
+        "github_com_ignata_go-microservices-boilerplate_internal_product_dto.CreateVariantRequest": {
+            "type": "object",
+            "required": [
+                "name",
+                "sku"
+            ],
+            "properties": {
+                "attributeValues": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "images": {
+                    "type": "string"
+                },
+                "isActive": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
+                },
+                "price": {
+                    "type": "number"
+                },
+                "sku": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
+                },
+                "stockQuantity": {
+                    "type": "integer",
+                    "minimum": 0
                 }
             }
         },
@@ -534,25 +628,45 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_ignata_go-microservices-boilerplate_internal_product_dto.PriceRange": {
+            "type": "object",
+            "properties": {
+                "display": {
+                    "type": "string"
+                },
+                "max": {
+                    "type": "number"
+                },
+                "min": {
+                    "type": "number"
+                }
+            }
+        },
         "github_com_ignata_go-microservices-boilerplate_internal_product_dto.ProductListResponse": {
             "type": "object",
             "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.ProductResponse"
+                    }
+                },
+                "hasNextPage": {
+                    "type": "boolean"
+                },
+                "hasPreviousPage": {
+                    "type": "boolean"
+                },
                 "limit": {
                     "type": "integer"
                 },
                 "page": {
                     "type": "integer"
                 },
-                "products": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.ProductResponse"
-                    }
-                },
                 "total": {
                     "type": "integer"
                 },
-                "total_pages": {
+                "totalPages": {
                     "type": "integer"
                 }
             }
@@ -560,14 +674,20 @@ const docTemplate = `{
         "github_com_ignata_go-microservices-boilerplate_internal_product_dto.ProductResponse": {
             "type": "object",
             "properties": {
-                "category_id": {
+                "attributes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.AttributeResponse"
+                    }
+                },
+                "createdAt": {
                     "type": "string"
                 },
-                "created_at": {
+                "deletedAt": {
                     "type": "string"
                 },
-                "description": {
-                    "type": "string"
+                "hasVariant": {
+                    "type": "boolean"
                 },
                 "id": {
                     "type": "string"
@@ -575,17 +695,23 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
-                "price": {
-                    "type": "number"
-                },
-                "status": {
+                "ownerId": {
                     "type": "string"
+                },
+                "price": {
+                    "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.PriceRange"
                 },
                 "stock": {
                     "type": "integer"
                 },
-                "updated_at": {
+                "updatedAt": {
                     "type": "string"
+                },
+                "variants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.VariantResponse"
+                    }
                 }
             }
         },
@@ -595,30 +721,35 @@ const docTemplate = `{
                 "id"
             ],
             "properties": {
-                "description": {
-                    "type": "string",
-                    "maxLength": 1000
+                "attributes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.CreateAttributeRequest"
+                    }
                 },
                 "id": {
+                    "type": "string"
+                },
+                "images": {
                     "type": "string"
                 },
                 "name": {
                     "type": "string",
                     "maxLength": 255,
-                    "minLength": 3
+                    "minLength": 2
                 },
                 "price": {
                     "type": "number"
                 },
-                "status": {
-                    "type": "string",
-                    "enum": [
-                        "ACTIVE",
-                        "INACTIVE"
-                    ]
-                },
                 "stock": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "variants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.CreateVariantRequest"
+                    }
                 }
             }
         },
@@ -633,7 +764,8 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "stock": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 0
                 }
             }
         },
@@ -651,28 +783,35 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_ignata_go-microservices-boilerplate_pkg_utils.ErrorBody": {
+        "github_com_ignata_go-microservices-boilerplate_internal_product_dto.VariantResponse": {
             "type": "object",
             "properties": {
-                "code": {
+                "attributeValues": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "availableStock": {
+                    "type": "integer"
+                },
+                "id": {
                     "type": "string"
                 },
-                "details": {
+                "images": {
                     "type": "string"
                 },
-                "message": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_ignata_go-microservices-boilerplate_pkg_utils.Meta": {
-            "type": "object",
-            "properties": {
-                "request_id": {
+                "isActive": {
+                    "type": "boolean"
+                },
+                "price": {
+                    "type": "number"
+                },
+                "sku": {
                     "type": "string"
                 },
-                "timestamp": {
-                    "type": "string"
+                "stockQuantity": {
+                    "type": "integer"
                 }
             }
         },
@@ -680,12 +819,10 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "data": {},
-                "error": {
-                    "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.ErrorBody"
+                "message": {
+                    "type": "string"
                 },
-                "meta": {
-                    "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Meta"
-                },
+                "meta": {},
                 "success": {
                     "type": "boolean"
                 }

@@ -1,4 +1,4 @@
-// Package delivery tests HTTP handlers for the product service.
+// Package delivery provides tests for HTTP handlers for the product service.
 package delivery_test
 
 import (
@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -19,6 +20,7 @@ import (
 	"github.com/ignata/go-microservices-boilerplate/internal/product/domain"
 	"github.com/ignata/go-microservices-boilerplate/internal/product/dto"
 	productusecasemocks "github.com/ignata/go-microservices-boilerplate/internal/product/usecase/mocks"
+	"github.com/ignata/go-microservices-boilerplate/pkg/server"
 )
 
 // setupTestRouter creates a test router with Gin in test mode.
@@ -49,15 +51,21 @@ func TestCreateProduct_Success(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"name":     "Test Product",
-		"price":    29.99,
-		"stock":    100,
-		"owner_id": "550e8400-e29b-41d4-a716-446655440000",
+		"name":    "Test Product",
+		"price":   29.99,
+		"stock":   100,
+		"ownerId": "550e8400-e29b-41d4-a716-446655440000",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", "/products", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
+
+	// Set user context
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440000")
+		c.Next()
+	})
 
 	router.POST("/products", handler.CreateProduct)
 	router.ServeHTTP(w, req)
@@ -142,16 +150,21 @@ func TestCreateProduct_Conflict(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"name":        "Existing Product",
-		"price":       19.99,
-		"stock":       50,
-		"owner_id":    "550e8400-e29b-41d4-a716-446655440000",
-		"has_variant": false,
+		"name":    "Existing Product",
+		"price":   19.99,
+		"stock":   50,
+		"ownerId": "550e8400-e29b-41d4-a716-446655440000",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", "/products", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
+
+	// Set user context
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440000")
+		c.Next()
+	})
 
 	router.POST("/products", handler.CreateProduct)
 	router.ServeHTTP(w, req)
@@ -846,15 +859,21 @@ func TestHandleError_ValidationError(t *testing.T) {
 
 	// Act - use valid data to pass Gin binding
 	reqBody := map[string]interface{}{
-		"name":        "Test Product",
-		"price":       29.99,
-		"stock":       100,
-		"category_id": "550e8400-e29b-41d4-a716-446655440000",
+		"name":    "Test Product",
+		"price":   29.99,
+		"stock":   100,
+		"ownerId": "550e8400-e29b-41d4-a716-446655440000",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", "/products", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
+
+	// Set user context
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440000")
+		c.Next()
+	})
 
 	router.POST("/products", handler.CreateProduct)
 	router.ServeHTTP(w, req)
@@ -885,16 +904,21 @@ func TestCreateProduct_InternalError(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"name":        "Test Product",
-		"description": "A test product",
-		"price":       29.99,
-		"stock":       100,
-		"category_id": "550e8400-e29b-41d4-a716-446655440000",
+		"name":    "Test Product",
+		"price":   29.99,
+		"stock":   100,
+		"ownerId": "550e8400-e29b-41d4-a716-446655440000",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", "/products", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
+
+	// Set user context
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440000")
+		c.Next()
+	})
 
 	router.POST("/products", handler.CreateProduct)
 	router.ServeHTTP(w, req)
@@ -1270,4 +1294,628 @@ func TestUpdateStock_InternalError(t *testing.T) {
 	assert.False(t, response["success"].(bool))
 
 	mockUseCase.AssertExpectations(t)
+}
+
+// TestCORSMiddleware tests the CORS middleware.
+func TestCORSMiddleware(t *testing.T) {
+	tests := []struct {
+		name           string
+		method         string
+		expectedStatus int
+		checkHeaders   bool
+	}{
+		{
+			name:           "OPTIONS request returns 204",
+			method:         "OPTIONS",
+			expectedStatus: http.StatusNoContent,
+			checkHeaders:   true,
+		},
+		{
+			name:           "GET request passes through",
+			method:         "GET",
+			expectedStatus: http.StatusOK,
+			checkHeaders:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			router := setupTestRouter()
+			router.Use(delivery.CORSMiddleware())
+			router.GET("/test", func(c *gin.Context) {
+				c.Status(http.StatusOK)
+			})
+
+			// Act
+			req, _ := http.NewRequest(tt.method, "/test", nil)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			// Assert
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			if tt.checkHeaders {
+				assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
+				assert.Equal(t, "true", w.Header().Get("Access-Control-Allow-Credentials"))
+				assert.Contains(t, w.Header().Get("Access-Control-Allow-Headers"), "Content-Type")
+				assert.Contains(t, w.Header().Get("Access-Control-Allow-Methods"), "POST")
+			}
+		})
+	}
+}
+
+// TestPublicHealth tests the public health endpoint.
+func TestPublicHealth(t *testing.T) {
+	// Arrange
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	router.GET("/health", handler.PublicHealth)
+
+	// Act
+	req, _ := http.NewRequest("GET", "/health", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.Equal(t, "ok", response["status"])
+	assert.Equal(t, "product-service", response["service"])
+}
+
+// TestReadyProbe tests the readiness probe endpoint.
+func TestReadyProbe(t *testing.T) {
+	// Arrange
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	router.GET("/ready", handler.ReadyProbe)
+
+	// Act
+	req, _ := http.NewRequest("GET", "/ready", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.Equal(t, true, response["ready"])
+}
+
+// TestLiveProbe tests the liveness probe endpoint.
+func TestLiveProbe(t *testing.T) {
+	// Arrange
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	router.GET("/live", handler.LiveProbe)
+
+	// Act
+	req, _ := http.NewRequest("GET", "/live", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.Equal(t, true, response["alive"])
+}
+
+// TestRegisterRoutes tests route registration.
+func TestRegisterRoutes(t *testing.T) {
+	// Arrange
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	router := setupTestRouter()
+
+	// Set up mock expectations for all possible route calls
+	mockUseCase.On("ListProducts", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&dto.ProductListResponse{}, nil).Maybe()
+
+	// Act
+	delivery.RegisterRoutes(router, mockUseCase)
+
+	// Assert - verify routes are registered
+	w := httptest.NewRecorder()
+
+	// Test health endpoint
+	req1, _ := http.NewRequest("GET", "/health", nil)
+	router.ServeHTTP(w, req1)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Test ready endpoint
+	w = httptest.NewRecorder()
+	req2, _ := http.NewRequest("GET", "/ready", nil)
+	router.ServeHTTP(w, req2)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Test live endpoint
+	w = httptest.NewRecorder()
+	req3, _ := http.NewRequest("GET", "/live", nil)
+	router.ServeHTTP(w, req3)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Test public products list
+	w = httptest.NewRecorder()
+	req4, _ := http.NewRequest("GET", "/products", nil)
+	router.ServeHTTP(w, req4)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestGetProduct_Unauthorized tests GetProduct without user context.
+func TestGetProduct_Unauthorized(t *testing.T) {
+	// Arrange
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	expectedResponse := &dto.ProductResponse{
+		ID:         "550e8400-e29b-41d4-a716-446655440001",
+		Name:       "Test Product",
+		OwnerID:    "550e8400-e29b-41d4-a716-446655440000",
+		HasVariant: false,
+	}
+
+	mockUseCase.On("GetProduct", mock.Anything, "", "", mock.AnythingOfType("*dto.GetProductRequest")).
+		Return(expectedResponse, nil)
+
+	// Act - no user context set
+	req, _ := http.NewRequest("GET", "/products/550e8400-e29b-41d4-a716-446655440001", nil)
+	w := httptest.NewRecorder()
+
+	router.GET("/products/:id", handler.GetProduct)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestListProducts_Unauthorized tests ListProducts without user context.
+func TestListProducts_Unauthorized(t *testing.T) {
+	// Arrange
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	expectedResponse := &dto.ProductListResponse{
+		Data:       []*dto.ProductResponse{},
+		Total:      0,
+		Page:       1,
+		Limit:      10,
+		TotalPages: 0,
+	}
+
+	mockUseCase.On("ListProducts", mock.Anything, "", "", mock.AnythingOfType("*dto.ListProductsRequest")).
+		Return(expectedResponse, nil)
+
+	// Act - no user context set
+	req, _ := http.NewRequest("GET", "/products", nil)
+	w := httptest.NewRecorder()
+
+	router.GET("/products", handler.ListProducts)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestDeleteProduct_Unauthorized tests DeleteProduct without user context.
+func TestDeleteProduct_Unauthorized(t *testing.T) {
+	// Arrange
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	expectedResponse := &dto.DeleteResponse{
+		Success: true,
+		Message: "Product deleted successfully",
+	}
+
+	mockUseCase.On("DeleteProduct", mock.Anything, "", "", mock.MatchedBy(func(r *dto.DeleteProductRequest) bool {
+		return r.ID == "550e8400-e29b-41d4-a716-446655440001"
+	})).Return(expectedResponse, nil)
+
+	// Act - no user context set
+	req, _ := http.NewRequest("DELETE", "/products/550e8400-e29b-41d4-a716-446655440001", nil)
+	w := httptest.NewRecorder()
+
+	router.DELETE("/products/:id", handler.DeleteProduct)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestRestoreProduct_Unauthorized tests RestoreProduct without user context.
+func TestRestoreProduct_Unauthorized(t *testing.T) {
+	// Arrange
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	expectedResponse := &dto.ProductResponse{
+		ID:         "550e8400-e29b-41d4-a716-446655440001",
+		Name:       "Test Product",
+		HasVariant: false,
+	}
+
+	mockUseCase.On("RestoreProduct", mock.Anything, "", "", mock.AnythingOfType("*dto.RestoreProductRequest")).
+		Return(expectedResponse, nil)
+
+	// Act - no user context set
+	req, _ := http.NewRequest("POST", "/products/550e8400-e29b-41d4-a716-446655440001/restore", nil)
+	w := httptest.NewRecorder()
+
+	router.POST("/products/:id/restore", handler.RestoreProduct)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestUpdateStock_Unauthorized tests UpdateStock without user context.
+func TestUpdateStock_Unauthorized(t *testing.T) {
+	// Arrange
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	expectedResponse := &dto.UpdateStockResponse{
+		Success: true,
+		Message: "Stock updated successfully",
+		Stock:   150,
+	}
+
+	mockUseCase.On("UpdateStock", mock.Anything, "", "", mock.MatchedBy(func(r *dto.UpdateStockRequest) bool {
+		return r.ID == "550e8400-e29b-41d4-a716-446655440001" && r.Stock == 150
+	})).Return(expectedResponse, nil)
+
+	// Act - no user context set
+	reqBody := map[string]interface{}{"stock": 150}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("PUT", "/products/550e8400-e29b-41d4-a716-446655440001/stock", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.PUT("/products/:id/stock", handler.UpdateStock)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestGetProduct_AdminRole tests GetProduct with admin role.
+func TestGetProduct_AdminRole(t *testing.T) {
+	// Arrange
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	expectedResponse := &dto.ProductResponse{
+		ID:         "550e8400-e29b-41d4-a716-446655440001",
+		Name:       "Test Product",
+		OwnerID:    "550e8400-e29b-41d4-a716-446655440000",
+		HasVariant: false,
+	}
+
+	mockUseCase.On("GetProduct", mock.Anything, "", "ADMIN", mock.AnythingOfType("*dto.GetProductRequest")).
+		Return(expectedResponse, nil)
+
+	// Act
+	req, _ := http.NewRequest("GET", "/products/550e8400-e29b-41d4-a716-446655440001", nil)
+	w := httptest.NewRecorder()
+
+	router.Use(func(c *gin.Context) {
+		c.Set("user_role", "ADMIN")
+		c.Next()
+	})
+	router.GET("/products/:id", handler.GetProduct)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestListProducts_AdminRole tests ListProducts with admin role.
+func TestListProducts_AdminRole(t *testing.T) {
+	// Arrange
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	expectedResponse := &dto.ProductListResponse{
+		Data:       []*dto.ProductResponse{},
+		Total:      0,
+		Page:       1,
+		Limit:      10,
+		TotalPages: 0,
+	}
+
+	mockUseCase.On("ListProducts", mock.Anything, "", "ADMIN", mock.AnythingOfType("*dto.ListProductsRequest")).
+		Return(expectedResponse, nil)
+
+	// Act
+	req, _ := http.NewRequest("GET", "/products", nil)
+	w := httptest.NewRecorder()
+
+	router.Use(func(c *gin.Context) {
+		c.Set("user_role", "ADMIN")
+		c.Next()
+	})
+	router.GET("/products", handler.ListProducts)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestGetProduct_BindQueryError tests GetProduct with bind query error.
+func TestGetProduct_BindQueryError(t *testing.T) {
+	// Arrange
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// This test checks the case when ShouldBindQuery fails but ShouldBindUri succeeds
+	// Since Gin validation catches most query errors at the router level,
+	// this is a theoretical edge case
+
+	// Act - request with malformed query that might cause bind issues
+	req, _ := http.NewRequest("GET", "/products/550e8400-e29b-41d4-a716-446655440001?include_deleted=invalid", nil)
+	w := httptest.NewRecorder()
+
+	router.GET("/products/:id", handler.GetProduct)
+	router.ServeHTTP(w, req)
+
+	// Should return 400 due to invalid boolean binding
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// TestListProducts_EmptyResults tests ListProducts returning empty results.
+func TestListProducts_EmptyResults(t *testing.T) {
+	// Arrange
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	expectedResponse := &dto.ProductListResponse{
+		Data:       []*dto.ProductResponse{},
+		Total:      0,
+		Page:       1,
+		Limit:      10,
+		TotalPages: 0,
+	}
+
+	mockUseCase.On("ListProducts", mock.Anything, "", "", mock.AnythingOfType("*dto.ListProductsRequest")).
+		Return(expectedResponse, nil)
+
+	// Act
+	req, _ := http.NewRequest("GET", "/products", nil)
+	w := httptest.NewRecorder()
+
+	router.GET("/products", handler.ListProducts)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.True(t, response["success"].(bool))
+	data := response["data"].(map[string]interface{})
+	assert.Equal(t, float64(0), data["total"])
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestUpdateProduct_Conflict tests UpdateProduct with name conflict.
+func TestUpdateProduct_Conflict(t *testing.T) {
+	// Arrange
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	mockUseCase.On("UpdateProduct", mock.Anything, mock.Anything, mock.Anything, "550e8400-e29b-41d4-a716-446655440001", mock.AnythingOfType("*dto.UpdateProductRequest")).
+		Return(nil, domain.ErrProductNameAlreadyUsed)
+
+	// Act
+	reqBody := map[string]interface{}{
+		"name":  "Existing Name",
+		"price": 25.99,
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("PUT", "/products/550e8400-e29b-41d4-a716-446655440001", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.PUT("/products/:id", handler.UpdateProduct)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusConflict, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.False(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestUpdateProduct_Validation tests UpdateProduct with validation error.
+func TestUpdateProduct_Validation(t *testing.T) {
+	// Arrange
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	validationErr := errors.New("invalid stock reduction amount")
+	mockUseCase.On("UpdateProduct", mock.Anything, mock.Anything, mock.Anything, "550e8400-e29b-41d4-a716-446655440001", mock.AnythingOfType("*dto.UpdateProductRequest")).
+		Return(nil, validationErr)
+
+	// Act
+	reqBody := map[string]interface{}{
+		"stockReduction": 1000,
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("PUT", "/products/550e8400-e29b-41d4-a716-446655440001", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.PUT("/products/:id", handler.UpdateProduct)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestRestoreProduct_Validation tests RestoreProduct with validation error.
+func TestRestoreProduct_Validation(t *testing.T) {
+	// Arrange
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Use an actual validation error (insufficient stock is recognized as validation)
+	validationErr := errors.New("invalid stock reduction amount")
+	mockUseCase.On("RestoreProduct", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("*dto.RestoreProductRequest")).
+		Return(nil, validationErr)
+
+	// Act
+	req, _ := http.NewRequest("POST", "/products/550e8400-e29b-41d4-a716-446655440001/restore", nil)
+	w := httptest.NewRecorder()
+
+	router.POST("/products/:id/restore", handler.RestoreProduct)
+	router.ServeHTTP(w, req)
+
+	// Assert - validation error returns 422
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestDeleteProduct_Validation tests DeleteProduct with validation error.
+func TestDeleteProduct_Validation(t *testing.T) {
+	// Arrange
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	// Use an actual validation error (insufficient stock is recognized as validation)
+	validationErr := errors.New("invalid stock reduction amount")
+	mockUseCase.On("DeleteProduct", mock.Anything, mock.Anything, mock.Anything, mock.AnythingOfType("*dto.DeleteProductRequest")).
+		Return(nil, validationErr)
+
+	// Act
+	req, _ := http.NewRequest("DELETE", "/products/550e8400-e29b-41d4-a716-446655440001", nil)
+	w := httptest.NewRecorder()
+
+	router.DELETE("/products/:id", handler.DeleteProduct)
+	router.ServeHTTP(w, req)
+
+	// Assert - validation error returns 422
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.False(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
+// TestRegisterRoutesWithRateLimit tests route registration with rate limiting.
+func TestRegisterRoutesWithRateLimit(t *testing.T) {
+	// This test verifies the function is callable
+	// We don't actually test rate limiting as it requires Redis
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	router := setupTestRouter()
+
+	// Set up mock expectations for all possible route calls
+	mockUseCase.On("ListProducts", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&dto.ProductListResponse{}, nil).Maybe()
+
+	// This should not panic - it will just register routes without rate limiting
+	// since we're passing nil for the limiter
+	delivery.RegisterRoutesWithRateLimit(router, mockUseCase, nil, 100, time.Second)
+
+	// Verify basic routes work
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/health", nil)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestRegisterHealthRoutes tests health route registration.
+func TestRegisterHealthRoutes(t *testing.T) {
+	// This test verifies the function is callable
+	// Arrange
+	router := setupTestRouter()
+
+	// Create a mock health handler using the constructor
+	healthHandler := server.NewHealthHandler(server.HealthHandlerConfig{
+		ServiceName: "product-service",
+		Version:     "1.0.0",
+	})
+
+	// Act - this should not panic
+	delivery.RegisterHealthRoutes(router, healthHandler)
+
+	// Assert - verify health routes are registered
+	w := httptest.NewRecorder()
+
+	// Test public health endpoint
+	req1, _ := http.NewRequest("GET", "/health", nil)
+	router.ServeHTTP(w, req1)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Test ready endpoint
+	w = httptest.NewRecorder()
+	req2, _ := http.NewRequest("GET", "/ready", nil)
+	router.ServeHTTP(w, req2)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Test live endpoint
+	w = httptest.NewRecorder()
+	req3, _ := http.NewRequest("GET", "/live", nil)
+	router.ServeHTTP(w, req3)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Test admin health endpoint
+	w = httptest.NewRecorder()
+	req4, _ := http.NewRequest("GET", "/admin/health", nil)
+	router.ServeHTTP(w, req4)
+	assert.Equal(t, http.StatusOK, w.Code)
 }

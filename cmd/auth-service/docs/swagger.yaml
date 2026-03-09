@@ -2,28 +2,22 @@ basePath: /
 definitions:
   github_com_ignata_go-microservices-boilerplate_internal_auth_dto.AuthResponse:
     properties:
-      access_token:
-        type: string
       expires_in:
-        description: seconds
         type: integer
-      refresh_token:
-        type: string
-      token_type:
+      token:
         type: string
       user:
         $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_auth_dto.UserResponse'
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_auth_dto.ChangePasswordRequest:
     properties:
-      current_password:
-        type: string
       new_password:
-        minLength: 8
+        type: string
+      old_password:
         type: string
     required:
-    - current_password
     - new_password
+    - old_password
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_auth_dto.DeleteResponse:
     properties:
@@ -44,9 +38,9 @@ definitions:
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_auth_dto.PaginationMeta:
     properties:
-      has_next:
+      hasNextPage:
         type: boolean
-      has_prev:
+      hasPreviousPage:
         type: boolean
       limit:
         type: integer
@@ -54,31 +48,34 @@ definitions:
         type: integer
       total:
         type: integer
-      total_pages:
+      totalPages:
         type: integer
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_auth_dto.RefreshTokenRequest:
     properties:
-      refresh_token:
+      token:
         type: string
     required:
-    - refresh_token
+    - token
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_auth_dto.RegisterRequest:
     properties:
       email:
+        maxLength: 255
+        type: string
+      name:
+        maxLength: 255
         type: string
       password:
-        minLength: 8
         type: string
-      role:
-        enum:
-        - ADMIN
-        - USER
+      username:
+        maxLength: 50
+        minLength: 3
         type: string
     required:
     - email
     - password
+    - username
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_auth_dto.RestoreResponse:
     properties:
@@ -91,55 +88,38 @@ definitions:
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_auth_dto.UserListResponse:
     properties:
-      pagination:
-        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_auth_dto.PaginationMeta'
-      users:
+      data:
         items:
           $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_auth_dto.UserResponse'
         type: array
+      meta:
+        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_auth_dto.PaginationMeta'
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_auth_dto.UserResponse:
     properties:
-      created_at:
+      createdAt:
         type: string
-      deleted_at:
+      deletedAt:
         type: string
       email:
         type: string
       id:
         type: string
-      is_active:
-        type: boolean
-      last_login_at:
+      name:
         type: string
       role:
         type: string
-      updated_at:
+      updatedAt:
         type: string
-    type: object
-  github_com_ignata_go-microservices-boilerplate_pkg_utils.ErrorBody:
-    properties:
-      code:
-        type: string
-      details:
-        type: string
-      message:
-        type: string
-    type: object
-  github_com_ignata_go-microservices-boilerplate_pkg_utils.Meta:
-    properties:
-      request_id:
-        type: string
-      timestamp:
+      username:
         type: string
     type: object
   github_com_ignata_go-microservices-boilerplate_pkg_utils.Response:
     properties:
       data: {}
-      error:
-        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.ErrorBody'
-      meta:
-        $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Meta'
+      message:
+        type: string
+      meta: {}
       success:
         type: boolean
     type: object

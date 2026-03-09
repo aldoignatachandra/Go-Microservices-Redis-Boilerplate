@@ -79,8 +79,9 @@ Content-Type: application/json
 
 {
   "email": "user@example.com",
+  "username": "johndoe",
   "password": "SecurePassword123!",
-  "role": "USER"
+  "name": "John Doe"
 }
 ```
 
@@ -89,10 +90,17 @@ Content-Type: application/json
 {
   "success": true,
   "data": {
-    "id": "uuid",
-    "email": "user@example.com",
-    "role": "USER",
-    "created_at": "2024-01-01T00:00:00Z"
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "expires_in": 900,
+    "user": {
+      "id": "uuid",
+      "email": "user@example.com",
+      "username": "johndoe",
+      "name": "John Doe",
+      "role": "USER",
+      "createdAt": "2024-01-01T00:00:00Z",
+      "updatedAt": "2024-01-01T00:00:00Z"
+    }
   }
 }
 ```
@@ -114,10 +122,17 @@ Content-Type: application/json
 {
   "success": true,
   "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-    "token_type": "Bearer",
-    "expires_in": 900
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "expires_in": 900,
+    "user": {
+      "id": "uuid",
+      "email": "user@example.com",
+      "username": "johndoe",
+      "name": "John Doe",
+      "role": "USER",
+      "createdAt": "2024-01-01T00:00:00Z",
+      "updatedAt": "2024-01-01T00:00:00Z"
+    }
   }
 }
 ```
@@ -129,7 +144,39 @@ POST /auth/refresh
 Content-Type: application/json
 
 {
-  "refresh_token": "eyJhbGciOiJIUzI1NiIs..."
+  "token": "eyJhbGciOiJIUzI1NiIs..."
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "expires_in": 900
+  }
+}
+```
+
+#### Change Password
+
+```http
+POST /auth/change-password
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+  "old_password": "OldPassword123!",
+  "new_password": "NewPassword456!"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Password changed successfully"
 }
 ```
 
@@ -141,7 +188,7 @@ Content-Type: application/json
 
 ```http
 GET /auth/me
-Authorization: Bearer <access_token>
+Authorization: Bearer <token>
 ```
 
 **Response:**
@@ -151,8 +198,11 @@ Authorization: Bearer <access_token>
   "data": {
     "id": "uuid",
     "email": "user@example.com",
+    "username": "johndoe",
+    "name": "John Doe",
     "role": "USER",
-    "is_active": true
+    "createdAt": "2024-01-01T00:00:00Z",
+    "updatedAt": "2024-01-01T00:00:00Z"
   }
 }
 ```
@@ -161,7 +211,15 @@ Authorization: Bearer <access_token>
 
 ```http
 POST /auth/logout
-Authorization: Bearer <access_token>
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Logged out successfully"
+}
 ```
 
 ### Health Endpoints

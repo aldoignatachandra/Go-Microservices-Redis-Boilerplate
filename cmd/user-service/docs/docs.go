@@ -628,13 +628,13 @@ const docTemplate = `{
         "github_com_ignata_go-microservices-boilerplate_internal_user_dto.ActivityLogListResponse": {
             "type": "object",
             "properties": {
-                "logs": {
+                "data": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.ActivityLogResponse"
                     }
                 },
-                "pagination": {
+                "meta": {
                     "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.PaginationMeta"
                 }
             }
@@ -645,29 +645,29 @@ const docTemplate = `{
                 "action": {
                     "type": "string"
                 },
-                "created_at": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "details": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "entity": {
+                    "type": "string"
+                },
+                "entityId": {
                     "type": "string"
                 },
                 "id": {
                     "type": "string"
                 },
-                "ip_address": {
+                "ipAddress": {
                     "type": "string"
                 },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "resource": {
+                "userAgent": {
                     "type": "string"
                 },
-                "resource_id": {
-                    "type": "string"
-                },
-                "user_agent": {
-                    "type": "string"
-                },
-                "user_id": {
+                "userId": {
                     "type": "string"
                 }
             }
@@ -683,10 +683,10 @@ const docTemplate = `{
         "github_com_ignata_go-microservices-boilerplate_internal_user_dto.PaginationMeta": {
             "type": "object",
             "properties": {
-                "has_next": {
+                "hasNextPage": {
                     "type": "boolean"
                 },
-                "has_prev": {
+                "hasPreviousPage": {
                     "type": "boolean"
                 },
                 "limit": {
@@ -698,7 +698,7 @@ const docTemplate = `{
                 "total": {
                     "type": "integer"
                 },
-                "total_pages": {
+                "totalPages": {
                     "type": "integer"
                 }
             }
@@ -706,22 +706,10 @@ const docTemplate = `{
         "github_com_ignata_go-microservices-boilerplate_internal_user_dto.ProfileResponse": {
             "type": "object",
             "properties": {
-                "avatar": {
-                    "type": "string"
-                },
-                "bio": {
-                    "type": "string"
-                },
-                "first_name": {
-                    "type": "string"
-                },
-                "full_name": {
-                    "type": "string"
-                },
                 "id": {
                     "type": "string"
                 },
-                "last_name": {
+                "name": {
                     "type": "string"
                 }
             }
@@ -743,44 +731,39 @@ const docTemplate = `{
         "github_com_ignata_go-microservices-boilerplate_internal_user_dto.UpdateProfileRequest": {
             "type": "object",
             "properties": {
-                "avatar": {
-                    "type": "string"
-                },
-                "bio": {
+                "name": {
                     "type": "string",
-                    "maxLength": 500
+                    "maxLength": 255,
+                    "minLength": 2
                 },
-                "first_name": {
+                "username": {
                     "type": "string",
-                    "maxLength": 100
-                },
-                "last_name": {
-                    "type": "string",
-                    "maxLength": 100
+                    "maxLength": 50,
+                    "minLength": 3
                 }
             }
         },
         "github_com_ignata_go-microservices-boilerplate_internal_user_dto.UserListResponse": {
             "type": "object",
             "properties": {
-                "pagination": {
-                    "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.PaginationMeta"
-                },
-                "users": {
+                "data": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.UserResponse"
                     }
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.PaginationMeta"
                 }
             }
         },
         "github_com_ignata_go-microservices-boilerplate_internal_user_dto.UserResponse": {
             "type": "object",
             "properties": {
-                "created_at": {
+                "createdAt": {
                     "type": "string"
                 },
-                "deleted_at": {
+                "deletedAt": {
                     "type": "string"
                 },
                 "email": {
@@ -789,44 +772,16 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "last_login_at": {
+                "name": {
                     "type": "string"
-                },
-                "profile": {
-                    "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.ProfileResponse"
                 },
                 "role": {
                     "type": "string"
                 },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_ignata_go-microservices-boilerplate_pkg_utils.ErrorBody": {
-            "type": "object",
-            "properties": {
-                "code": {
+                "updatedAt": {
                     "type": "string"
                 },
-                "details": {
-                    "type": "string"
-                },
-                "message": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_ignata_go-microservices-boilerplate_pkg_utils.Meta": {
-            "type": "object",
-            "properties": {
-                "request_id": {
-                    "type": "string"
-                },
-                "timestamp": {
+                "username": {
                     "type": "string"
                 }
             }
@@ -835,12 +790,10 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "data": {},
-                "error": {
-                    "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.ErrorBody"
+                "message": {
+                    "type": "string"
                 },
-                "meta": {
-                    "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Meta"
-                },
+                "meta": {},
                 "success": {
                     "type": "boolean"
                 }

@@ -2,10 +2,13 @@
 package middleware_test
 
 import (
+	"net/http/httptest"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/ignata/go-microservices-boilerplate/internal/common/constants"
 	"github.com/ignata/go-microservices-boilerplate/internal/common/middleware"
 )
 
@@ -69,6 +72,184 @@ func TestPaginationParams_GetOffset(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &middleware.PaginationParams{Page: tt.page, Limit: tt.limit}
 			assert.Equal(t, tt.expected, p.GetOffset())
+		})
+	}
+}
+
+func TestExtractUserID(t *testing.T) {
+	tests := []struct {
+		name     string
+		setupCtx func(c *gin.Context)
+		expectOK bool
+		expectID string
+	}{
+		{
+			name:     "user ID exists",
+			setupCtx: func(c *gin.Context) { c.Set(string(constants.ContextKeyUserID), "user-123") },
+			expectOK: true,
+			expectID: "user-123",
+		},
+		{
+			name:     "user ID not set",
+			setupCtx: func(c *gin.Context) {},
+			expectOK: false,
+			expectID: "",
+		},
+		{
+			name:     "user ID is empty string",
+			setupCtx: func(c *gin.Context) { c.Set(string(constants.ContextKeyUserID), "") },
+			expectOK: false,
+			expectID: "",
+		},
+		{
+			name:     "user ID is wrong type",
+			setupCtx: func(c *gin.Context) { c.Set(string(constants.ContextKeyUserID), 123) },
+			expectOK: false,
+			expectID: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			tt.setupCtx(c)
+
+			id, ok := middleware.ExtractUserID(c)
+			assert.Equal(t, tt.expectOK, ok)
+			assert.Equal(t, tt.expectID, id)
+		})
+	}
+}
+
+func TestExtractUserRole(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupCtx   func(c *gin.Context)
+		expectOK   bool
+		expectRole string
+	}{
+		{
+			name:       "role exists as admin",
+			setupCtx:   func(c *gin.Context) { c.Set(string(constants.ContextKeyUserRole), "ADMIN") },
+			expectOK:   true,
+			expectRole: "ADMIN",
+		},
+		{
+			name:       "role exists as user",
+			setupCtx:   func(c *gin.Context) { c.Set(string(constants.ContextKeyUserRole), "USER") },
+			expectOK:   true,
+			expectRole: "USER",
+		},
+		{
+			name:       "role not set",
+			setupCtx:   func(c *gin.Context) {},
+			expectOK:   false,
+			expectRole: "",
+		},
+		{
+			name:       "role is empty string",
+			setupCtx:   func(c *gin.Context) { c.Set(string(constants.ContextKeyUserRole), "") },
+			expectOK:   false,
+			expectRole: "",
+		},
+		{
+			name:       "role is wrong type",
+			setupCtx:   func(c *gin.Context) { c.Set(string(constants.ContextKeyUserRole), 123) },
+			expectOK:   false,
+			expectRole: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			tt.setupCtx(c)
+
+			role, ok := middleware.ExtractUserRole(c)
+			assert.Equal(t, tt.expectOK, ok)
+			assert.Equal(t, tt.expectRole, role)
+		})
+	}
+}
+
+func TestExtractRequestID(t *testing.T) {
+	tests := []struct {
+		name     string
+		setupCtx func(c *gin.Context)
+		expected string
+	}{
+		{
+			name:     "request ID exists",
+			setupCtx: func(c *gin.Context) { c.Set(string(constants.ContextKeyRequestID), "req-123") },
+			expected: "req-123",
+		},
+		{
+			name:     "request ID not set",
+			setupCtx: func(c *gin.Context) {},
+			expected: "",
+		},
+		{
+			name:     "request ID is empty",
+			setupCtx: func(c *gin.Context) { c.Set(string(constants.ContextKeyRequestID), "") },
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			tt.setupCtx(c)
+
+			requestID := middleware.ExtractRequestID(c)
+			assert.Equal(t, tt.expected, requestID)
+		})
+	}
+}
+
+func TestIsAdmin(t *testing.T) {
+	tests := []struct {
+		name     string
+		setupCtx func(c *gin.Context)
+		expected bool
+	}{
+		{
+			name:     "is admin when role is ADMIN",
+			setupCtx: func(c *gin.Context) { c.Set(string(constants.ContextKeyUserRole), "ADMIN") },
+			expected: true,
+		},
+		{
+			name:     "is not admin when role is USER",
+			setupCtx: func(c *gin.Context) { c.Set(string(constants.ContextKeyUserRole), "USER") },
+			expected: false,
+		},
+		{
+			name:     "is not admin when role not set",
+			setupCtx: func(c *gin.Context) {},
+			expected: false,
+		},
+		{
+			name:     "is not admin when role is empty",
+			setupCtx: func(c *gin.Context) { c.Set(string(constants.ContextKeyUserRole), "") },
+			expected: false,
+		},
+		{
+			name:     "is not admin when role is wrong type",
+			setupCtx: func(c *gin.Context) { c.Set(string(constants.ContextKeyUserRole), 123) },
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			tt.setupCtx(c)
+
+			isAdmin := middleware.IsAdmin(c)
+			assert.Equal(t, tt.expected, isAdmin)
 		})
 	}
 }

@@ -194,8 +194,8 @@ func (r *gormUserRepository) FindAll(ctx context.Context, req *dto.ListUsersRequ
 		search := "%" + req.Search + "%"
 		// Use standard SQL LIKE which is case-insensitive in SQLite but case-sensitive in Postgres
 		// To support both, we use LOWER()
-		query = query.Where("LOWER(email) LIKE LOWER(?) OR EXISTS (SELECT 1 FROM profiles WHERE profiles.user_id = users.id AND (LOWER(first_name) LIKE LOWER(?) OR LOWER(last_name) LIKE LOWER(?)))",
-			search, search, search)
+		query = query.Where("LOWER(email) LIKE LOWER(?) OR EXISTS (SELECT 1 FROM profiles WHERE profiles.user_id = users.id AND LOWER(name) LIKE LOWER(?))",
+			search, search)
 	}
 
 	// Count total

@@ -78,45 +78,36 @@ GET /api/v1/products
 | :------------ | :------ | :----------------------------- |
 | `page`        | int     | Page number (default: 1)       |
 | `limit`       | int     | Items per page (default: 20)   |
-| `search`      | string  | Search by name or SKU           |
-| `category`    | string  | Filter by category              |
-| `min_price`   | float   | Minimum price filter            |
-| `max_price`   | float   | Maximum price filter            |
-| `is_active`   | bool    | Filter active products          |
+| `search`      | string  | Search by name                 |
+| `owner_id`    | string  | Filter by owner                 |
+| `status`      | string  | Filter by status (ACTIVE, INACTIVE) |
 
 **Response:**
 ```json
 {
   "success": true,
-  "data": {
-    "items": [
-      {
-        "id": "uuid",
-        "name": "Product Name",
-        "sku": "SKU-001",
-        "description": "Product description",
-        "price": 99.99,
-        "currency": "USD",
-        "quantity": 100,
-        "category": "electronics",
-        "is_active": true,
-        "variants": [
-          {
-            "id": "uuid",
-            "name": "Size",
-            "value": "Large",
-            "price_adjustment": 10.00
-          }
-        ],
-        "created_at": "2024-01-01T00:00:00Z",
-        "updated_at": "2024-01-01T00:00:00Z"
-      }
-    ],
-    "total": 100,
-    "page": 1,
-    "limit": 20,
-    "total_pages": 5
-  }
+  "data": [
+    {
+      "id": "uuid",
+      "name": "Product Name",
+      "price": {
+        "min": 29.99,
+        "max": 29.99,
+        "display": "$29.99"
+      },
+      "stock": 100,
+      "hasVariant": false,
+      "ownerId": "user-uuid",
+      "createdAt": "2024-01-01T00:00:00Z",
+      "updatedAt": "2024-01-01T00:00:00Z"
+    }
+  ],
+  "total": 500,
+  "page": 1,
+  "limit": 20,
+  "totalPages": 25,
+  "hasNextPage": true,
+  "hasPreviousPage": false
 }
 ```
 
@@ -133,29 +124,20 @@ GET /api/v1/products/:id
   "data": {
     "id": "uuid",
     "name": "Product Name",
-    "sku": "SKU-001",
-    "description": "Product description",
-    "price": 99.99,
-    "currency": "USD",
-    "quantity": 100,
-    "category": "electronics",
-    "is_active": true,
-    "images": [
-      "https://example.com/image1.jpg"
-    ],
+    "price": {
+      "min": 29.99,
+      "max": 29.99,
+      "display": "$29.99"
+    },
+    "stock": 100,
+    "hasVariant": false,
+    "ownerId": "user-uuid",
+    "attributes": [],
     "variants": [],
-    "metadata": {
-      "weight": "1.5kg",
-      "dimensions": "10x20x30cm"
-    }
+    "createdAt": "2024-01-01T00:00:00Z",
+    "updatedAt": "2024-01-01T00:00:00Z"
   }
 }
-```
-
-#### Get Product by SKU
-
-```http
-GET /api/v1/products/sku/:sku
 ```
 
 ### Protected Endpoints
@@ -166,62 +148,16 @@ GET /api/v1/products/sku/:sku
 
 ```http
 POST /api/v1/products
-Authorization: Bearer <access_token>
+Authorization: Bearer <token>
 Content-Type: application/json
 
 {
-  "name": "New Product",
-  "sku": "SKU-002",
-  "description": "Product description",
-  "price": 149.99,
-  "currency": "USD",
-  "quantity": 50,
-  "category": "electronics",
-  "is_active": true,
-  "images": ["https://example.com/image1.jpg"],
-  "variants": [
-    {
-      "name": "Color",
-      "value": "Red",
-      "price_adjustment": 0
-    }
-  ]
+  "name": "Product Name",
+  "price": 29.99,
+  "stock": 100,
+  "ownerId": "user-uuid",
+  "images": "https://example.com/image.jpg"
 }
-```
-
-**Response:** `201 Created`
-
-#### Update Product
-
-```http
-PUT /api/v1/products/:id
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "name": "Updated Product Name",
-  "price": 129.99,
-  "quantity": 75
-}
-```
-
-#### Delete Product (Soft Delete)
-
-```http
-DELETE /api/v1/products/:id
-Authorization: Bearer <access_token>
-```
-
-**Query Parameters:**
-| Parameter | Type    | Description                              |
-| :-------- | :------ | :--------------------------------------- |
-| `force`   | bool    | Hard delete if `true` (default: false)   |
-
-#### Restore Product
-
-```http
-POST /api/v1/products/:id/restore
-Authorization: Bearer <access_token>
 ```
 
 **Response:**
@@ -230,18 +166,146 @@ Authorization: Bearer <access_token>
   "success": true,
   "data": {
     "id": "uuid",
-    "name": "Restored Product",
-    "restored_at": "2024-01-01T00:00:00Z"
+    "name": "Product Name",
+    "price": {
+      "min": 29.99,
+      "max": 29.99,
+      "display": "$29.99"
+    },
+    "stock": 100,
+    "hasVariant": false,
+    "ownerId": "user-uuid",
+    "images": "https://example.com/image.jpg",
+    "createdAt": "2024-01-01T00:00:00Z",
+    "updatedAt": "2024-01-01T00:00:00Z"
   }
 }
 ```
 
-#### Update Inventory
+#### Create Product with Variants
 
 ```http
-PATCH /api/v1/products/:id/inventory
-Authorization: Bearer <access_token>
+POST /api/v1/products
+Authorization: Bearer <token>
 Content-Type: application/json
+
+{
+  "name": "T-Shirt",
+  "price": 29.99,
+  "stock": 100,
+  "ownerId": "user-uuid",
+  "attributes": [
+    {
+      "name": "Color",
+      "values": ["Red", "Blue", "Green"],
+      "displayOrder": 1
+    },
+    {
+      "name": "Size",
+      "values": ["S", "M", "L", "XL"],
+      "displayOrder": 2
+    }
+  ],
+  "variants": [
+    {
+      "name": "T-Shirt - Red - S",
+      "sku": "TSHIRT-RED-S",
+      "price": 29.99,
+      "stockQuantity": 25,
+      "isActive": true,
+      "attributeValues": {
+        "Color": "Red",
+        "Size": "S"
+      }
+    }
+  ]
+}
+```
+
+#### Update Product
+
+```http
+PUT /api/v1/products/:id
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "Updated Product Name",
+  "price": 39.99,
+  "stock": 150
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "name": "Updated Product Name",
+    "price": {
+      "min": 39.99,
+      "max": 39.99,
+      "display": "$39.99"
+    },
+    "stock": 150,
+    "hasVariant": false,
+    "ownerId": "user-uuid",
+    "createdAt": "2024-01-01T00:00:00Z",
+    "updatedAt": "2024-01-02T00:00:00Z"
+  }
+}
+```
+
+#### Update Stock
+
+```http
+PUT /api/v1/products/:id/stock
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "stock": 200
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Stock updated successfully"
+}
+```
+
+#### Delete Product (Soft Delete)
+
+```http
+DELETE /api/v1/products/:id
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Product deleted successfully"
+}
+```
+
+#### Restore Product
+
+```http
+POST /api/v1/products/:id/restore
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Product restored successfully"
+}
+```
 
 {
   "quantity": 150,

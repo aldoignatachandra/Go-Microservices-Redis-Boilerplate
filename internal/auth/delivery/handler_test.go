@@ -487,7 +487,7 @@ func TestRefreshToken_Success(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"refresh_token": "valid-refresh-token",
+		"token": "valid-refresh-token",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
@@ -523,7 +523,7 @@ func TestRefreshToken_InvalidToken(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"refresh_token": "invalid-token",
+		"token": "invalid-token",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
@@ -575,8 +575,8 @@ func TestChangePassword_Success(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"current_password": "OldPass123",
-		"new_password":     "NewPass456",
+		"old_password": "OldPass123",
+		"new_password": "NewPass456",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
@@ -618,8 +618,8 @@ func TestChangePassword_InvalidCurrentPassword(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"current_password": "WrongPass",
-		"new_password":     "NewPass456",
+		"old_password": "OldPass123",
+		"new_password": "NewPass456",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
@@ -656,8 +656,8 @@ func TestChangePassword_Unauthorized(t *testing.T) {
 
 	// Act - no user_id set
 	reqBody := map[string]interface{}{
-		"current_password": "OldPass123",
-		"new_password":     "NewPass456",
+		"old_password": "OldPass123",
+		"new_password": "NewPass456",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
@@ -1059,7 +1059,7 @@ func TestHandleError_SessionExpired(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"refresh_token": "expired-token",
+		"token": "expired-token",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
@@ -1383,8 +1383,8 @@ func TestChangePassword_EmptyNewPassword(t *testing.T) {
 
 	// Act - Gin validation will fail
 	reqBody := map[string]interface{}{
-		"current_password": "OldPass123",
-		"new_password":     "",
+		"old_password": "OldPass123",
+		"new_password": "",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
@@ -1421,8 +1421,8 @@ func TestChangePassword_RepositoryError(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"current_password": "OldPass123",
-		"new_password":     "NewPass456",
+		"old_password": "OldPass123",
+		"new_password": "NewPass456",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
@@ -1694,8 +1694,8 @@ func TestHandleError_PasswordTooShort(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"current_password": "OldPass123",
-		"new_password":     "ValidPass123",
+		"old_password": "OldPass123",
+		"new_password": "ValidPass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
@@ -1728,7 +1728,7 @@ func TestHandleError_SessionRevoked(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"refresh_token": "revoked-token",
+		"token": "revoked-token",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
@@ -1842,7 +1842,7 @@ func TestRefreshToken_EmptyToken(t *testing.T) {
 
 	// Act - empty refresh_token
 	reqBody := map[string]interface{}{
-		"refresh_token": "",
+		"token": "",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
@@ -1879,7 +1879,7 @@ func TestChangePassword_MissingFields(t *testing.T) {
 		{
 			name: "missing new password",
 			requestBody: map[string]interface{}{
-				"current_password": "OldPass123",
+				"old_password": "OldPass123",
 			},
 			expectedStatus: http.StatusBadRequest,
 		},
@@ -2058,8 +2058,8 @@ func TestHandleError_MultipleErrorTypes(t *testing.T) {
 				})
 				router.POST("/auth/change-password", handler.ChangePassword)
 				reqBody := map[string]interface{}{
-					"current_password": "OldPass123",
-					"new_password":     "ValidPass123",
+					"old_password": "OldPass123",
+					"new_password": "ValidPass123",
 				}
 				bodyBytes, _ := json.Marshal(reqBody)
 				req, _ = http.NewRequestWithContext(context.Background(), "POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
@@ -2313,8 +2313,8 @@ func TestChangePassword_SameAsOldPassword(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"current_password": "SamePass123",
-		"new_password":     "SamePass123",
+		"old_password": "SamePass123",
+		"new_password": "SamePass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/change-password", bytes.NewBuffer(bodyBytes))
@@ -2710,7 +2710,7 @@ func TestRefreshToken_Expired(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"refresh_token": "expired-token",
+		"token": "expired-token",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/refresh", bytes.NewBuffer(bodyBytes))
