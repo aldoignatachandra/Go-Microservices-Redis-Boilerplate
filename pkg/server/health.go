@@ -255,7 +255,7 @@ func (h *HealthHandler) Version() string {
 // with database and Redis health checkers.
 func RegisterHealthRoutes(engine *gin.Engine, db interface{}, redis interface{}) {
 	healthHandler := NewHealthHandler(HealthHandlerConfig{
-		ServiceName: "user-service",
+		ServiceName: "service-user",
 		Version:     "1.0.0",
 		DB:          createDBHealthChecker(db),
 		Redis:       createRedisHealthChecker(redis),

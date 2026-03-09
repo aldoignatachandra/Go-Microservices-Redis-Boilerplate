@@ -30,16 +30,20 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.uber.org/zap"
 
-	_ "github.com/ignata/go-microservices-boilerplate/cmd/user-service/docs"
+	_ "github.com/ignata/go-microservices-boilerplate/cmd/service-user/docs"
 	"github.com/ignata/go-microservices-boilerplate/internal/user/delivery"
 	"github.com/ignata/go-microservices-boilerplate/pkg/config"
 	"github.com/ignata/go-microservices-boilerplate/pkg/logger"
 	"github.com/ignata/go-microservices-boilerplate/pkg/metrics"
 	"github.com/ignata/go-microservices-boilerplate/pkg/ratelimit"
 	"github.com/ignata/go-microservices-boilerplate/pkg/server"
+	"github.com/ignata/go-microservices-boilerplate/pkg/utils"
 )
 
 func main() {
+	// Load .env file
+	utils.LoadEnv()
+
 	// Load configuration
 	cfg, err := config.Load("")
 	if err != nil {
@@ -155,9 +159,8 @@ func setupHTTPServer(app *AppServer, cfg *config.Config) {
 	if cfg.RateLimit.Enabled && app.RedisClient != nil {
 		redisLimiter := ratelimit.NewRedisRateLimiter(app.RedisClient, "ratelimit")
 		redisLimiter.SetLimits(map[string]ratelimit.RouteLimit{
-			"/api/v1/users":         {MaxRequests: 120, WindowSeconds: 60},
-			"/api/v1/users/:id":     {MaxRequests: 5, WindowSeconds: 60},
-			"/api/v1/users/profile": {MaxRequests: 5, WindowSeconds: 60},
+			"/api/v1/users":     {MaxRequests: 120, WindowSeconds: 60},
+			"/api/v1/users/:id": {MaxRequests: 5, WindowSeconds: 60},
 		})
 		delivery.RegisterRoutesWithRateLimit(app.Engine, handler, redisLimiter, cfg.RateLimit.Requests, cfg.RateLimit.Duration)
 	} else {

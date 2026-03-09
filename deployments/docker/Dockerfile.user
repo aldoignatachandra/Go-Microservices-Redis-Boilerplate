@@ -18,9 +18,9 @@ COPY . .
 # Build binary
 ARG VERSION
 RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-w -s -X main.Version=${VERSION} -X main.ServiceName=user-service" \
-    -o /app/user-service \
-    ./cmd/user-service
+    -ldflags="-w -s -X main.Version=${VERSION} -X main.ServiceName=service-user" \
+    -o /app/service-user \
+    ./cmd/service-user
 
 # Production image
 FROM alpine:3.19

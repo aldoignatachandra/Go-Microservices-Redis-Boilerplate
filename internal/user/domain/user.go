@@ -43,7 +43,6 @@ type User struct {
 	PasswordHash string     `gorm:"type:text;not null" json:"-"`
 	Role         Role       `gorm:"type:varchar(50);not null;default:'USER'" json:"role"`
 	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
-	Profile      *Profile   `gorm:"foreignKey:UserID" json:"profile,omitempty"`
 }
 
 // IsAdmin checks if user has admin role.
@@ -60,18 +59,6 @@ func (u *User) CanLogin() bool {
 func (u *User) TouchLastLogin() {
 	now := time.Now().UTC()
 	u.LastLoginAt = &now
-}
-
-// Profile represents user profile information (aligned with Bun-Hono).
-type Profile struct {
-	Model
-	UserID string `gorm:"type:uuid;not null;uniqueIndex" json:"user_id"`
-	Name   string `gorm:"type:varchar(255)" json:"name"`
-}
-
-// TableName specifies the table name for Profile.
-func (Profile) TableName() string {
-	return "profiles"
 }
 
 // TableName specifies the table name for User.

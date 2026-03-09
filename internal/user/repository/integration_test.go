@@ -35,7 +35,7 @@ func setupIntegrationDB(t testing.TB) *gorm.DB {
 	require.NoError(t, err)
 
 	// Migrate tables
-	err = db.AutoMigrate(&domain.User{}, &domain.Profile{}, &domain.ActivityLog{})
+	err = db.AutoMigrate(&domain.User{}, &domain.ActivityLog{})
 	require.NoError(t, err)
 
 	sqlDB, err := db.DB()
@@ -65,7 +65,6 @@ func setupIntegrationContext(t testing.TB) (*gorm.DB, usecase.UserUseCase, func(
 	// Cleanup function
 	cleanup := func() {
 		db.Exec("DELETE FROM activity_logs")
-		db.Exec("DELETE FROM profiles")
 		db.Exec("DELETE FROM users")
 	}
 
@@ -166,45 +165,6 @@ func TestUserRepository_Integration(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, domain.RoleAdmin, found.Role)
 	})
-
-	t.Run("Profile Management", func(t *testing.T) {
-		ctx := context.Background()
-
-		// Create user
-		user := &domain.User{
-			Email:        "profile@example.com",
-			Username:     "profileuser",
-			PasswordHash: "hashed_password",
-			Role:         domain.RoleUser,
-		}
-
-		err := repo.Create(ctx, user)
-		require.NoError(t, err)
-
-		// Create profile
-		profile := &domain.Profile{
-			UserID: user.ID,
-			Name:   "John Doe",
-		}
-
-		err = repo.UpdateProfile(ctx, profile)
-		require.NoError(t, err)
-
-		// Get profile
-		found, err := repo.GetProfile(ctx, user.ID)
-		require.NoError(t, err)
-		assert.Equal(t, "John Doe", found.Name)
-
-		// Update profile
-		found.Name = "Jane Smith"
-		err = repo.UpdateProfile(ctx, found)
-		require.NoError(t, err)
-
-		// Verify
-		updated, err := repo.GetProfile(ctx, user.ID)
-		require.NoError(t, err)
-		assert.Equal(t, "Jane Smith", updated.Name)
-	})
 }
 
 // TestActivityRepository_Integration tests the activity repository.
@@ -248,7 +208,7 @@ func TestActivityRepository_Integration(t *testing.T) {
 
 		// Create activity logs
 		activity1 := domain.NewActivityLog("user-2", "login", "auth", "")
-		activity2 := domain.NewActivityLog("user-2", "profile_update", "profile", "")
+		activity2 := domain.NewActivityLog("user-2", "user_updated", "user", "")
 
 		err := repo.Create(ctx, activity1)
 		require.NoError(t, err)
@@ -283,7 +243,7 @@ func TestUserUseCase_Integration(t *testing.T) {
 		// This is a simplified integration test
 		// In a real scenario, you'd test the full flow including:
 		// - Create user
-		// - Update profile
+		// - Update user
 		// - Activate/deactivate
 		// - Soft delete
 		// - Restore

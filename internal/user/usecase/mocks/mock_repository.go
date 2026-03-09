@@ -68,19 +68,6 @@ func (m *MockUserRepository) ExistsByEmail(ctx context.Context, email string) (b
 	return args.Bool(0), args.Error(1)
 }
 
-func (m *MockUserRepository) UpdateProfile(ctx context.Context, profile *domain.Profile) error {
-	args := m.Called(ctx, profile)
-	return args.Error(0)
-}
-
-func (m *MockUserRepository) GetProfile(ctx context.Context, userID string) (*domain.Profile, error) {
-	args := m.Called(ctx, userID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.Profile), args.Error(1)
-}
-
 // MockActivityRepository is a mock implementation of ActivityRepository.
 type MockActivityRepository struct {
 	mock.Mock

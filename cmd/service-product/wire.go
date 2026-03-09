@@ -43,6 +43,8 @@ func InitializeApp(cfg *config.Config) (*App, error) {
 
 // providePostgresDB creates a PostgreSQL connection.
 func providePostgresDB(cfg *config.Config) (*database.PostgresDB, error) {
+	// Database should be created first using: make db-create
+	// This just connects to the existing database
 	return database.NewPostgresConnection(&database.PostgresConfig{
 		Host:            cfg.Database.Host,
 		Port:            cfg.Database.Port,

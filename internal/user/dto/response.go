@@ -19,24 +19,6 @@ type UserResponse struct {
 	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 }
 
-// ProfileResponse represents a user profile in responses (aligned with Bun-Hono).
-type ProfileResponse struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
-// FromProfile creates a ProfileResponse from a domain.Profile.
-func FromProfile(profile *domain.Profile) *ProfileResponse {
-	if profile == nil {
-		return nil
-	}
-
-	return &ProfileResponse{
-		ID:   profile.ID,
-		Name: profile.Name,
-	}
-}
-
 // FromUser creates a UserResponse from a domain.User.
 func FromUser(user *domain.User) *UserResponse {
 	if user == nil {

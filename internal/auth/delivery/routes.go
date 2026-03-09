@@ -91,7 +91,7 @@ func RegisterRoutesWithRateLimit(
 func (h *Handler) PublicHealth(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"status":  "ok",
-		"service": "auth-service",
+		"service": "service-auth",
 	})
 }
 

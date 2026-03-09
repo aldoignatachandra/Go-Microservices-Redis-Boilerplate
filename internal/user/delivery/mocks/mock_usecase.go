@@ -14,19 +14,6 @@ type MockUserUseCase struct {
 	mock.Mock
 }
 
-func (m *MockUserUseCase) UpdateProfile(ctx context.Context, req *dto.UpdateProfileRequest) error {
-	args := m.Called(ctx, req)
-	return args.Error(0)
-}
-
-func (m *MockUserUseCase) GetProfile(ctx context.Context, req *dto.GetUserRequest) (*dto.ProfileResponse, error) {
-	args := m.Called(ctx, req)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*dto.ProfileResponse), args.Error(1)
-}
-
 func (m *MockUserUseCase) GetUser(ctx context.Context, req *dto.GetUserRequest) (*dto.UserResponse, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {

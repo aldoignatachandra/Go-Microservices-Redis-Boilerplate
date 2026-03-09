@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 
 	"github.com/ignata/go-microservices-boilerplate/internal/user/domain"
@@ -17,10 +16,6 @@ import (
 
 // UserUseCase defines the interface for user business logic.
 type UserUseCase interface {
-	// Profile operations
-	UpdateProfile(ctx context.Context, req *dto.UpdateProfileRequest) error
-	GetProfile(ctx context.Context, req *dto.GetUserRequest) (*dto.ProfileResponse, error)
-
 	// User queries
 	GetUser(ctx context.Context, req *dto.GetUserRequest) (*dto.UserResponse, error)
 	ListUsers(ctx context.Context, req *dto.ListUsersRequest) (*dto.UserListResponse, error)
@@ -57,70 +52,6 @@ func NewUserUseCase(
 		eventBus:     eventBus,
 		logger:       log,
 	}
-}
-
-// UpdateProfile updates a user's profile.
-func (uc *userUseCase) UpdateProfile(ctx context.Context, req *dto.UpdateProfileRequest) error {
-	if err := req.Validate(); err != nil {
-		return fmt.Errorf("%w: %v", domain.ErrValidationError, err)
-	}
-
-	// Get existing profile
-	profile, err := uc.userRepo.GetProfile(ctx, req.UserID)
-	if err != nil {
-		return fmt.Errorf("failed to get profile: %w", err)
-	}
-
-	// Create profile if it doesn't exist
-	if profile == nil {
-		profile = &domain.Profile{
-			Model:  domain.Model{ID: uuid.New().String()},
-			UserID: req.UserID,
-		}
-	}
-
-	// Update name field
-	if req.Name != "" {
-		profile.Name = req.Name
-	}
-
-	// Save profile
-	if err := uc.userRepo.UpdateProfile(ctx, profile); err != nil {
-		return fmt.Errorf("failed to update profile: %w", err)
-	}
-
-	// Publish event
-	event := domain.NewProfileUpdatedEvent(req.UserID, profile)
-	if _, err := uc.eventBus.Publish(ctx, eventbus.StreamUserEvents, event); err != nil {
-		uc.logger.Error("failed to publish profile updated event", zap.Error(err))
-	}
-
-	// Log activity
-	activity := domain.NewActivityLog(req.UserID, domain.ActivityProfileUpdated, "profile", req.UserID).
-		WithRequestInfo(req.IPAddress, req.UserAgent)
-	if err := uc.activityRepo.Create(ctx, activity); err != nil {
-		uc.logger.Error("failed to log activity", zap.Error(err))
-	}
-
-	return nil
-}
-
-// GetProfile retrieves a user's profile.
-func (uc *userUseCase) GetProfile(ctx context.Context, req *dto.GetUserRequest) (*dto.ProfileResponse, error) {
-	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %v", domain.ErrValidationError, err)
-	}
-
-	profile, err := uc.userRepo.GetProfile(ctx, req.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get profile: %w", err)
-	}
-
-	if profile == nil {
-		return nil, domain.ErrProfileNotFound
-	}
-
-	return dto.FromProfile(profile), nil
 }
 
 // GetUser retrieves a user by ID.

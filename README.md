@@ -115,7 +115,7 @@ sequenceDiagram
 
   Note over R,U: Async Event Processing (Consumer Group)
   R->>U: XREADGROUP "auth:events"
-  U->>D: Create user profile
+  U->>D: Create user
   U->>R: XACK acknowledge message
 ```
 
@@ -888,7 +888,7 @@ internal/
 | Stream             | Description                          | Producer      | Consumer      |
 | :----------------- | :----------------------------------- | :------------ | :------------ |
 | `auth:events`      | Authentication events                | Auth Service  | User Service  |
-| `users:events`     | User profile events                  | User Service  | All Services  |
+| `users:events`     | User events                  | User Service  | All Services  |
 | `products:events`  | Product catalog events               | Product Service | All Services |
 | `activity:log`     | User activity tracking               | All Services  | Analytics     |
 
@@ -916,7 +916,6 @@ internal/
 | `user.created`      | auth:events     | New user registered            |
 | `user.login`        | auth:events     | User logged in                 |
 | `user.logout`       | auth:events     | User logged out                |
-| `profile.updated`   | users:events    | User profile updated           |
 | `product.created`   | products:events | New product added              |
 | `product.updated`   | products:events | Product details updated        |
 | `stock.updated`     | products:events | Product stock changed          |

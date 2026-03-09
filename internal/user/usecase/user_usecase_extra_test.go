@@ -135,28 +135,6 @@ func TestGetActivityLogs_Error(t *testing.T) {
 	mockActivityRepo.AssertExpectations(t)
 }
 
-func TestUpdateProfile_UpdateError(t *testing.T) {
-	mockUserRepo := new(mocks.MockUserRepository)
-	mockActivityRepo := new(mocks.MockActivityRepository)
-	mockEventBus := new(MockEventPublisher)
-	logger := zap.NewNop()
-	uc := usecase.NewUserUseCase(mockUserRepo, mockActivityRepo, mockEventBus, logger)
-
-	req := &dto.UpdateProfileRequest{
-		UserID: "user-1",
-		Name:   "Jane Smith",
-	}
-
-	mockUserRepo.On("GetProfile", mock.Anything, req.UserID).Return(&domain.Profile{UserID: req.UserID}, nil)
-	mockUserRepo.On("UpdateProfile", mock.Anything, mock.AnythingOfType("*domain.Profile")).Return(errors.New("update error"))
-
-	err := uc.UpdateProfile(context.Background(), req)
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to update profile")
-	mockUserRepo.AssertExpectations(t)
-}
-
 func TestActivateUser_RepoError(t *testing.T) {
 	mockUserRepo := new(mocks.MockUserRepository)
 	mockActivityRepo := new(mocks.MockActivityRepository)
@@ -286,26 +264,6 @@ func TestLogActivity_Error(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to log activity")
-}
-
-func TestUpdateProfile_GetProfileError(t *testing.T) {
-	mockUserRepo := new(mocks.MockUserRepository)
-	mockActivityRepo := new(mocks.MockActivityRepository)
-	mockEventBus := new(MockEventPublisher)
-	logger := zap.NewNop()
-	uc := usecase.NewUserUseCase(mockUserRepo, mockActivityRepo, mockEventBus, logger)
-
-	req := &dto.UpdateProfileRequest{
-		UserID: "user-1",
-		Name:   "Jane Smith",
-	}
-
-	mockUserRepo.On("GetProfile", mock.Anything, req.UserID).Return(nil, errors.New("db error"))
-
-	err := uc.UpdateProfile(context.Background(), req)
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to get profile")
 }
 
 func TestGetUser_RepoError(t *testing.T) {

@@ -53,6 +53,9 @@ func LoadWithEnv(configPath string, env string) (*Config, error) {
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
+	// Bind specific env vars for explicit mapping
+	bindEnvVars(v)
+
 	// Read config file
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {

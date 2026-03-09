@@ -3,9 +3,9 @@ package constants
 
 // Service names for event bus and inter-service communication.
 const (
-	AuthService    = "auth-service"
-	UserService    = "user-service"
-	ProductService = "product-service"
+	AuthService    = "service-auth"
+	UserService    = "service-user"
+	ProductService = "service-product"
 )
 
 // HTTP header keys.

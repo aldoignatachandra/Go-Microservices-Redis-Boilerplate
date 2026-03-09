@@ -183,3 +183,112 @@ func containsSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+// EnsureDatabase creates the database if it doesn't exist.
+// It connects to the default 'postgres' database to check and create the target database.
+func EnsureDatabase(cfg *PostgresConfig) error {
+	// Connect to the 'postgres' maintenance database to check/create target DB
+	maintenanceDSN := fmt.Sprintf(
+		"host=%s port=%d user=%s password=%s dbname=postgres sslmode=%s",
+		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.SSLMode,
+	)
+
+	db, err := gorm.Open(postgres.Open(maintenanceDSN), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to connect to maintenance database: %w", err)
+	}
+
+	// Check if database exists
+	var count int64
+	db.Raw("SELECT COUNT(*) FROM pg_database WHERE datname = ?", cfg.Name).Scan(&count)
+
+	if count == 0 {
+		// Database doesn't exist, create it
+		db.Exec(fmt.Sprintf("CREATE DATABASE %s", cfg.Name))
+		if db.Error != nil {
+			return fmt.Errorf("failed to create database %s: %w", cfg.Name, db.Error)
+		}
+		fmt.Printf("✨ Database '%s' created successfully!\n", cfg.Name)
+	} else {
+		fmt.Printf("ℹ️  Database '%s' already exists. Skipping creation.\n", cfg.Name)
+	}
+
+	// Enable uuid-ossp extension
+	sqlDB, err := db.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get sql.DB: %w", err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		return fmt.Errorf("failed to close sql.DB: %w", err)
+	}
+
+	// Connect to the new database to enable extension
+	newDBDSN := fmt.Sprintf(
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Name, cfg.SSLMode,
+	)
+	newDB, err := gorm.Open(postgres.Open(newDBDSN), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to connect to new database: %w", err)
+	}
+	newDB.Exec("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"")
+	if newDB.Error != nil {
+		fmt.Printf("⚠️  Warning: failed to enable uuid-ossp extension: %v\n", newDB.Error)
+	}
+
+	newSQLDB, err := newDB.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get new sql.DB: %w", err)
+	}
+	if err := newSQLDB.Close(); err != nil {
+		return fmt.Errorf("failed to close new sql.DB: %w", err)
+	}
+
+	return nil
+}
+
+// DropDatabase drops the database if it exists.
+// It connects to the default 'postgres' database to drop the target database.
+func DropDatabase(cfg *PostgresConfig) error {
+	// Connect to the 'postgres' maintenance database to drop target DB
+	maintenanceDSN := fmt.Sprintf(
+		"host=%s port=%d user=%s password=%s dbname=postgres sslmode=%s",
+		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.SSLMode,
+	)
+
+	db, err := gorm.Open(postgres.Open(maintenanceDSN), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to connect to maintenance database: %w", err)
+	}
+
+	// Check if database exists
+	var count int64
+	db.Raw("SELECT COUNT(*) FROM pg_database WHERE datname = ?", cfg.Name).Scan(&count)
+
+	if count > 0 {
+		// Database exists, drop it
+		db.Exec(fmt.Sprintf("DROP DATABASE %s", cfg.Name))
+		if db.Error != nil {
+			return fmt.Errorf("failed to drop database %s: %w", cfg.Name, db.Error)
+		}
+		fmt.Printf("✨ Database '%s' dropped successfully!\n", cfg.Name)
+	} else {
+		fmt.Printf("ℹ️  Database '%s' does not exist. Nothing to drop.\n", cfg.Name)
+	}
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get sql.DB: %w", err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		return fmt.Errorf("failed to close sql.DB: %w", err)
+	}
+
+	return nil
+}

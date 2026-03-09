@@ -1,49 +1,76 @@
 //go:build wireinject
 // +build wireinject
 
-// Package main provides wire dependency injection setup.
+// Package main provides Wire dependency injection setup for the user service.
 package main
 
 import (
+	"context"
+
+	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	"go.uber.org/zap"
 
-	"github.com/ignata/go-microservices-boilerplate/internal/auth/repository"
-	"github.com/ignata/go-microservices-boilerplate/internal/auth/usecase"
+	"github.com/ignata/go-microservices-boilerplate/internal/user/repository"
+	"github.com/ignata/go-microservices-boilerplate/internal/user/usecase"
 	"github.com/ignata/go-microservices-boilerplate/pkg/config"
 	"github.com/ignata/go-microservices-boilerplate/pkg/database"
 	"github.com/ignata/go-microservices-boilerplate/pkg/eventbus"
 	"github.com/ignata/go-microservices-boilerplate/pkg/logger"
+	"github.com/ignata/go-microservices-boilerplate/pkg/server"
 )
 
-// InitializeApp creates a new application with all dependencies.
-func InitializeApp(cfg *config.Config) (*App, error) {
+// AppServer contains all dependencies for the user service.
+type AppServer struct {
+	Engine      *gin.Engine
+	UserUseCase usecase.UserUseCase
+	PostgresDB  *database.PostgresDB
+	RedisClient *database.RedisClient
+	Log         *zap.Logger
+	Config      *config.Config
+}
+
+// Shutdown gracefully shuts down the server.
+func (s *AppServer) Shutdown(ctx context.Context) error {
+	return server.GracefulShutdown(ctx, s.Config, s.Engine, s.Log, s.PostgresDB.DB, s.RedisClient)
+}
+
+// initializeApp initializes the application with all dependencies using Wire.
+//
+//go:generate wire
+func initializeApp(cfg *config.Config) (*AppServer, error) {
 	wire.Build(
-		// Database
+		// Core providers
+		wire.Struct(new(AppServer), "*"),
+		provideLogger,
+		provideGinEngine,
 		providePostgresDB,
 		provideRedisClient,
-
-		// Logger
-		provideLogger,
-
-		// Event Bus
 		provideEventBusProducer,
-
-		// Repositories
 		provideUserRepository,
-		provideSessionRepository,
-
-		// Use Cases
-		provideAuthUseCase,
-
-		// App
-		NewApp,
+		provideActivityRepository,
+		provideUserUseCase,
 	)
-	return nil, nil
+	return &AppServer{}, nil
+}
+
+// provideLogger creates a logger.
+func provideLogger(cfg *config.Config) (*zap.Logger, error) {
+	return logger.New(&logger.Config{
+		Level:  cfg.Logging.Level,
+		Format: cfg.Logging.Format,
+	})
+}
+
+// provideGinEngine creates a Gin engine.
+func provideGinEngine() *gin.Engine {
+	return gin.Default()
 }
 
 // providePostgresDB creates a PostgreSQL connection.
 func providePostgresDB(cfg *config.Config) (*database.PostgresDB, error) {
+	// Database should be created first using: make db-create
+	// This just connects to the existing database
 	return database.NewPostgresConnection(&database.PostgresConfig{
 		Host:            cfg.Database.Host,
 		Port:            cfg.Database.Port,
@@ -68,14 +95,6 @@ func provideRedisClient(cfg *config.Config) (*database.RedisClient, error) {
 	})
 }
 
-// provideLogger creates a logger.
-func provideLogger(cfg *config.Config) (*zap.Logger, error) {
-	return logger.New(&logger.Config{
-		Level:  cfg.Logging.Level,
-		Format: cfg.Logging.Format,
-	})
-}
-
 // provideEventBusProducer creates an event bus producer.
 func provideEventBusProducer(redisClient *database.RedisClient, cfg *config.Config) *eventbus.Producer {
 	return eventbus.NewProducer(redisClient.Client, eventbus.ProducerConfig{
@@ -89,28 +108,22 @@ func provideUserRepository(db *database.PostgresDB) repository.UserRepository {
 	return repository.NewUserRepository(db.DB)
 }
 
-// provideSessionRepository creates a session repository.
-func provideSessionRepository(db *database.PostgresDB) repository.SessionRepository {
-	return repository.NewSessionRepository(db.DB)
+// provideActivityRepository creates an activity repository.
+func provideActivityRepository(db *database.PostgresDB) repository.ActivityRepository {
+	return repository.NewActivityRepository(db.DB)
 }
 
-// provideAuthUseCase creates an auth use case.
-func provideAuthUseCase(
+// provideUserUseCase creates a user use case.
+func provideUserUseCase(
 	userRepo repository.UserRepository,
-	sessionRepo repository.SessionRepository,
+	activityRepo repository.ActivityRepository,
 	producer *eventbus.Producer,
-	cfg *config.Config,
-) usecase.AuthUseCase {
-	return usecase.NewAuthUseCase(
+	log *zap.Logger,
+) usecase.UserUseCase {
+	return usecase.NewUserUseCase(
 		userRepo,
-		sessionRepo,
+		activityRepo,
 		producer,
-		usecase.Config{
-			JWTSecret:        cfg.Auth.JWT.Secret,
-			JWTExpiresIn:     cfg.Auth.JWT.ExpiresIn,
-			RefreshExpiresIn: cfg.Auth.JWT.RefreshExpiresIn,
-			BcryptCost:       cfg.Auth.Bcrypt.Cost,
-			ServiceName:      cfg.App.Name,
-		},
+		log,
 	)
 }

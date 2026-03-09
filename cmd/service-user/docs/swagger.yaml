@@ -51,13 +51,6 @@ definitions:
       totalPages:
         type: integer
     type: object
-  github_com_ignata_go-microservices-boilerplate_internal_user_dto.ProfileResponse:
-    properties:
-      id:
-        type: string
-      name:
-        type: string
-    type: object
   github_com_ignata_go-microservices-boilerplate_internal_user_dto.RestoreResponse:
     properties:
       message:
@@ -66,17 +59,6 @@ definitions:
         type: boolean
       user:
         $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.UserResponse'
-    type: object
-  github_com_ignata_go-microservices-boilerplate_internal_user_dto.UpdateProfileRequest:
-    properties:
-      name:
-        maxLength: 255
-        minLength: 2
-        type: string
-      username:
-        maxLength: 50
-        minLength: 3
-        type: string
     type: object
   github_com_ignata_go-microservices-boilerplate_internal_user_dto.UserListResponse:
     properties:
@@ -138,7 +120,7 @@ info:
     name: API Support
     url: https://github.com/aldoignatachandra/Go-Microservices-Redis-Boilerplate
   description: User service for Go Microservices Redis Pub/Sub Boilerplate. Manages
-    user profiles, activity logs, and consumes auth events from Redis Streams.
+    users, activity logs, and consumes auth events from Redis Streams.
   title: User Service API
   version: "1.0"
 paths:
@@ -380,37 +362,6 @@ paths:
       summary: Deactivate user
       tags:
       - users
-  /api/v1/users/{id}/profile:
-    get:
-      description: Get a user's profile information
-      parameters:
-      - description: User ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.ProfileResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
-      summary: Get user profile
-      tags:
-      - users
   /api/v1/users/{id}/restore:
     post:
       description: Restore a soft-deleted user account
@@ -440,40 +391,6 @@ paths:
           schema:
             $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
       summary: Restore user
-      tags:
-      - users
-  /api/v1/users/profile:
-    put:
-      consumes:
-      - application/json
-      description: Update a user's profile information
-      parameters:
-      - description: Profile update request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.UpdateProfileRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_user_dto.ProfileResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
-      summary: Update user profile
       tags:
       - users
   /health:

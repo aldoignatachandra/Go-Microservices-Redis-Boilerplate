@@ -5,23 +5,6 @@ import (
 	"errors"
 )
 
-// UpdateProfileRequest represents a profile update request (aligned with Bun-Hono).
-type UpdateProfileRequest struct {
-	UserID    string `json:"-" uri:"id"`
-	Name      string `json:"name" binding:"omitempty,min=2,max=255"`
-	Username  string `json:"username" binding:"omitempty,min=3,max=50,alphanum"`
-	IPAddress string `json:"-"`
-	UserAgent string `json:"-"`
-}
-
-// Validate validates the update profile request.
-func (r *UpdateProfileRequest) Validate() error {
-	if r.UserID == "" {
-		return errors.New("user ID is required")
-	}
-	return nil
-}
-
 // GetUserRequest represents a request to get a user.
 type GetUserRequest struct {
 	ID             string `uri:"id" binding:"required,uuid"`

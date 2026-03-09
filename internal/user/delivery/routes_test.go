@@ -57,7 +57,6 @@ func TestRegisterRoutes(t *testing.T) {
 
 	// Check for user-specific routes (note: routes are under /api/v1/users/...)
 	assert.True(t, routePaths["/api/v1/users/:id"], "Get user route should be registered")
-	assert.True(t, routePaths["/api/v1/users/:id/profile"], "Get profile route should be registered")
 	assert.True(t, routePaths["/api/v1/users"], "List users route should be registered")
 
 	// Verify we have routes registered

@@ -49,26 +49,26 @@ func TestNewEvent(t *testing.T) {
 		{
 			name:       "create event with data",
 			eventType:  "user.created",
-			source:     "auth-service",
+			source:     "service-auth",
 			data:       map[string]interface{}{"user_id": "123", "email": "test@example.com"},
 			wantType:   "user.created",
-			wantSource: "auth-service",
+			wantSource: "service-auth",
 		},
 		{
 			name:       "create event with empty data",
 			eventType:  "user.deleted",
-			source:     "auth-service",
+			source:     "service-auth",
 			data:       map[string]interface{}{},
 			wantType:   "user.deleted",
-			wantSource: "auth-service",
+			wantSource: "service-auth",
 		},
 		{
 			name:       "create event with nil data",
 			eventType:  "product.updated",
-			source:     "product-service",
+			source:     "service-product",
 			data:       nil,
 			wantType:   "product.updated",
-			wantSource: "product-service",
+			wantSource: "service-product",
 		},
 	}
 

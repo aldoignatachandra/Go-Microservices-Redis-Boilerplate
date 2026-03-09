@@ -1367,7 +1367,7 @@ func TestPublicHealth(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "ok", response["status"])
-	assert.Equal(t, "product-service", response["service"])
+	assert.Equal(t, "service-product", response["service"])
 }
 
 // TestReadyProbe tests the readiness probe endpoint.
@@ -1886,7 +1886,7 @@ func TestRegisterHealthRoutes(t *testing.T) {
 
 	// Create a mock health handler using the constructor
 	healthHandler := server.NewHealthHandler(server.HealthHandlerConfig{
-		ServiceName: "product-service",
+		ServiceName: "service-product",
 		Version:     "1.0.0",
 	})
 

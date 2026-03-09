@@ -2,7 +2,7 @@
 # Override with environment variables for production
 
 app:
-  name: "user-service"
+  name: "service-user"
   version: "1.0.0"
   env: "local"
 
@@ -35,7 +35,7 @@ streams:
   max_len: 10000
   block_ms: 5000
   batch_size: 10
-  consumer_group: "user-service"
+  consumer_group: "service-user"
   consumer_name: "user-1"
 
 auth:

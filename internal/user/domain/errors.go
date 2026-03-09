@@ -13,9 +13,6 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrEmailAlreadyUsed   = errors.New("email already in use")
 
-	// Profile errors
-	ErrProfileNotFound = errors.New("profile not found")
-
 	// Activity errors
 	ErrActivityNotFound = errors.New("activity not found")
 
@@ -34,7 +31,6 @@ var (
 // IsNotFoundError checks if the error is a not found error.
 func IsNotFoundError(err error) bool {
 	return errors.Is(err, ErrUserNotFound) ||
-		errors.Is(err, ErrProfileNotFound) ||
 		errors.Is(err, ErrActivityNotFound)
 }
 

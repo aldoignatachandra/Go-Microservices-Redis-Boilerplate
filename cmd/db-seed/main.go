@@ -16,6 +16,7 @@ import (
 	authDomain "github.com/ignata/go-microservices-boilerplate/internal/auth/domain"
 	productDomain "github.com/ignata/go-microservices-boilerplate/internal/product/domain"
 	userDomain "github.com/ignata/go-microservices-boilerplate/internal/user/domain"
+	"github.com/ignata/go-microservices-boilerplate/pkg/utils"
 )
 
 const (
@@ -61,10 +62,6 @@ func (s *seeder) seed(ctx context.Context) error {
 		return fmt.Errorf("failed to seed users: %w", err)
 	}
 
-	if err := s.seedUserProfiles(ctx); err != nil {
-		return fmt.Errorf("failed to seed profiles: %w", err)
-	}
-
 	if err := s.seedProducts(ctx); err != nil {
 		return fmt.Errorf("failed to seed products: %w", err)
 	}
@@ -98,6 +95,8 @@ func (s *seeder) seedUsers(ctx context.Context) error {
 	if adminCount == 0 {
 		admin := &authDomain.User{
 			Email:        adminEmail,
+			Username:     "admin",
+			Name:         "Admin",
 			PasswordHash: adminHash,
 			Role:         authDomain.RoleAdmin,
 		}
@@ -121,6 +120,8 @@ func (s *seeder) seedUsers(ctx context.Context) error {
 	if userCount == 0 {
 		user := &authDomain.User{
 			Email:        userEmail,
+			Username:     "testuser",
+			Name:         "Test User",
 			PasswordHash: userHash,
 			Role:         authDomain.RoleUser,
 		}
@@ -137,42 +138,6 @@ func (s *seeder) seedUsers(ctx context.Context) error {
 	if err := s.db.WithContext(ctx).Where("role = ? AND deleted_at IS NULL", userRole).
 		Order("created_at ASC").First(&oldestUser).Error; err == nil {
 		log.Printf("   📋 Oldest USER for product seeder: %s (ID: %s)", oldestUser.Email, oldestUser.ID)
-	}
-
-	return nil
-}
-
-// seedUserProfiles creates user profiles.
-func (s *seeder) seedUserProfiles(ctx context.Context) error {
-	log.Println("")
-
-	// Get user IDs
-	var users []authDomain.User
-	if err := s.db.WithContext(ctx).Find(&users).Error; err != nil {
-		return fmt.Errorf("failed to fetch users: %w", err)
-	}
-
-	for i := range users {
-		u := &users[i]
-		var profileCount int64
-		s.db.WithContext(ctx).Model(&userDomain.Profile{}).Where("user_id = ?", u.ID).Count(&profileCount)
-
-		if profileCount == 0 {
-			profile := &userDomain.Profile{
-				UserID: u.ID,
-				Name:   "Test User",
-			}
-			if u.Role == authDomain.RoleAdmin {
-				profile.Name = "Admin User"
-			}
-
-			if err := s.db.WithContext(ctx).Create(profile).Error; err != nil {
-				return fmt.Errorf("failed to create profile for user %s: %w", u.Email, err)
-			}
-			log.Printf("   ✅ Profile created for: %s", u.Email)
-		} else {
-			log.Printf("   ⚠️  Profile already exists for: %s, skipping...", u.Email)
-		}
 	}
 
 	return nil
@@ -262,6 +227,9 @@ func (s *seeder) seedProducts(ctx context.Context) error {
 }
 
 func main() {
+	// Load .env file
+	utils.LoadEnv()
+
 	ctx := context.Background()
 
 	// Get database connection from environment or use default
@@ -292,8 +260,6 @@ func main() {
 	if err := seeder.db.AutoMigrate(
 		&authDomain.User{},
 		&authDomain.Session{},
-		&userDomain.User{},
-		&userDomain.Profile{},
 		&userDomain.ActivityLog{},
 		&productDomain.Product{},
 	); err != nil {

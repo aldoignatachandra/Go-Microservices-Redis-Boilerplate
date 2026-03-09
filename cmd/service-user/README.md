@@ -1,11 +1,11 @@
 # User Service
 
-The user service handles user profile management, activity logging, and user administration.
+The user service handles user management, activity logging, and user administration.
 
 ## Overview
 
 This service is responsible for:
-- User profile CRUD operations
+- User CRUD operations
 - Activity log tracking and retrieval
 - User activation/deactivation
 - Soft delete and restore functionality
@@ -68,46 +68,6 @@ air -c .air.toml
 ### All endpoints require authentication
 
 > All endpoints require the `Authorization: Bearer <token>` header.
-
-### Profile Endpoints
-
-#### Get User Profile
-
-```http
-GET /api/v1/users/:id/profile
-Authorization: Bearer <token>
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "name": "John Doe"
-  }
-}
-```
-
-#### Update User Profile
-
-```http
-PUT /api/v1/users/profile
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "name": "John Doe"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Profile updated successfully"
-}
-```
 
 ### User Management Endpoints
 
@@ -268,9 +228,9 @@ Authorization: Bearer <token>
     {
       "id": "uuid",
       "userId": "user-uuid",
-      "action": "profile_updated",
-      "entity": "profile",
-      "entityId": "profile-uuid",
+      "action": "user_updated",
+      "entity": "user",
+      "entityId": "user-uuid",
       "details": {
         "field": "name",
         "old_value": "John",
@@ -307,7 +267,7 @@ The user service consumes the following events from Redis Streams:
 
 | Event Type        | Stream         | Action                          |
 | :---------------- | :------------- | :------------------------------ |
-| `user.created`    | `auth:events`  | Create user profile             |
+| `user.created`    | `auth:events`  | Create user                     |
 | `user.logged_in`  | `auth:events`  | Log login activity              |
 | `user.logged_out` | `auth:events`  | Log logout activity             |
 
@@ -315,7 +275,6 @@ The user service consumes the following events from Redis Streams:
 
 | Event Type              | Stream          | Description                    |
 | :---------------------- | :-------------- | :----------------------------- |
-| `profile.updated`       | `user:events`   | User profile was updated       |
 | `user.activated`        | `user:events`   | User account was activated     |
 | `user.deactivated`      | `user:events`   | User account was deactivated   |
 | `user.deleted`          | `user:events`   | User was soft deleted          |
@@ -333,7 +292,6 @@ cmd/user-service/
 internal/user/
 ├── domain/              # Core business entities
 │   ├── user.go          # User entity with soft delete
-│   ├── profile.go       # Profile entity
 │   ├── activity_log.go  # Activity log entity
 │   ├── events.go        # Event type constants
 │   └── errors.go        # Domain-specific errors
@@ -379,14 +337,13 @@ go test ./internal/user/... -v
 go test ./internal/user/... -cover
 
 # Run specific test
-go test ./internal/user/usecase/... -run TestUpdateProfile -v
+go test ./internal/user/usecase/... -run TestActivateUser -v
 ```
 
 ## Activity Log Types
 
 | Action                | Description                              |
 | :-------------------- | :-------------------------------------- |
-| `profile_updated`     | User updated their profile               |
 | `user_activated`      | User account was activated               |
 | `user_deactivated`    | User account was deactivated             |
 | `user_deleted`        | User account was soft deleted            |
@@ -400,7 +357,6 @@ go test ./internal/user/usecase/... -run TestUpdateProfile -v
 | `UNAUTHORIZED`          | 401         | Invalid or expired token       |
 | `FORBIDDEN`             | 403         | Insufficient permissions       |
 | `USER_NOT_FOUND`        | 404         | User does not exist            |
-| `PROFILE_NOT_FOUND`     | 404         | Profile does not exist         |
 | `USER_ALREADY_DELETED`  | 400         | User already soft deleted      |
 | `USER_NOT_DELETED`      | 400         | Cannot restore non-deleted user|
 | `INTERNAL_ERROR`        | 500         | Server error                   |

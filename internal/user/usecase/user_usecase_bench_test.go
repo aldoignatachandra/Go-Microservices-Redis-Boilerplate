@@ -11,31 +11,6 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// BenchmarkUpdateProfile benchmarks the profile update operation.
-func BenchmarkUpdateProfile(b *testing.B) {
-	userRepo := new(mocks.MockUserRepository)
-	activityRepo := new(mocks.MockActivityRepository)
-	eventBus := new(MockEventPublisher)
-
-	userRepo.On("GetProfile", mock.Anything, mock.Anything).Return(getTestProfile(), nil)
-	userRepo.On("UpdateProfile", mock.Anything, mock.Anything).Return(nil)
-	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
-	activityRepo.On("Create", mock.Anything, mock.Anything).Return(nil)
-
-	log, _ := logger.New(&logger.Config{Level: "info", Format: "json"})
-	uc := usecase.NewUserUseCase(userRepo, activityRepo, eventBus, log)
-
-	req := &dto.UpdateProfileRequest{
-		UserID: "test-user-id",
-		Name:   "Jane Smith",
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = uc.UpdateProfile(context.Background(), req)
-	}
-}
-
 // BenchmarkGetUser benchmarks the user retrieval operation.
 func BenchmarkGetUser(b *testing.B) {
 	userRepo := new(mocks.MockUserRepository)

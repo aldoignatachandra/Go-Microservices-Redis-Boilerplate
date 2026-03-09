@@ -31,10 +31,6 @@ type UserRepository interface {
 	FindAll(ctx context.Context, req *dto.ListUsersRequest) (*domain.UserList, error)
 	// ExistsByEmail checks if a user exists by email
 	ExistsByEmail(ctx context.Context, email string) (bool, error)
-	// UpdateProfile updates a user's profile
-	UpdateProfile(ctx context.Context, profile *domain.Profile) error
-	// GetProfile gets a user's profile
-	GetProfile(ctx context.Context, userID string) (*domain.Profile, error)
 }
 
 // gormUserRepository implements UserRepository using GORM.
@@ -118,7 +114,7 @@ func (r *gormUserRepository) FindByID(ctx context.Context, id string, opts *dto.
 		opts = dto.DefaultParanoidOptions()
 	}
 
-	query := r.db.WithContext(ctx).Preload("Profile")
+	query := r.db.WithContext(ctx)
 
 	if opts.ShouldIncludeDeleted() {
 		query = query.Unscoped()
@@ -145,7 +141,7 @@ func (r *gormUserRepository) FindByEmail(ctx context.Context, email string, opts
 		opts = dto.DefaultParanoidOptions()
 	}
 
-	query := r.db.WithContext(ctx).Preload("Profile")
+	query := r.db.WithContext(ctx)
 
 	if opts.ShouldIncludeDeleted() {
 		query = query.Unscoped()
@@ -176,7 +172,7 @@ func (r *gormUserRepository) FindAll(ctx context.Context, req *dto.ListUsersRequ
 	limit := req.GetLimit()
 	opts := req.GetParanoidOptions()
 
-	query := r.db.WithContext(ctx).Model(&domain.User{}).Preload("Profile")
+	query := r.db.WithContext(ctx).Model(&domain.User{})
 
 	// Apply paranoid options
 	if opts.ShouldIncludeDeleted() {
@@ -194,7 +190,7 @@ func (r *gormUserRepository) FindAll(ctx context.Context, req *dto.ListUsersRequ
 		search := "%" + req.Search + "%"
 		// Use standard SQL LIKE which is case-insensitive in SQLite but case-sensitive in Postgres
 		// To support both, we use LOWER()
-		query = query.Where("LOWER(email) LIKE LOWER(?) OR EXISTS (SELECT 1 FROM profiles WHERE profiles.user_id = users.id AND LOWER(name) LIKE LOWER(?))",
+		query = query.Where("LOWER(email) LIKE LOWER(?) OR LOWER(name) LIKE LOWER(?)",
 			search, search)
 	}
 
@@ -240,26 +236,4 @@ func (r *gormUserRepository) ExistsByEmail(ctx context.Context, email string) (b
 	}
 
 	return count > 0, nil
-}
-
-// UpdateProfile updates a user's profile.
-func (r *gormUserRepository) UpdateProfile(ctx context.Context, profile *domain.Profile) error {
-	result := r.db.WithContext(ctx).Save(profile)
-	if result.Error != nil {
-		return fmt.Errorf("failed to update profile: %w", result.Error)
-	}
-	return nil
-}
-
-// GetProfile gets a user's profile.
-func (r *gormUserRepository) GetProfile(ctx context.Context, userID string) (*domain.Profile, error) {
-	var profile domain.Profile
-	result := r.db.WithContext(ctx).Where("user_id = ?", userID).First(&profile)
-	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return nil, nil // Profile doesn't exist yet
-		}
-		return nil, fmt.Errorf("failed to get profile: %w", result.Error)
-	}
-	return &profile, nil
 }

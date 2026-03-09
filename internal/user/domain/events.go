@@ -19,16 +19,12 @@ const (
 	EventUserActivated   = "user.activated"
 	EventUserDeactivated = "user.deactivated"
 
-	// Profile events
-	EventProfileUpdated = "profile.updated"
-
 	// Activity events (published by user service)
 	EventActivityCreated = "activity.created"
 )
 
 // Activity types for logging user actions.
 const (
-	ActivityProfileUpdated  = "profile_updated"
 	ActivityUserActivated   = "user_activated"
 	ActivityUserDeactivated = "user_deactivated"
 	ActivityUserDeleted     = "user_deleted"
@@ -153,17 +149,9 @@ func (e *ActivityEvent) ToActivityLog() *ActivityLog {
 	return log
 }
 
-// NewProfileUpdatedEvent creates a new profile updated event.
-func NewProfileUpdatedEvent(userID string, profile *Profile) *eventbus.Event {
-	return eventbus.NewEvent(EventProfileUpdated, "user-service", map[string]interface{}{
-		"user_id": userID,
-		"name":    profile.Name,
-	})
-}
-
 // NewUserActivatedEvent creates a new user activated event.
 func NewUserActivatedEvent(userID, email string) *eventbus.Event {
-	return eventbus.NewEvent(EventUserActivated, "user-service", map[string]interface{}{
+	return eventbus.NewEvent(EventUserActivated, "service-user", map[string]interface{}{
 		"user_id": userID,
 		"email":   email,
 	})
@@ -171,7 +159,7 @@ func NewUserActivatedEvent(userID, email string) *eventbus.Event {
 
 // NewUserDeactivatedEvent creates a new user deactivated event.
 func NewUserDeactivatedEvent(userID, email string) *eventbus.Event {
-	return eventbus.NewEvent(EventUserDeactivated, "user-service", map[string]interface{}{
+	return eventbus.NewEvent(EventUserDeactivated, "service-user", map[string]interface{}{
 		"user_id": userID,
 		"email":   email,
 	})
@@ -179,14 +167,14 @@ func NewUserDeactivatedEvent(userID, email string) *eventbus.Event {
 
 // NewUserDeletedEvent creates a new user deleted event.
 func NewUserDeletedEvent(userID string) *eventbus.Event {
-	return eventbus.NewEvent(EventUserDeleted, "user-service", map[string]interface{}{
+	return eventbus.NewEvent(EventUserDeleted, "service-user", map[string]interface{}{
 		"user_id": userID,
 	})
 }
 
 // NewUserRestoredEvent creates a new user restored event.
 func NewUserRestoredEvent(userID, email string) *eventbus.Event {
-	return eventbus.NewEvent(EventUserRestored, "user-service", map[string]interface{}{
+	return eventbus.NewEvent(EventUserRestored, "service-user", map[string]interface{}{
 		"user_id": userID,
 		"email":   email,
 	})

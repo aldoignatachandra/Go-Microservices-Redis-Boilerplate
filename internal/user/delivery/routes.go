@@ -36,9 +36,6 @@ func RegisterRoutes(r *gin.Engine, handler *UserHandler) {
 	// Public routes (with auth middleware in actual implementation)
 	users.GET("/:id", handler.GetUser)
 	users.GET("", handler.ListUsers)
-	users.GET("/:id/profile", handler.GetProfile)
-	// Protected routes (require auth)
-	users.PUT("/profile", handler.UpdateProfile)
 	// Admin routes
 	users.POST("/:id/activate", handler.ActivateUser)
 	users.POST("/:id/deactivate", handler.DeactivateUser)
@@ -66,9 +63,6 @@ func RegisterRoutesWithRateLimit(
 	// Public routes
 	users.GET("/:id", handler.GetUser)
 	users.GET("", handler.ListUsers)
-	users.GET("/:id/profile", handler.GetProfile)
-	// Protected routes (require auth)
-	users.PUT("/profile", handler.UpdateProfile)
 	// Admin routes
 	users.POST("/:id/activate", handler.ActivateUser)
 	users.POST("/:id/deactivate", handler.DeactivateUser)

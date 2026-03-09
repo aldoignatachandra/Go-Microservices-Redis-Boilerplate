@@ -31,7 +31,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err, "Failed to open test database")
 
 	// Migrate the schema
-	err = db.AutoMigrate(&domain.User{}, &domain.Profile{})
+	err = db.AutoMigrate(&domain.User{})
 	require.NoError(t, err, "Failed to migrate test database")
 
 	return db
@@ -51,7 +51,6 @@ func cleanupDB(db *gorm.DB) {
 	// Disable foreign key checks for SQLite to allow deletion order independence
 	db.Exec("PRAGMA foreign_keys = OFF")
 	db.Exec("DELETE FROM activity_logs")
-	db.Exec("DELETE FROM profiles")
 	db.Exec("DELETE FROM users")
 	db.Exec("PRAGMA foreign_keys = ON")
 }
@@ -74,23 +73,6 @@ func createTestUser(t *testing.T, db *gorm.DB) *domain.User {
 	err := db.Create(user).Error
 	require.NoError(t, err)
 	return user
-}
-
-// createTestProfile creates a test profile.
-func createTestProfile(t *testing.T, db *gorm.DB, userID string) *domain.Profile {
-	t.Helper()
-	profile := &domain.Profile{
-		Model: domain.Model{
-			ID:        uuid.New().String(),
-			CreatedAt: time.Now().UTC(),
-			UpdatedAt: time.Now().UTC(),
-		},
-		UserID: userID,
-		Name:   "John Doe",
-	}
-	err := db.Create(profile).Error
-	require.NoError(t, err)
-	return profile
 }
 
 // TestCreate tests the Create method.
@@ -118,27 +100,6 @@ func TestCreate(t *testing.T) {
 		err = db.Where("id = ?", user.ID).First(&found).Error
 		require.NoError(t, err)
 		assert.Equal(t, user.Email, found.Email)
-	})
-
-	t.Run("successful create user with profile", func(t *testing.T) {
-		profile := &domain.Profile{
-			UserID: uuid.New().String(),
-			Name:   "Jane Smith",
-		}
-		err := db.Create(profile).Error
-		require.NoError(t, err)
-
-		user := &domain.User{
-			Model:        domain.Model{ID: profile.UserID},
-			Email:        fmt.Sprintf("test_%s@example.com", uuid.New().String()),
-			Username:     fmt.Sprintf("testuser_%s", uuid.New().String()),
-			PasswordHash: "hashedpassword",
-			Role:         domain.RoleUser,
-			Profile:      profile,
-		}
-
-		err = repo.Create(ctx, user)
-		require.NoError(t, err)
 	})
 
 	t.Run("successful create admin user", func(t *testing.T) {
@@ -360,16 +321,6 @@ func TestFindByID(t *testing.T) {
 		assert.Equal(t, domain.RoleAdmin, found.Role)
 	})
 
-	t.Run("successful find user with profile", func(t *testing.T) {
-		user := createTestUser(t, db)
-		profile := createTestProfile(t, db, user.ID)
-
-		found, err := repo.FindByID(ctx, user.ID, dto.DefaultParanoidOptions())
-		require.NoError(t, err)
-		assert.NotNil(t, found.Profile)
-		assert.Equal(t, profile.Name, found.Profile.Name)
-	})
-
 	t.Run("successful find deleted user with include deleted", func(t *testing.T) {
 		user := createTestUser(t, db)
 		err := db.Delete(user).Error
@@ -431,16 +382,6 @@ func TestFindByEmail(t *testing.T) {
 		found, err := repo.FindByEmail(ctx, user.Email, dto.DefaultParanoidOptions())
 		require.NoError(t, err)
 		assert.Equal(t, domain.RoleAdmin, found.Role)
-	})
-
-	t.Run("successful find user with profile", func(t *testing.T) {
-		user := createTestUser(t, db)
-		profile := createTestProfile(t, db, user.ID)
-
-		found, err := repo.FindByEmail(ctx, user.Email, dto.DefaultParanoidOptions())
-		require.NoError(t, err)
-		assert.NotNil(t, found.Profile)
-		assert.Equal(t, profile.Name, found.Profile.Name)
 	})
 
 	t.Run("successful find deleted user with include deleted", func(t *testing.T) {
@@ -619,104 +560,6 @@ func TestExistsByEmail(t *testing.T) {
 	})
 }
 
-// TestUpdateProfile tests the UpdateProfile method.
-func TestUpdateProfile(t *testing.T) {
-	db := setupTestDB(t)
-	defer teardownTestDB(t, db)
-
-	repo := repository.NewUserRepository(db)
-	ctx := context.Background()
-
-	t.Run("successful update existing profile", func(t *testing.T) {
-		user := createTestUser(t, db)
-		profile := createTestProfile(t, db, user.ID)
-
-		profile.Name = "Jane Smith"
-
-		err := repo.UpdateProfile(ctx, profile)
-		require.NoError(t, err)
-
-		var found domain.Profile
-		err = db.Where("user_id = ?", user.ID).First(&found).Error
-		require.NoError(t, err)
-		assert.Equal(t, "Jane Smith", found.Name)
-	})
-
-	t.Run("successful create new profile", func(t *testing.T) {
-		user := createTestUser(t, db)
-
-		profile := &domain.Profile{
-			Model:  domain.Model{ID: uuid.New().String()},
-			UserID: user.ID,
-			Name:   "Alice Johnson",
-		}
-
-		err := repo.UpdateProfile(ctx, profile)
-		require.NoError(t, err)
-
-		var found domain.Profile
-		err = db.Where("user_id = ?", user.ID).First(&found).Error
-		require.NoError(t, err)
-		assert.Equal(t, "Alice Johnson", found.Name)
-	})
-
-	t.Run("successful update profile name", func(t *testing.T) {
-		user := createTestUser(t, db)
-		profile := createTestProfile(t, db, user.ID)
-
-		profile.Name = "Software Engineer"
-
-		err := repo.UpdateProfile(ctx, profile)
-		require.NoError(t, err)
-
-		var found domain.Profile
-		err = db.Where("user_id = ?", user.ID).First(&found).Error
-		require.NoError(t, err)
-		assert.Equal(t, "Software Engineer", found.Name)
-	})
-}
-
-// TestGetProfile tests the GetProfile method.
-func TestGetProfile(t *testing.T) {
-	db := setupTestDB(t)
-	defer teardownTestDB(t, db)
-
-	repo := repository.NewUserRepository(db)
-	ctx := context.Background()
-
-	t.Run("successful get existing profile", func(t *testing.T) {
-		user := createTestUser(t, db)
-		profile := createTestProfile(t, db, user.ID)
-
-		found, err := repo.GetProfile(ctx, user.ID)
-		require.NoError(t, err)
-		require.NotNil(t, found)
-		assert.Equal(t, profile.UserID, found.UserID)
-		assert.Equal(t, profile.Name, found.Name)
-	})
-
-	t.Run("successful get non-existent profile returns nil", func(t *testing.T) {
-		user := createTestUser(t, db)
-
-		profile, err := repo.GetProfile(ctx, user.ID)
-		require.NoError(t, err)
-		assert.Nil(t, profile)
-	})
-
-	t.Run("successful get profile with name", func(t *testing.T) {
-		user := createTestUser(t, db)
-		profile := createTestProfile(t, db, user.ID)
-		profile.Name = "Full stack developer"
-		err := db.Save(profile).Error
-		require.NoError(t, err)
-
-		found, err := repo.GetProfile(ctx, user.ID)
-		require.NoError(t, err)
-		require.NotNil(t, found)
-		assert.Equal(t, "Full stack developer", found.Name)
-	})
-}
-
 // TestUserRepositoryIntegration tests the repository with multiple operations.
 func TestUserRepositoryIntegration(t *testing.T) {
 	db := setupTestDB(t)
@@ -748,18 +591,6 @@ func TestUserRepositoryIntegration(t *testing.T) {
 		updated, err := repo.FindByID(ctx, user.ID, dto.DefaultParanoidOptions())
 		require.NoError(t, err)
 		assert.Equal(t, domain.RoleAdmin, updated.Role)
-
-		// Create and update profile
-		profile := createTestProfile(t, db, user.ID)
-		profile.Name = "Test User"
-		err = repo.UpdateProfile(ctx, profile)
-		require.NoError(t, err)
-
-		// Get profile
-		retrievedProfile, err := repo.GetProfile(ctx, user.ID)
-		require.NoError(t, err)
-		assert.NotNil(t, retrievedProfile)
-		assert.Equal(t, "Test User", retrievedProfile.Name)
 
 		// Delete (soft)
 		err = repo.Delete(ctx, user.ID)
@@ -964,56 +795,6 @@ func TestConcurrentOperations(t *testing.T) {
 		}
 	})
 
-	t.Run("concurrent profile operations", func(t *testing.T) {
-		// SQLite handles concurrency poorly, so we reduce the number of goroutines
-		// and allow for some failures due to locking.
-		// In a real Postgres environment, this would work fine with higher concurrency.
-		user := createTestUser(t, db)
-		profile := createTestProfile(t, db, user.ID)
-
-		const numGoroutines = 5 // Reduced from 10 to minimize locking
-		results := make(chan error, numGoroutines)
-
-		for i := 0; i < numGoroutines; i++ {
-			go func(n int) {
-				// Mix of read and update operations
-				if n%2 == 0 {
-					_, err := repo.GetProfile(ctx, user.ID)
-					results <- err
-				} else {
-					// We need to use a new struct for updates to avoid race conditions on the profile pointer
-					newProfile := &domain.Profile{
-						Model: domain.Model{
-							ID: profile.ID,
-						},
-						UserID: user.ID,
-						Name:   fmt.Sprintf("Updated name %d", n),
-					}
-					err := repo.UpdateProfile(ctx, newProfile)
-					results <- err
-				}
-			}(i)
-		}
-
-		for i := 0; i < numGoroutines; i++ {
-			err := <-results
-			// Ignore SQLite lock errors during concurrent tests
-			if err != nil {
-				// Check for various forms of database locked errors
-				errStr := err.Error()
-				if errStr == "database table is locked" ||
-					errStr == "database table is locked: profiles" ||
-					errStr == "failed to update profile: database table is locked" ||
-					errStr == "failed to update profile: database table is locked: profiles" ||
-					errStr == "failed to get profile: database table is locked" ||
-					errStr == "failed to get profile: database table is locked: profiles" {
-					continue
-				}
-			}
-			assert.NoError(t, err)
-		}
-	})
-
 	t.Run("concurrent find all", func(t *testing.T) {
 		// Create some test data
 		for i := 0; i < 5; i++ {
@@ -1064,50 +845,9 @@ func TestRepositoryErrorPaths(t *testing.T) {
 		assert.Equal(t, user.Email, found.Email)
 	})
 
-	t.Run("UpdateProfile with new profile", func(t *testing.T) {
-		user := createTestUser(t, db)
-
-		// Create a new profile (doesn't exist yet)
-		profile := &domain.Profile{
-			Model:  domain.Model{ID: uuid.New().String()},
-			UserID: user.ID,
-			Name:   "New Profile",
-		}
-
-		err := repo.UpdateProfile(ctx, profile)
-		require.NoError(t, err)
-
-		// Verify it was created
-		found, err := repo.GetProfile(ctx, user.ID)
-		require.NoError(t, err)
-		assert.NotNil(t, found)
-		assert.Equal(t, "New Profile", found.Name)
-	})
-
-	t.Run("GetProfile for user without profile", func(t *testing.T) {
-		user := createTestUser(t, db)
-
-		// Don't create a profile
-		profile, err := repo.GetProfile(ctx, user.ID)
-		require.NoError(t, err)
-		assert.Nil(t, profile) // Should return nil, not error
-	})
-
 	t.Run("FindAll with search query", func(t *testing.T) {
 		// Create users with specific emails
 		user1 := createTestUser(t, db)
-		user2 := createTestUser(t, db)
-
-		// Add profiles with names
-		profile1 := createTestProfile(t, db, user1.ID)
-		profile1.Name = "John Doe"
-		err := db.Save(profile1).Error
-		require.NoError(t, err)
-
-		profile2 := createTestProfile(t, db, user2.ID)
-		profile2.Name = "Jane Smith"
-		err = db.Save(profile2).Error
-		require.NoError(t, err)
 
 		// Search by email
 		result, err := repo.FindAll(ctx, &dto.ListUsersRequest{
@@ -1118,7 +858,11 @@ func TestRepositoryErrorPaths(t *testing.T) {
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, result.Total, int64(1))
 
-		// Search by name
+		// Search by name (using user's Name field)
+		user1.Name = "John Doe"
+		err = db.Save(user1).Error
+		require.NoError(t, err)
+
 		result, err = repo.FindAll(ctx, &dto.ListUsersRequest{
 			Page:   1,
 			Limit:  10,

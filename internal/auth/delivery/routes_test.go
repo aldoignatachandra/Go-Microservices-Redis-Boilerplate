@@ -122,7 +122,7 @@ func TestPublicHealth_Response(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "ok", response["status"])
-	assert.Equal(t, "auth-service", response["service"])
+	assert.Equal(t, "service-auth", response["service"])
 }
 
 // TestReadyProbe_Response tests readiness probe response format.

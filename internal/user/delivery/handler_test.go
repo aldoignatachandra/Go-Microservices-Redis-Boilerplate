@@ -2,7 +2,6 @@
 package delivery_test
 
 import (
-	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -93,89 +92,6 @@ func TestGetUser_NotFound(t *testing.T) {
 	assert.Contains(t, errObj["message"], "not found")
 
 	mockUseCase.AssertExpectations(t)
-}
-
-// TestUpdateProfile_Success tests successful profile update.
-func TestUpdateProfile_Success(t *testing.T) {
-	// Setup mock
-	mockUseCase := new(mocks.MockUserUseCase)
-	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
-
-	mockUseCase.On("UpdateProfile", mock.Anything, mock.AnythingOfType("*dto.UpdateProfileRequest")).
-		Return(nil)
-
-	// Create request body
-	reqBody := map[string]interface{}{
-		"first_name": "John",
-		"last_name":  "Doe",
-		"bio":        "Software Engineer",
-	}
-	bodyBytes, _ := json.Marshal(reqBody)
-
-	// Create request
-	req, _ := http.NewRequest("PUT", "/api/v1/users/profile", bytes.NewBuffer(bodyBytes))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	// Set user_id in context (simulating auth middleware)
-	router.Use(func(c *gin.Context) {
-		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440001")
-		c.Next()
-	})
-
-	// Register route and serve
-	router.PUT("/api/v1/users/profile", handler.UpdateProfile)
-	router.ServeHTTP(w, req)
-
-	// Assert
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var response map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	require.NoError(t, err)
-
-	assert.True(t, response["success"].(bool))
-	data := response["data"].(map[string]interface{})
-	assert.Equal(t, "Profile updated successfully", data["message"])
-
-	mockUseCase.AssertExpectations(t)
-}
-
-// TestUpdateProfile_ValidationError tests profile update validation error.
-func TestUpdateProfile_ValidationError(t *testing.T) {
-	// Setup mock
-	mockUseCase := new(mocks.MockUserUseCase)
-	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
-
-	// Create request body with invalid JSON
-	reqBody := `{"first_name": "invalid,`
-	bodyBytes := []byte(reqBody)
-
-	// Create request
-	req, _ := http.NewRequest("PUT", "/api/v1/users/profile", bytes.NewBuffer(bodyBytes))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	// Set user_id in context
-	router.Use(func(c *gin.Context) {
-		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440001")
-		c.Next()
-	})
-
-	// Register route and serve
-	router.PUT("/api/v1/users/profile", handler.UpdateProfile)
-	router.ServeHTTP(w, req)
-
-	// Assert
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-
-	var response map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	require.NoError(t, err)
-
-	assert.False(t, response["success"].(bool))
 }
 
 // TestListUsers_Success tests successful user list retrieval.

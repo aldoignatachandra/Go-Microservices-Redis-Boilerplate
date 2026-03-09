@@ -30,7 +30,7 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.uber.org/zap"
 
-	_ "github.com/ignata/go-microservices-boilerplate/cmd/auth-service/docs"
+	_ "github.com/ignata/go-microservices-boilerplate/cmd/service-auth/docs"
 	"github.com/ignata/go-microservices-boilerplate/internal/auth/delivery"
 	"github.com/ignata/go-microservices-boilerplate/internal/auth/usecase"
 	"github.com/ignata/go-microservices-boilerplate/pkg/config"
@@ -40,6 +40,7 @@ import (
 	"github.com/ignata/go-microservices-boilerplate/pkg/metrics"
 	"github.com/ignata/go-microservices-boilerplate/pkg/ratelimit"
 	"github.com/ignata/go-microservices-boilerplate/pkg/server"
+	"github.com/ignata/go-microservices-boilerplate/pkg/utils"
 )
 
 // App holds all application dependencies.
@@ -73,6 +74,9 @@ func NewApp(
 }
 
 func main() {
+	// Load .env file
+	utils.LoadEnv()
+
 	// Load configuration
 	cfg, err := config.Load("")
 	if err != nil {

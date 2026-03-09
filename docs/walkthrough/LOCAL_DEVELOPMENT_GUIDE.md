@@ -427,8 +427,6 @@ curl http://localhost:3101/health
 | :----- | :----------------------------- | :------------------- |
 | GET    | `/api/v1/users`                | List all users       |
 | GET    | `/api/v1/users/:id`            | Get user by ID       |
-| GET    | `/api/v1/users/:id/profile`    | Get user profile     |
-| PUT    | `/api/v1/users/profile`        | Update profile       |
 | POST   | `/api/v1/users/:id/activate`   | Activate user        |
 | POST   | `/api/v1/users/:id/deactivate` | Deactivate user      |
 | DELETE | `/api/v1/users/:id`            | Delete user          |

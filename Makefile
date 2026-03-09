@@ -10,7 +10,7 @@
 
 GO := go
 BINARY_DIR := bin
-SERVICES := auth-service user-service product-service
+SERVICES := service-auth service-user service-product
 DOCKER_SERVICES := auth user product
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -35,7 +35,7 @@ build: ## Build all services
 	done
 	@echo "✅ Build complete!"
 
-build-%: ## Build a specific service (e.g., make build-auth-service)
+build-%: ## Build a specific service (e.g., make build-service-auth)
 	@echo "Building $*..."
 	@mkdir -p $(BINARY_DIR)
 	$(GO) build $(LDFLAGS) -o $(BINARY_DIR)/$* ./cmd/$*
@@ -55,9 +55,9 @@ build-prod: ## Build for production (optimized)
 # ═══════════════════════════════════════════════════════════════════════════
 
 run: ## Run auth service (default)
-	$(GO) run ./cmd/auth-service
+	$(GO) run ./cmd/service-auth
 
-run-%: ## Run a specific service (e.g., make run-user-service)
+run-%: ## Run a specific service (e.g., make run-service-user)
 	$(GO) run ./cmd/$*
 
 dev: ## Run with hot reload (requires air)
@@ -79,9 +79,9 @@ wire: ## Generate Wire dependency injection
 
 swagger: ## Generate Swagger documentation
 	@which swag > /dev/null || (echo "Installing swag..." && $(GO) install github.com/swaggo/swag/cmd/swag@latest)
-	swag init -g cmd/auth-service/main.go -o cmd/auth-service/docs --parseDependency --parseInternal --exclude "internal/user,internal/product"
-	swag init -g cmd/user-service/main.go -o cmd/user-service/docs --parseDependency --parseInternal --exclude "internal/auth,internal/product"
-	swag init -g cmd/product-service/main.go -o cmd/product-service/docs --parseDependency --parseInternal --exclude "internal/auth,internal/user"
+	swag init -g cmd/service-auth/main.go -o cmd/service-auth/docs --parseDependency --parseInternal --exclude "internal/user,internal/product"
+	swag init -g cmd/service-user/main.go -o cmd/service-user/docs --parseDependency --parseInternal --exclude "internal/auth,internal/product"
+	swag init -g cmd/service-product/main.go -o cmd/service-product/docs --parseDependency --parseInternal --exclude "internal/auth,internal/user"
 	@echo "✅ Swagger documentation generated!"
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -210,32 +210,30 @@ docker-push: ## Push Docker images to registry
 # DATABASE
 # ═══════════════════════════════════════════════════════════════════════════
 
-db-init: ## Initialize databases using init script
-	psql -U postgres -f scripts/init-db.sql
+db-create: ## Create database (if not exists)
+	$(GO) run ./cmd/db-create
 
-db-drop: ## Drop all databases
-	psql -U postgres -c "DROP DATABASE IF EXISTS auth_db;"
-	psql -U postgres -c "DROP DATABASE IF EXISTS user_db;"
-	psql -U postgres -c "DROP DATABASE IF EXISTS product_db;"
+db-drop: ## Drop database
+	$(GO) run ./cmd/db-drop
+	@sleep 1
 
-db-reset: db-drop db-init ## Reset all databases
+db-reset: ## Reset database (drop and create)
+	$(MAKE) db-drop
+	sleep 2
+	$(MAKE) db-create
 
-# Run database migrations up
-migrate-up:
-	$(GO) run ./cmd/migrate up
+# Run database migrations (AutoMigrate)
+db-migrate: ## Run migrations (AutoMigrate)
+	$(GO) run ./cmd/db-migrate
 
-# Run database migrations down
-migrate-down:
-	$(GO) run ./cmd/migrate down
-
-# Create a new migration
-migrate-create:
-	@read -p "Enter migration name: " name; \
-		migrate create -ext sql -dir migrations -seq $$name
+# Full setup: create DB + run migrations
+db-setup: ## Full setup: create DB + run migrations
+	$(MAKE) db-create
+	$(MAKE) db-migrate
 
 # Seed database
-seed:
-	$(GO) run ./cmd/seed
+db-seed: ## Seed database with sample data
+	$(GO) run ./cmd/db-seed
 
 # ═══════════════════════════════════════════════════════════════════════════
 # KUBERNETES (Future Development)
@@ -296,7 +294,7 @@ help: ## Show this help message
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Pattern Targets:"
-	@echo "  build-<service>   - Build a specific service (auth-service, user-service, product-service)"
+	@echo "  build-<service>   - Build a specific service (service-auth, service-user, service-product)"
 	@echo "  run-<service>     - Run a specific service"
 	@echo "  test-<package>    - Run tests for a specific package"
 	@echo ""

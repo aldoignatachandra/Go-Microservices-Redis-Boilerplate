@@ -18,9 +18,9 @@ COPY . .
 # Build binary
 ARG VERSION
 RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-w -s -X main.Version=${VERSION} -X main.ServiceName=auth-service" \
-    -o /app/auth-service \
-    ./cmd/auth-service
+    -ldflags="-w -s -X main.Version=${VERSION} -X main.ServiceName=service-auth" \
+    -o /app/service-auth \
+    ./cmd/service-auth
 
 # Production image
 FROM alpine:3.19
