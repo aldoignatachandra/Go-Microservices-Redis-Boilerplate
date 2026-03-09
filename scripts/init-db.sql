@@ -1,17 +1,9 @@
--- Initialize databases for microservices
--- This script creates 3 separate databases (one per service)
+-- Initialize single shared database for microservices
+-- This script is run when the PostgreSQL container starts
 
--- Create databases (one per service)
-CREATE DATABASE auth_db;
-CREATE DATABASE user_db;
-CREATE DATABASE product_db;
+-- Create single shared database
+CREATE DATABASE microservices_db;
 
--- Enable UUID extension in each database
-\c auth_db;
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
-\c user_db;
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
-\c product_db;
+-- Enable UUID extension
+\c microservices_db;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
