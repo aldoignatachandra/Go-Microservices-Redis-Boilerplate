@@ -376,20 +376,20 @@ curl http://localhost:3100/health
 
 | Method | Endpoint                   | Auth Required | Description                 |
 | :----- | :------------------------- | :------------ | :-------------------------- |
-| POST   | `/auth/register`           | No            | Register a new user         |
-| POST   | `/auth/login`              | No            | Login and get JWT token     |
-| POST   | `/auth/refresh`            | No            | Refresh JWT token           |
-| POST   | `/auth/logout`             | ✅ JWT        | Logout (invalidate session) |
-| GET    | `/auth/me`                 | ✅ JWT        | Get current user info       |
-| POST   | `/auth/change-password`    | ✅ JWT        | Change password             |
-| GET    | `/admin/users`             | ✅ Admin      | List all users              |
-| GET    | `/admin/users/:id`         | ✅ Admin      | Get user by ID              |
-| DELETE | `/admin/users/:id`         | ✅ Admin      | Delete user                 |
-| POST   | `/admin/users/:id/restore` | ✅ Admin      | Restore deleted user        |
-| GET    | `/health`                  | No            | Health check                |
-| GET    | `/ready`                   | No            | Readiness probe             |
-| GET    | `/live`                    | No            | Liveness probe              |
-| GET    | `/metrics`                 | No            | Prometheus metrics          |
+| POST   | `/auth/register`           | No            | Register new user           |
+| POST   | `/auth/login`             | No            | Login and get JWT token     |
+| POST   | `/auth/refresh`           | No            | Refresh JWT token          |
+| POST   | `/auth/logout`            | ✅ JWT        | Logout (invalidate session)|
+| GET    | `/auth/me`                | ✅ JWT        | Get current user info      |
+| POST   | `/auth/change-password`  | ✅ JWT        | Change password           |
+| GET    | `/admin/users`            | ✅ Admin      | List all users            |
+| GET    | `/admin/users/:id`        | ✅ Admin      | Get user by ID            |
+| DELETE | `/admin/users/:id`        | ✅ Admin      | Delete user               |
+| POST   | `/admin/users/:id/restore`| ✅ Admin      | Restore deleted user      |
+| GET    | `/health`                 | No            | Health check              |
+| GET    | `/ready`                  | No            | Readiness probe           |
+| GET    | `/live`                   | No            | Liveness probe            |
+| GET    | `/metrics`                | No            | Prometheus metrics        |
 
 ---
 
@@ -485,6 +485,7 @@ curl -X POST http://localhost:3100/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "email": "john@example.com",
+    "username": "johndoe",
     "password": "MyP@ssw0rd123",
     "name": "John Doe"
   }'
@@ -496,10 +497,17 @@ curl -X POST http://localhost:3100/auth/register \
 {
   "success": true,
   "data": {
-    "id": "uuid-here",
-    "email": "john@example.com",
-    "name": "John Doe",
-    "created_at": "2026-03-05T..."
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "expires_in": 900,
+    "user": {
+      "id": "uuid-here",
+      "email": "john@example.com",
+      "username": "johndoe",
+      "name": "John Doe",
+      "role": "USER",
+      "createdAt": "2026-03-09T12:00:00Z",
+      "updatedAt": "2026-03-09T12:00:00Z"
+    }
   }
 }
 ```
@@ -521,14 +529,21 @@ curl -X POST http://localhost:3100/auth/login \
 {
   "success": true,
   "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_in": 86400
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "expires_in": 900,
+    "user": {
+      "id": "uuid-here",
+      "email": "john@example.com",
+      "username": "johndoe",
+      "name": "John Doe",
+      "createdAt": "2026-03-09T12:00:00Z",
+      "updatedAt": "2026-03-09T12:00:00Z"
+    }
   }
 }
 ```
 
-> **📋 Save the `access_token`** — you'll need it for authenticated requests.
+> **📋 Save the `token`** — you'll need it for authenticated requests.
 
 ### 8c. Get Current User (Auth Service — Authenticated)
 
@@ -543,14 +558,16 @@ curl http://localhost:3100/auth/me \
 ```bash
 curl -X POST http://localhost:3102/products \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <TOKEN>" \
   -d '{
     "name": "MacBook Pro M4",
-    "description": "Latest Apple laptop with M4 chip",
     "price": 2499.99,
     "stock": 100,
-    "category_id": "electronics"
+    "ownerId": "<USER_ID>"
   }'
 ```
+
+> **Note:** You'll need to get the `ownerId` from the `/auth/me` endpoint response.
 
 ### 8e. List Products (Product Service)
 
