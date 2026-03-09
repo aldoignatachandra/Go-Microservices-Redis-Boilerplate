@@ -85,9 +85,8 @@ func createTestProfile(t *testing.T, db *gorm.DB, userID string) *domain.Profile
 			CreatedAt: time.Now().UTC(),
 			UpdatedAt: time.Now().UTC(),
 		},
-		UserID:    userID,
-		FirstName: "John",
-		LastName:  "Doe",
+		UserID: userID,
+		Name:   "John Doe",
 	}
 	err := db.Create(profile).Error
 	require.NoError(t, err)
@@ -123,9 +122,8 @@ func TestCreate(t *testing.T) {
 
 	t.Run("successful create user with profile", func(t *testing.T) {
 		profile := &domain.Profile{
-			UserID:    uuid.New().String(),
-			FirstName: "Jane",
-			LastName:  "Smith",
+			UserID: uuid.New().String(),
+			Name:   "Jane Smith",
 		}
 		err := db.Create(profile).Error
 		require.NoError(t, err)
@@ -369,7 +367,7 @@ func TestFindByID(t *testing.T) {
 		found, err := repo.FindByID(ctx, user.ID, dto.DefaultParanoidOptions())
 		require.NoError(t, err)
 		assert.NotNil(t, found.Profile)
-		assert.Equal(t, profile.FirstName, found.Profile.FirstName)
+		assert.Equal(t, profile.Name, found.Profile.Name)
 	})
 
 	t.Run("successful find deleted user with include deleted", func(t *testing.T) {
@@ -442,7 +440,7 @@ func TestFindByEmail(t *testing.T) {
 		found, err := repo.FindByEmail(ctx, user.Email, dto.DefaultParanoidOptions())
 		require.NoError(t, err)
 		assert.NotNil(t, found.Profile)
-		assert.Equal(t, profile.FirstName, found.Profile.FirstName)
+		assert.Equal(t, profile.Name, found.Profile.Name)
 	})
 
 	t.Run("successful find deleted user with include deleted", func(t *testing.T) {
@@ -633,8 +631,7 @@ func TestUpdateProfile(t *testing.T) {
 		user := createTestUser(t, db)
 		profile := createTestProfile(t, db, user.ID)
 
-		profile.FirstName = "Jane"
-		profile.LastName = "Smith"
+		profile.Name = "Jane Smith"
 
 		err := repo.UpdateProfile(ctx, profile)
 		require.NoError(t, err)
@@ -642,18 +639,16 @@ func TestUpdateProfile(t *testing.T) {
 		var found domain.Profile
 		err = db.Where("user_id = ?", user.ID).First(&found).Error
 		require.NoError(t, err)
-		assert.Equal(t, "Jane", found.FirstName)
-		assert.Equal(t, "Smith", found.LastName)
+		assert.Equal(t, "Jane Smith", found.Name)
 	})
 
 	t.Run("successful create new profile", func(t *testing.T) {
 		user := createTestUser(t, db)
 
 		profile := &domain.Profile{
-			Model:     domain.Model{ID: uuid.New().String()},
-			UserID:    user.ID,
-			FirstName: "Alice",
-			LastName:  "Johnson",
+			Model:  domain.Model{ID: uuid.New().String()},
+			UserID: user.ID,
+			Name:   "Alice Johnson",
 		}
 
 		err := repo.UpdateProfile(ctx, profile)
@@ -662,14 +657,14 @@ func TestUpdateProfile(t *testing.T) {
 		var found domain.Profile
 		err = db.Where("user_id = ?", user.ID).First(&found).Error
 		require.NoError(t, err)
-		assert.Equal(t, "Alice", found.FirstName)
+		assert.Equal(t, "Alice Johnson", found.Name)
 	})
 
-	t.Run("successful update profile with bio", func(t *testing.T) {
+	t.Run("successful update profile name", func(t *testing.T) {
 		user := createTestUser(t, db)
 		profile := createTestProfile(t, db, user.ID)
 
-		profile.Bio = "Software Engineer"
+		profile.Name = "Software Engineer"
 
 		err := repo.UpdateProfile(ctx, profile)
 		require.NoError(t, err)
@@ -677,22 +672,7 @@ func TestUpdateProfile(t *testing.T) {
 		var found domain.Profile
 		err = db.Where("user_id = ?", user.ID).First(&found).Error
 		require.NoError(t, err)
-		assert.Equal(t, "Software Engineer", found.Bio)
-	})
-
-	t.Run("successful update profile with avatar", func(t *testing.T) {
-		user := createTestUser(t, db)
-		profile := createTestProfile(t, db, user.ID)
-
-		profile.Avatar = "https://example.com/avatar.jpg"
-
-		err := repo.UpdateProfile(ctx, profile)
-		require.NoError(t, err)
-
-		var found domain.Profile
-		err = db.Where("user_id = ?", user.ID).First(&found).Error
-		require.NoError(t, err)
-		assert.Equal(t, "https://example.com/avatar.jpg", found.Avatar)
+		assert.Equal(t, "Software Engineer", found.Name)
 	})
 }
 
@@ -712,8 +692,7 @@ func TestGetProfile(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, found)
 		assert.Equal(t, profile.UserID, found.UserID)
-		assert.Equal(t, profile.FirstName, found.FirstName)
-		assert.Equal(t, profile.LastName, found.LastName)
+		assert.Equal(t, profile.Name, found.Name)
 	})
 
 	t.Run("successful get non-existent profile returns nil", func(t *testing.T) {
@@ -724,19 +703,17 @@ func TestGetProfile(t *testing.T) {
 		assert.Nil(t, profile)
 	})
 
-	t.Run("successful get profile with all fields", func(t *testing.T) {
+	t.Run("successful get profile with name", func(t *testing.T) {
 		user := createTestUser(t, db)
 		profile := createTestProfile(t, db, user.ID)
-		profile.Bio = "Full stack developer"
-		profile.Avatar = "https://example.com/jane.jpg"
+		profile.Name = "Full stack developer"
 		err := db.Save(profile).Error
 		require.NoError(t, err)
 
 		found, err := repo.GetProfile(ctx, user.ID)
 		require.NoError(t, err)
 		require.NotNil(t, found)
-		assert.Equal(t, "Full stack developer", found.Bio)
-		assert.Equal(t, "https://example.com/jane.jpg", found.Avatar)
+		assert.Equal(t, "Full stack developer", found.Name)
 	})
 }
 
@@ -774,8 +751,7 @@ func TestUserRepositoryIntegration(t *testing.T) {
 
 		// Create and update profile
 		profile := createTestProfile(t, db, user.ID)
-		profile.FirstName = "Test"
-		profile.LastName = "User"
+		profile.Name = "Test User"
 		err = repo.UpdateProfile(ctx, profile)
 		require.NoError(t, err)
 
@@ -783,7 +759,7 @@ func TestUserRepositoryIntegration(t *testing.T) {
 		retrievedProfile, err := repo.GetProfile(ctx, user.ID)
 		require.NoError(t, err)
 		assert.NotNil(t, retrievedProfile)
-		assert.Equal(t, "Test", retrievedProfile.FirstName)
+		assert.Equal(t, "Test User", retrievedProfile.Name)
 
 		// Delete (soft)
 		err = repo.Delete(ctx, user.ID)
@@ -1011,7 +987,7 @@ func TestConcurrentOperations(t *testing.T) {
 							ID: profile.ID,
 						},
 						UserID: user.ID,
-						Bio:    fmt.Sprintf("Updated bio %d", n),
+						Name:   fmt.Sprintf("Updated name %d", n),
 					}
 					err := repo.UpdateProfile(ctx, newProfile)
 					results <- err
@@ -1093,10 +1069,9 @@ func TestRepositoryErrorPaths(t *testing.T) {
 
 		// Create a new profile (doesn't exist yet)
 		profile := &domain.Profile{
-			Model:     domain.Model{ID: uuid.New().String()},
-			UserID:    user.ID,
-			FirstName: "New",
-			LastName:  "Profile",
+			Model:  domain.Model{ID: uuid.New().String()},
+			UserID: user.ID,
+			Name:   "New Profile",
 		}
 
 		err := repo.UpdateProfile(ctx, profile)
@@ -1106,7 +1081,7 @@ func TestRepositoryErrorPaths(t *testing.T) {
 		found, err := repo.GetProfile(ctx, user.ID)
 		require.NoError(t, err)
 		assert.NotNil(t, found)
-		assert.Equal(t, "New", found.FirstName)
+		assert.Equal(t, "New Profile", found.Name)
 	})
 
 	t.Run("GetProfile for user without profile", func(t *testing.T) {
@@ -1125,14 +1100,12 @@ func TestRepositoryErrorPaths(t *testing.T) {
 
 		// Add profiles with names
 		profile1 := createTestProfile(t, db, user1.ID)
-		profile1.FirstName = "John"
-		profile1.LastName = "Doe"
+		profile1.Name = "John Doe"
 		err := db.Save(profile1).Error
 		require.NoError(t, err)
 
 		profile2 := createTestProfile(t, db, user2.ID)
-		profile2.FirstName = "Jane"
-		profile2.LastName = "Smith"
+		profile2.Name = "Jane Smith"
 		err = db.Save(profile2).Error
 		require.NoError(t, err)
 
