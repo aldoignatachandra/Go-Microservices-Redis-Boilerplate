@@ -5,15 +5,12 @@ import (
 	"errors"
 )
 
-// UpdateProfileRequest represents a profile update request.
+// UpdateProfileRequest represents a profile update request (aligned with Bun-Hono).
 type UpdateProfileRequest struct {
-	UserID    string  `json:"-" uri:"id"` // From URL path
-	FirstName *string `json:"first_name" binding:"omitempty,max=100"`
-	LastName  *string `json:"last_name" binding:"omitempty,max=100"`
-	Avatar    *string `json:"avatar" binding:"omitempty,url"`
-	Bio       *string `json:"bio" binding:"omitempty,max=500"`
-	IPAddress string  `json:"-"`
-	UserAgent string  `json:"-"`
+	UserID    string `json:"-" uri:"id"`
+	Name      string `json:"name" binding:"omitempty,min=2,max=255"`
+	IPAddress string `json:"-"`
+	UserAgent string `json:"-"`
 }
 
 // Validate validates the update profile request.

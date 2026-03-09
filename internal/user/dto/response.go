@@ -9,38 +9,20 @@ import (
 
 // UserResponse represents a user in responses (aligned with Bun-Hono).
 type UserResponse struct {
-	ID       string `json:"id"`
-	Email    string `json:"email"`
-	Username string `json:"username"`
-	Name     string `json:"name"`
-	Role     string `json:"role"`
+	ID        string     `json:"id"`
+	Email     string     `json:"email"`
+	Username  string     `json:"username"`
+	Name      string     `json:"name"`
+	Role      string     `json:"role"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
+	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 }
 
-// ProfileResponse represents a user profile in responses.
+// ProfileResponse represents a user profile in responses (aligned with Bun-Hono).
 type ProfileResponse struct {
-	ID        string `json:"id"`
-	FirstName string `json:"firstName,omitempty"`
-	LastName  string `json:"lastName,omitempty"`
-	FullName  string `json:"fullName,omitempty"`
-	Avatar    string `json:"avatar,omitempty"`
-	Bio       string `json:"bio,omitempty"`
-}
-
-// FromUser creates a UserResponse from a domain.User.
-func FromUser(user *domain.User) *UserResponse {
-	if user == nil {
-		return nil
-	}
-
-	resp := &UserResponse{
-		ID:       user.ID,
-		Email:    user.Email,
-		Username: user.Username,
-		Name:     user.Name,
-		Role:     string(user.Role),
-	}
-
-	return resp
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // FromProfile creates a ProfileResponse from a domain.Profile.
@@ -50,12 +32,31 @@ func FromProfile(profile *domain.Profile) *ProfileResponse {
 	}
 
 	return &ProfileResponse{
-		ID:        profile.ID,
-		FirstName: profile.FirstName,
-		LastName:  profile.LastName,
-		FullName:  profile.FullName(),
-		Avatar:    profile.Avatar,
-		Bio:       profile.Bio,
+		ID:   profile.ID,
+		Name: profile.Name,
+	}
+}
+
+// FromUser creates a UserResponse from a domain.User.
+func FromUser(user *domain.User) *UserResponse {
+	if user == nil {
+		return nil
+	}
+
+	var deletedAt *time.Time
+	if user.DeletedAt.Valid {
+		deletedAt = &user.DeletedAt.Time
+	}
+
+	return &UserResponse{
+		ID:        user.ID,
+		Email:     user.Email,
+		Username:  user.Username,
+		Name:      user.Name,
+		Role:      string(user.Role),
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		DeletedAt: deletedAt,
 	}
 }
 

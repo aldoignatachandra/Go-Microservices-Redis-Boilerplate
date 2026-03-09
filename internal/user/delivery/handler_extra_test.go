@@ -25,10 +25,8 @@ func TestGetProfile_Success(t *testing.T) {
 	router := setupTestRouter(handler)
 
 	expectedProfile := &dto.ProfileResponse{
-		ID:        "prof-123",
-		FirstName: "John",
-		LastName:  "Doe",
-		FullName:  "John Doe",
+		ID:   "prof-123",
+		Name: "John Doe",
 	}
 
 	mockUseCase.On("GetProfile", mock.Anything, mock.AnythingOfType("*dto.GetUserRequest")).

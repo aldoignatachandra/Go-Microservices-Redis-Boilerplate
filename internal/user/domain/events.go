@@ -156,11 +156,8 @@ func (e *ActivityEvent) ToActivityLog() *ActivityLog {
 // NewProfileUpdatedEvent creates a new profile updated event.
 func NewProfileUpdatedEvent(userID string, profile *Profile) *eventbus.Event {
 	return eventbus.NewEvent(EventProfileUpdated, "user-service", map[string]interface{}{
-		"user_id":    userID,
-		"first_name": profile.FirstName,
-		"last_name":  profile.LastName,
-		"avatar":     profile.Avatar,
-		"bio":        profile.Bio,
+		"user_id": userID,
+		"name":    profile.Name,
 	})
 }
 

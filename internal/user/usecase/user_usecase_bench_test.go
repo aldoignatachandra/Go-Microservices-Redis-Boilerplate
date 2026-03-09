@@ -26,9 +26,8 @@ func BenchmarkUpdateProfile(b *testing.B) {
 	uc := usecase.NewUserUseCase(userRepo, activityRepo, eventBus, log)
 
 	req := &dto.UpdateProfileRequest{
-		UserID:    "test-user-id",
-		FirstName: strPtr("Jane"),
-		LastName:  strPtr("Smith"),
+		UserID: "test-user-id",
+		Name:   "Jane Smith",
 	}
 
 	b.ResetTimer()

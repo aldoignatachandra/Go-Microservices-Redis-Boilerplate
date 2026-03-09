@@ -183,10 +183,8 @@ func TestUserRepository_Integration(t *testing.T) {
 
 		// Create profile
 		profile := &domain.Profile{
-			UserID:    user.ID,
-			FirstName: "John",
-			LastName:  "Doe",
-			Bio:       "Test user",
+			UserID: user.ID,
+			Name:   "John Doe",
 		}
 
 		err = repo.UpdateProfile(ctx, profile)
@@ -195,18 +193,17 @@ func TestUserRepository_Integration(t *testing.T) {
 		// Get profile
 		found, err := repo.GetProfile(ctx, user.ID)
 		require.NoError(t, err)
-		assert.Equal(t, "John", found.FirstName)
-		assert.Equal(t, "Doe", found.LastName)
+		assert.Equal(t, "John Doe", found.Name)
 
 		// Update profile
-		found.FirstName = "Jane"
+		found.Name = "Jane Smith"
 		err = repo.UpdateProfile(ctx, found)
 		require.NoError(t, err)
 
 		// Verify
 		updated, err := repo.GetProfile(ctx, user.ID)
 		require.NoError(t, err)
-		assert.Equal(t, "Jane", updated.FirstName)
+		assert.Equal(t, "Jane Smith", updated.Name)
 	})
 }
 

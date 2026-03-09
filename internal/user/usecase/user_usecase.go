@@ -79,18 +79,9 @@ func (uc *userUseCase) UpdateProfile(ctx context.Context, req *dto.UpdateProfile
 		}
 	}
 
-	// Update fields
-	if req.FirstName != nil {
-		profile.FirstName = *req.FirstName
-	}
-	if req.LastName != nil {
-		profile.LastName = *req.LastName
-	}
-	if req.Avatar != nil {
-		profile.Avatar = *req.Avatar
-	}
-	if req.Bio != nil {
-		profile.Bio = *req.Bio
+	// Update name field
+	if req.Name != "" {
+		profile.Name = req.Name
 	}
 
 	// Save profile

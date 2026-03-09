@@ -48,10 +48,8 @@ func getTestProfile() *domain.Profile {
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		},
-		UserID:    "test-user-id",
-		FirstName: "John",
-		LastName:  "Doe",
-		Bio:       "Test user",
+		UserID: "test-user-id",
+		Name:   "John Doe",
 	}
 }
 
@@ -67,9 +65,8 @@ func TestUpdateProfile(t *testing.T) {
 		{
 			name: "successful update existing profile",
 			req: &dto.UpdateProfileRequest{
-				UserID:    "test-user-id",
-				FirstName: strPtr("Jane"),
-				LastName:  strPtr("Smith"),
+				UserID: "test-user-id",
+				Name:   "Jane Smith",
 			},
 			setupMocks: func(userRepo *mocks.MockUserRepository, activityRepo *mocks.MockActivityRepository, eventBus *MockEventPublisher) {
 				userRepo.On("GetProfile", mock.Anything, "test-user-id").Return(getTestProfile(), nil)
@@ -82,9 +79,8 @@ func TestUpdateProfile(t *testing.T) {
 		{
 			name: "successful create new profile",
 			req: &dto.UpdateProfileRequest{
-				UserID:    "test-user-id",
-				FirstName: strPtr("Jane"),
-				LastName:  strPtr("Smith"),
+				UserID: "test-user-id",
+				Name:   "Jane Smith",
 			},
 			setupMocks: func(userRepo *mocks.MockUserRepository, activityRepo *mocks.MockActivityRepository, eventBus *MockEventPublisher) {
 				userRepo.On("GetProfile", mock.Anything, "test-user-id").Return(nil, nil)
@@ -97,7 +93,7 @@ func TestUpdateProfile(t *testing.T) {
 		{
 			name: "validation error - missing user ID",
 			req: &dto.UpdateProfileRequest{
-				FirstName: strPtr("Jane"),
+				Name: "Jane",
 			},
 			setupMocks: func(userRepo *mocks.MockUserRepository, activityRepo *mocks.MockActivityRepository, eventBus *MockEventPublisher) {
 				// No mocks should be called due to validation error
@@ -108,8 +104,8 @@ func TestUpdateProfile(t *testing.T) {
 		{
 			name: "repository error",
 			req: &dto.UpdateProfileRequest{
-				UserID:    "test-user-id",
-				FirstName: strPtr("Jane"),
+				UserID: "test-user-id",
+				Name:   "Jane",
 			},
 			setupMocks: func(userRepo *mocks.MockUserRepository, activityRepo *mocks.MockActivityRepository, eventBus *MockEventPublisher) {
 				userRepo.On("GetProfile", mock.Anything, "test-user-id").Return(nil, errors.New("database error"))
@@ -556,8 +552,7 @@ func TestGetProfile(t *testing.T) {
 			wantErr: false,
 			checkResult: func(t *testing.T, resp *dto.ProfileResponse) {
 				assert.Equal(t, "test-profile-id", resp.ID)
-				assert.Equal(t, "John", resp.FirstName)
-				assert.Equal(t, "Doe", resp.LastName)
+				assert.Equal(t, "John Doe", resp.Name)
 			},
 		},
 		{

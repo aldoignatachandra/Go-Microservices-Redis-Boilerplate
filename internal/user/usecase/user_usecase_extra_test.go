@@ -143,8 +143,8 @@ func TestUpdateProfile_UpdateError(t *testing.T) {
 	uc := usecase.NewUserUseCase(mockUserRepo, mockActivityRepo, mockEventBus, logger)
 
 	req := &dto.UpdateProfileRequest{
-		UserID:    "user-1",
-		FirstName: strPtr("Jane"),
+		UserID: "user-1",
+		Name:   "Jane Smith",
 	}
 
 	mockUserRepo.On("GetProfile", mock.Anything, req.UserID).Return(&domain.Profile{UserID: req.UserID}, nil)
@@ -296,8 +296,8 @@ func TestUpdateProfile_GetProfileError(t *testing.T) {
 	uc := usecase.NewUserUseCase(mockUserRepo, mockActivityRepo, mockEventBus, logger)
 
 	req := &dto.UpdateProfileRequest{
-		UserID:    "user-1",
-		FirstName: strPtr("Jane"),
+		UserID: "user-1",
+		Name:   "Jane Smith",
 	}
 
 	mockUserRepo.On("GetProfile", mock.Anything, req.UserID).Return(nil, errors.New("db error"))

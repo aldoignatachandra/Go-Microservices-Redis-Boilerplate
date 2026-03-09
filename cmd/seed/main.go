@@ -159,13 +159,11 @@ func (s *seeder) seedUserProfiles(ctx context.Context) error {
 
 		if profileCount == 0 {
 			profile := &userDomain.Profile{
-				UserID:    u.ID,
-				FirstName: "Test",
-				LastName:  "User",
+				UserID: u.ID,
+				Name:   "Test User",
 			}
 			if u.Role == authDomain.RoleAdmin {
-				profile.FirstName = "Admin"
-				profile.LastName = "User"
+				profile.Name = "Admin User"
 			}
 
 			if err := s.db.WithContext(ctx).Create(profile).Error; err != nil {

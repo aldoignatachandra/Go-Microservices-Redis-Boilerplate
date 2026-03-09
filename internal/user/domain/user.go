@@ -62,19 +62,11 @@ func (u *User) TouchLastLogin() {
 	u.LastLoginAt = &now
 }
 
-// Profile represents user profile information.
+// Profile represents user profile information (aligned with Bun-Hono).
 type Profile struct {
 	Model
-	UserID    string `gorm:"type:uuid;not null;uniqueIndex" json:"user_id"`
-	FirstName string `gorm:"type:varchar(100)" json:"first_name,omitempty"`
-	LastName  string `gorm:"type:varchar(100)" json:"last_name,omitempty"`
-	Avatar    string `gorm:"type:text" json:"avatar,omitempty"`
-	Bio       string `gorm:"type:text" json:"bio,omitempty"`
-}
-
-// TableName specifies the table name for User.
-func (User) TableName() string {
-	return "users"
+	UserID string `gorm:"type:uuid;not null;uniqueIndex" json:"user_id"`
+	Name   string `gorm:"type:varchar(255)" json:"name"`
 }
 
 // TableName specifies the table name for Profile.
@@ -82,12 +74,9 @@ func (Profile) TableName() string {
 	return "profiles"
 }
 
-// FullName returns the user's full name.
-func (p *Profile) FullName() string {
-	if p.FirstName == "" && p.LastName == "" {
-		return ""
-	}
-	return p.FirstName + " " + p.LastName
+// TableName specifies the table name for User.
+func (User) TableName() string {
+	return "users"
 }
 
 // ActivityLog represents an activity log entry.

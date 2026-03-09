@@ -2,6 +2,8 @@
 package dto
 
 import (
+	"time"
+
 	"github.com/ignata/go-microservices-boilerplate/internal/auth/domain"
 )
 
@@ -12,13 +14,16 @@ type AuthResponse struct {
 	User      *UserResponse `json:"user"`
 }
 
-// UserResponse represents a user in responses.
+// UserResponse represents a user in responses (aligned with Bun-Hono).
 type UserResponse struct {
-	ID       string `json:"id"`
-	Email    string `json:"email"`
-	Username string `json:"username"`
-	Name     string `json:"name"`
-	Role     string `json:"role"`
+	ID        string     `json:"id"`
+	Email     string     `json:"email"`
+	Username  string     `json:"username"`
+	Name      string     `json:"name"`
+	Role      string     `json:"role"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
+	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 }
 
 // FromUser creates a UserResponse from a domain.User.
@@ -27,12 +32,20 @@ func FromUser(user *domain.User) *UserResponse {
 		return nil
 	}
 
+	var deletedAt *time.Time
+	if user.DeletedAt.Valid {
+		deletedAt = &user.DeletedAt.Time
+	}
+
 	return &UserResponse{
-		ID:       user.ID,
-		Email:    user.Email,
-		Username: user.Username,
-		Name:     user.Name,
-		Role:     string(user.Role),
+		ID:        user.ID,
+		Email:     user.Email,
+		Username:  user.Username,
+		Name:      user.Name,
+		Role:      string(user.Role),
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		DeletedAt: deletedAt,
 	}
 }
 
