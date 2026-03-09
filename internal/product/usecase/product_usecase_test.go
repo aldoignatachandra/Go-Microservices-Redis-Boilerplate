@@ -117,10 +117,10 @@ func TestCreateProduct_Success(t *testing.T) {
 	testUserID := "user-123"
 
 	req := &dto.CreateProductRequest{
-		Name:       "Test Product",
-		Price:      29.99,
-		Stock:      100,
-		HasVariant: false,
+		Name:    "Test Product",
+		Price:   29.99,
+		Stock:   100,
+		OwnerID: testUserID,
 	}
 
 	repo.On("ExistsByNameAndOwner", mock.Anything, req.Name, testUserID).Return(false, nil)

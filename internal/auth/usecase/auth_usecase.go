@@ -115,7 +115,7 @@ func (uc *authUseCase) Register(ctx context.Context, req *dto.RegisterRequest) (
 		Username:     req.Username,
 		Name:         req.Name,
 		PasswordHash: passwordHash,
-		Role:         req.ToRole(),
+		Role:         domain.RoleUser,
 	}
 
 	if err = uc.userRepo.Create(ctx, user); err != nil {
@@ -233,13 +233,13 @@ func (uc *authUseCase) Logout(ctx context.Context, userID string) error {
 // RefreshToken refreshes access token.
 func (uc *authUseCase) RefreshToken(ctx context.Context, req *dto.RefreshTokenRequest) (*dto.AuthResponse, error) {
 	// Validate refresh token
-	userID, err := uc.jwtManager.ValidateRefreshToken(req.RefreshToken)
+	userID, err := uc.jwtManager.ValidateRefreshToken(req.Token)
 	if err != nil {
 		return nil, domain.ErrInvalidToken
 	}
 
 	// Find session
-	session, err := uc.sessionRepo.FindByRefreshToken(ctx, req.RefreshToken)
+	session, err := uc.sessionRepo.FindByRefreshToken(ctx, req.Token)
 	if err != nil {
 		return nil, domain.ErrInvalidToken
 	}
@@ -362,7 +362,7 @@ func (uc *authUseCase) ChangePassword(ctx context.Context, userID string, req *d
 	}
 
 	// Verify current password
-	if !utils.CheckPassword(req.CurrentPassword, user.PasswordHash) {
+	if !utils.CheckPassword(req.OldPassword, user.PasswordHash) {
 		return domain.ErrInvalidPassword
 	}
 

@@ -215,7 +215,7 @@ func TestRegister_WithRole(t *testing.T) {
 	}
 
 	mockUseCase.On("Register", mock.Anything, mock.MatchedBy(func(r *dto.RegisterRequest) bool {
-		return r.Email == "admin@example.com" && r.Role == "ADMIN"
+		return r.Email == "admin@example.com"
 	})).Return(expectedResponse, nil)
 
 	// Act
@@ -1172,7 +1172,7 @@ func TestRegister_WithDefaultRole(t *testing.T) {
 	}
 
 	mockUseCase.On("Register", mock.Anything, mock.MatchedBy(func(r *dto.RegisterRequest) bool {
-		return r.Email == "user@example.com" && r.Role == ""
+		return r.Email == "user@example.com"
 	})).Return(expectedResponse, nil)
 
 	// Act
@@ -2301,7 +2301,7 @@ func TestChangePassword_SameAsOldPassword(t *testing.T) {
 
 	// Simulate business logic error when new password equals old
 	mockUseCase.On("ChangePassword", mock.Anything, "550e8400-e29b-41d4-a716-446655440001", mock.MatchedBy(func(r *dto.ChangePasswordRequest) bool {
-		return r.CurrentPassword == "SamePass123" && r.NewPassword == "SamePass123"
+		return r.OldPassword == "SamePass123" && r.NewPassword == "SamePass123"
 	})).Return(errors.New("new password must be different from current password"))
 
 	router.Use(func(c *gin.Context) {

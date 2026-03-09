@@ -220,7 +220,6 @@ func TestRegister(t *testing.T) {
 				Email:    "test@example.com",
 				Username: "testuser",
 				Password: "SecureP@ss123",
-				Role:     "USER",
 			},
 			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
 				userRepo.On("ExistsByEmail", mock.Anything, "test@example.com").Return(false, nil)
@@ -463,7 +462,7 @@ func TestRefreshToken(t *testing.T) {
 		{
 			name: "invalid refresh token",
 			req: &dto.RefreshTokenRequest{
-				RefreshToken: "invalid-refresh-token",
+				Token: "invalid-refresh-token",
 			},
 			setupMocks:  func(*MockUserRepository, *MockSessionRepository, *MockEventPublisher) {},
 			wantErr:     true,
@@ -472,7 +471,7 @@ func TestRefreshToken(t *testing.T) {
 		{
 			name: "valid refresh token with session not found",
 			req: &dto.RefreshTokenRequest{
-				RefreshToken: validRefreshToken,
+				Token: validRefreshToken,
 			},
 			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
 				sessionRepo.On("FindByRefreshToken", mock.Anything, validRefreshToken).Return((*domain.Session)(nil), errors.New("session not found"))
@@ -830,8 +829,8 @@ func TestChangePassword(t *testing.T) {
 			name:   "invalid current password",
 			userID: "test-user-id",
 			req: &dto.ChangePasswordRequest{
-				CurrentPassword: "WrongP@ss123",
-				NewPassword:     "NewP@ss123",
+				OldPassword: "WrongP@ss123",
+				NewPassword: "NewP@ss123",
 			},
 			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository) {
 				user := buildTestUser(withID("test-user-id"))
@@ -844,8 +843,8 @@ func TestChangePassword(t *testing.T) {
 			name:   "user not found",
 			userID: "nonexistent-id",
 			req: &dto.ChangePasswordRequest{
-				CurrentPassword: "OldP@ss123",
-				NewPassword:     "NewP@ss123",
+				OldPassword: "OldP@ss123",
+				NewPassword: "NewP@ss123",
 			},
 			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository) {
 				userRepo.On("FindByID", mock.Anything, "nonexistent-id", mock.AnythingOfType("*domain.ParanoidOptions")).Return((*domain.User)(nil), domain.ErrUserNotFound)
@@ -857,8 +856,8 @@ func TestChangePassword(t *testing.T) {
 			name:   "invalid current password",
 			userID: "test-user-id",
 			req: &dto.ChangePasswordRequest{
-				CurrentPassword: "WrongP@ss123",
-				NewPassword:     "NewP@ss123",
+				OldPassword: "WrongP@ss123",
+				NewPassword: "NewP@ss123",
 			},
 			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository) {
 				user := buildTestUser(withID("test-user-id"))
@@ -1139,7 +1138,7 @@ func TestRefreshToken_Success(t *testing.T) {
 
 	// Act
 	refreshResp, err := uc.RefreshToken(context.Background(), &dto.RefreshTokenRequest{
-		RefreshToken: validRefreshToken,
+		Token: validRefreshToken,
 	})
 
 	// Assert
@@ -1177,7 +1176,7 @@ func TestRefreshToken_SessionExpired(t *testing.T) {
 
 	// Act
 	_, err := uc.RefreshToken(context.Background(), &dto.RefreshTokenRequest{
-		RefreshToken: validToken,
+		Token: validToken,
 	})
 
 	// Assert
@@ -1211,7 +1210,7 @@ func TestRefreshToken_UserMismatch(t *testing.T) {
 
 	// Act - Token is for user-123 but session is for user-456
 	_, err := uc.RefreshToken(context.Background(), &dto.RefreshTokenRequest{
-		RefreshToken: validToken,
+		Token: validToken,
 	})
 
 	// Assert - Should fail due to user mismatch
@@ -1264,8 +1263,8 @@ func TestChangePassword_Success(t *testing.T) {
 
 	// Act
 	err = uc.ChangePassword(context.Background(), "user-123", &dto.ChangePasswordRequest{
-		CurrentPassword: "OldPass123",
-		NewPassword:     "NewPass456",
+		OldPassword: "OldPass123",
+		NewPassword: "NewPass456",
 	})
 
 	// Assert

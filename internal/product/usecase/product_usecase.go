@@ -74,12 +74,13 @@ func (uc *productUseCase) CreateProduct(ctx context.Context, ownerID string, req
 	}
 
 	// Create product
+	hasVariant := len(req.Variants) > 0
 	product := &domain.Product{
 		Name:       req.Name,
 		Price:      req.Price,
 		Stock:      req.Stock,
 		OwnerID:    ownerID,
-		HasVariant: req.HasVariant,
+		HasVariant: hasVariant,
 		Images:     req.Images,
 	}
 
@@ -140,31 +141,27 @@ func (uc *productUseCase) UpdateProduct(ctx context.Context, userID, _ string, p
 	}
 
 	// Update fields
-	if req.Name != nil {
+	if req.Name != "" {
 		// Check if name is already used by another product of same owner
-		if *req.Name != product.Name {
-			exists, err := uc.productRepo.ExistsByNameAndOwner(ctx, *req.Name, product.OwnerID)
+		if req.Name != product.Name {
+			exists, err := uc.productRepo.ExistsByNameAndOwner(ctx, req.Name, product.OwnerID)
 			if err == nil && exists {
 				return nil, domain.ErrProductNameAlreadyUsed
 			}
 		}
-		product.Name = *req.Name
+		product.Name = req.Name
 	}
 
-	if req.Price != nil {
-		product.Price = *req.Price
+	if req.Price > 0 {
+		product.Price = req.Price
 	}
 
-	if req.Stock != nil {
-		product.Stock = *req.Stock
+	if req.Stock >= 0 {
+		product.Stock = req.Stock
 	}
 
-	if req.HasVariant != nil {
-		product.HasVariant = *req.HasVariant
-	}
-
-	if req.Images != nil {
-		product.Images = *req.Images
+	if req.Images != "" {
+		product.Images = req.Images
 	}
 
 	if err := uc.productRepo.Update(ctx, product); err != nil {

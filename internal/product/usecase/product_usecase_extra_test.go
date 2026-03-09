@@ -94,20 +94,20 @@ func TestUpdateProduct_Success(t *testing.T) {
 	newName := "New Name"
 	newPrice := 20.0
 	req := &dto.UpdateProductRequest{
-		Name:  &newName,
-		Price: &newPrice,
+		Name:  newName,
+		Price: newPrice,
 	}
 
 	repo.On("FindByID", mock.Anything, "prod-1", mock.Anything).Return(testProduct, nil)
-	repo.On("ExistsByNameAndOwner", mock.Anything, *req.Name, testUserID).Return(false, nil)
+	repo.On("ExistsByNameAndOwner", mock.Anything, req.Name, testUserID).Return(false, nil)
 	repo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Product")).Return(nil)
 
 	response, err := uc.UpdateProduct(context.Background(), testUserID, testUserRole, "prod-1", req)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
-	assert.Equal(t, *req.Name, response.Name)
-	assert.Equal(t, dto.PriceRange{Min: *req.Price, Max: *req.Price, Display: fmt.Sprintf("$%.2f", *req.Price)}, response.Price)
+	assert.Equal(t, req.Name, response.Name)
+	assert.Equal(t, dto.PriceRange{Min: req.Price, Max: req.Price, Display: fmt.Sprintf("$%.2f", req.Price)}, response.Price)
 
 	repo.AssertExpectations(t)
 }
@@ -124,11 +124,11 @@ func TestUpdateProduct_NameAlreadyUsed(t *testing.T) {
 
 	existName := "Existing Name"
 	req := &dto.UpdateProductRequest{
-		Name: &existName,
+		Name: existName,
 	}
 
 	repo.On("FindByID", mock.Anything, "prod-1", mock.Anything).Return(testProduct, nil)
-	repo.On("ExistsByNameAndOwner", mock.Anything, *req.Name, testUserID).Return(true, nil)
+	repo.On("ExistsByNameAndOwner", mock.Anything, req.Name, testUserID).Return(true, nil)
 
 	response, err := uc.UpdateProduct(context.Background(), testUserID, testUserRole, "prod-1", req)
 
@@ -151,7 +151,7 @@ func TestUpdateProduct_AccessDenied(t *testing.T) {
 
 	newName := "New Name"
 	req := &dto.UpdateProductRequest{
-		Name: &newName,
+		Name: newName,
 	}
 
 	repo.On("FindByID", mock.Anything, "prod-1", mock.Anything).Return(testProduct, nil)
@@ -312,11 +312,11 @@ func TestUpdateProduct_UpdateError(t *testing.T) {
 	testProduct := &domain.Product{Model: domain.Model{ID: "prod-1"}, OwnerID: testUserID}
 	name := "New Name"
 	req := &dto.UpdateProductRequest{
-		Name: &name,
+		Name: name,
 	}
 
 	repo.On("FindByID", mock.Anything, "prod-1", mock.Anything).Return(testProduct, nil)
-	repo.On("ExistsByNameAndOwner", mock.Anything, *req.Name, testUserID).Return(false, nil)
+	repo.On("ExistsByNameAndOwner", mock.Anything, req.Name, testUserID).Return(false, nil)
 	repo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Product")).Return(errors.New("update error"))
 
 	response, err := uc.UpdateProduct(context.Background(), testUserID, testUserRole, "prod-1", req)

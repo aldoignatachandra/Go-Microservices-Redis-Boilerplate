@@ -6,13 +6,12 @@ import (
 	"github.com/ignata/go-microservices-boilerplate/pkg/validator"
 )
 
-// RegisterRequest represents a user registration request.
+// RegisterRequest represents a user registration request (aligned with Bun-Hono).
 type RegisterRequest struct {
 	Email    string `json:"email" binding:"required,email,max=255"`
 	Username string `json:"username" binding:"required,min=3,max=50"`
 	Password string `json:"password" binding:"required"`
 	Name     string `json:"name" binding:"omitempty,max=255"`
-	Role     string `json:"role" binding:"omitempty,oneof=ADMIN USER"`
 }
 
 // Validate validates the registration request.
@@ -23,23 +22,15 @@ func (r *RegisterRequest) Validate() error {
 	return validator.ValidatePassword(r.Password)
 }
 
-// ToRole converts the role string to domain.Role.
-func (r *RegisterRequest) ToRole() domain.Role {
-	if r.Role == string(domain.RoleAdmin) {
-		return domain.RoleAdmin
-	}
-	return domain.RoleUser
-}
-
-// LoginRequest represents a login request.
+// LoginRequest represents a login request (aligned with Bun-Hono).
 type LoginRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required"`
 }
 
-// RefreshTokenRequest represents a token refresh request.
+// RefreshTokenRequest represents a token refresh request (aligned with Bun-Hono).
 type RefreshTokenRequest struct {
-	RefreshToken string `json:"refresh_token" binding:"required"`
+	Token string `json:"token" binding:"required"`
 }
 
 // UpdateUserRequest represents a user update request.
@@ -57,10 +48,10 @@ func (r *UpdateUserRequest) Validate() error {
 	return validator.ValidatePassword(r.Password)
 }
 
-// ChangePasswordRequest represents a password change request.
+// ChangePasswordRequest represents a password change request (aligned with Bun-Hono).
 type ChangePasswordRequest struct {
-	CurrentPassword string `json:"current_password" binding:"required"`
-	NewPassword     string `json:"new_password" binding:"required"`
+	OldPassword string `json:"old_password" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required"`
 }
 
 // Validate validates the change password request.

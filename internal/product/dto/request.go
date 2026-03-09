@@ -5,24 +5,44 @@ import (
 	"github.com/ignata/go-microservices-boilerplate/internal/product/domain"
 )
 
-// CreateProductRequest represents a product creation request.
-// OwnerID is extracted from JWT token, not from request body.
-type CreateProductRequest struct {
-	Name       string  `json:"name" binding:"required,min=1,max=255"`
-	Price      float64 `json:"price" binding:"required,gt=0"`
-	Stock      int     `json:"stock" binding:"omitempty,min=0"`
-	HasVariant bool    `json:"has_variant" binding:"omitempty"`
-	Images     string  `json:"images" binding:"omitempty"`
+// CreateVariantRequest represents a variant in create/update requests (aligned with Bun-Hono).
+type CreateVariantRequest struct {
+	Name            string            `json:"name" binding:"required,min=1,max=255"`
+	SKU             string            `json:"sku" binding:"required,min=1,max=100"`
+	Price           *float64          `json:"price" binding:"omitempty,gt=0"`
+	StockQuantity   int               `json:"stockQuantity" binding:"omitempty,gte=0"`
+	IsActive        bool              `json:"isActive" binding:"omitempty"`
+	AttributeValues map[string]string `json:"attributeValues" binding:"omitempty"`
+	Images          string            `json:"images" binding:"omitempty"`
 }
 
-// UpdateProductRequest represents a product update request.
+// CreateAttributeRequest represents an attribute in create/update requests (aligned with Bun-Hono).
+type CreateAttributeRequest struct {
+	Name         string   `json:"name" binding:"required,min=1,max=100"`
+	Values       []string `json:"values" binding:"required,min=1"`
+	DisplayOrder int      `json:"displayOrder" binding:"omitempty,gte=0"`
+}
+
+// CreateProductRequest represents a product creation request (aligned with Bun-Hono).
+type CreateProductRequest struct {
+	Name       string                    `json:"name" binding:"required,min=2,max=255"`
+	Price      float64                   `json:"price" binding:"required,gt=0"`
+	Stock      int                       `json:"stock" binding:"omitempty,gte=0"`
+	OwnerID    string                    `json:"ownerId" binding:"required,uuid"`
+	Images     string                    `json:"images" binding:"omitempty"`
+	Attributes []*CreateAttributeRequest `json:"attributes" binding:"omitempty"`
+	Variants   []*CreateVariantRequest   `json:"variants" binding:"omitempty"`
+}
+
+// UpdateProductRequest represents a product update request (aligned with Bun-Hono).
 type UpdateProductRequest struct {
-	ID         string   `uri:"id" binding:"required,uuid"`
-	Name       *string  `json:"name" binding:"omitempty,min=1,max=255"`
-	Price      *float64 `json:"price" binding:"omitempty,gt=0"`
-	Stock      *int     `json:"stock" binding:"omitempty,min=0"`
-	HasVariant *bool    `json:"has_variant" binding:"omitempty"`
-	Images     *string  `json:"images" binding:"omitempty"`
+	ID         string                    `uri:"id" binding:"required,uuid"`
+	Name       string                    `json:"name" binding:"omitempty,min=2,max=255"`
+	Price      float64                   `json:"price" binding:"omitempty,gt=0"`
+	Stock      int                       `json:"stock" binding:"omitempty,gte=0"`
+	Images     string                    `json:"images" binding:"omitempty"`
+	Attributes []*CreateAttributeRequest `json:"attributes" binding:"omitempty"`
+	Variants   []*CreateVariantRequest   `json:"variants" binding:"omitempty"`
 }
 
 // GetProductRequest represents a request to get a product.

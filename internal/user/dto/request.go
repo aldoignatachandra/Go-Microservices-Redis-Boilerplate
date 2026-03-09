@@ -9,6 +9,7 @@ import (
 type UpdateProfileRequest struct {
 	UserID    string `json:"-" uri:"id"`
 	Name      string `json:"name" binding:"omitempty,min=2,max=255"`
+	Username  string `json:"username" binding:"omitempty,min=3,max=50,alphanum"`
 	IPAddress string `json:"-"`
 	UserAgent string `json:"-"`
 }
