@@ -4,9 +4,25 @@ package ratelimit
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/ignata/go-microservices-boilerplate/pkg/database"
 )
+
+// BuildKeyPrefix builds an environment- and service-scoped key prefix.
+func BuildKeyPrefix(env, serviceName string) string {
+	env = strings.TrimSpace(env)
+	if env == "" {
+		env = "default"
+	}
+
+	serviceName = strings.TrimSpace(serviceName)
+	if serviceName == "" {
+		serviceName = "service"
+	}
+
+	return fmt.Sprintf("ratelimit:%s:%s", env, serviceName)
+}
 
 // RateLimitResult represents the result of a rate limit check.
 type RateLimitResult struct {

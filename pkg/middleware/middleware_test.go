@@ -542,6 +542,46 @@ func TestRateLimit(t *testing.T) {
 	}
 }
 
+func TestDefaultRedisKeyFunc_PrefersUserID(t *testing.T) {
+	router := gin.New()
+	var gotKey string
+
+	router.Use(func(c *gin.Context) {
+		c.Set(UserIDKey, "user-123")
+		c.Next()
+	})
+	router.GET("/api/v1/users", func(c *gin.Context) {
+		gotKey = defaultRedisKeyFunc(c)
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest("GET", "/api/v1/users", nil)
+	req.RemoteAddr = "198.51.100.8:12345"
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "user:user-123:GET:/api/v1/users", gotKey)
+}
+
+func TestDefaultRedisKeyFunc_FallsBackToIP(t *testing.T) {
+	router := gin.New()
+	var gotKey string
+
+	router.GET("/api/v1/users", func(c *gin.Context) {
+		gotKey = defaultRedisKeyFunc(c)
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest("GET", "/api/v1/users", nil)
+	req.RemoteAddr = "198.51.100.8:12345"
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "ip:198.51.100.8:GET:/api/v1/users", gotKey)
+}
+
 // TestRecovery tests the panic recovery middleware.
 func TestRecovery(t *testing.T) {
 	tests := []struct {

@@ -225,7 +225,10 @@ func setupHTTPServer(app *App) *gin.Engine {
 	var redisLimiter *ratelimit.RouteRateLimiter
 	sessionValidator := buildSessionValidator(app)
 	if app.Config.RateLimit.Enabled && app.Redis != nil {
-		redisLimiter = ratelimit.NewRedisRateLimiter(app.Redis, "ratelimit")
+		redisLimiter = ratelimit.NewRedisRateLimiter(
+			app.Redis,
+			ratelimit.BuildKeyPrefix(app.Config.App.Env, app.Config.App.Name),
+		)
 
 		redisLimiter.SetLimits(map[string]ratelimit.RouteLimit{
 			"/api/v1/auth/login":    {MaxRequests: 10, WindowSeconds: 60},

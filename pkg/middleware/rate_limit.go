@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -127,7 +128,41 @@ type RedisRateLimiterConfig struct {
 }
 
 func defaultRedisKeyFunc(c *gin.Context) string {
-	return fmt.Sprintf("%s:%s", c.ClientIP(), c.FullPath())
+	return fmt.Sprintf("%s:%s:%s", rateLimitIdentity(c), resolveMethod(c), resolveRoutePattern(c))
+}
+
+func rateLimitIdentity(c *gin.Context) string {
+	if userID, exists := GetUserID(c); exists {
+		userID = strings.TrimSpace(userID)
+		if userID != "" {
+			return "user:" + userID
+		}
+	}
+
+	clientIP := strings.TrimSpace(c.ClientIP())
+	if clientIP == "" {
+		clientIP = "unknown"
+	}
+	return "ip:" + clientIP
+}
+
+func resolveRoutePattern(c *gin.Context) string {
+	route := strings.TrimSpace(c.FullPath())
+	if route != "" {
+		return route
+	}
+	if c.Request != nil && c.Request.URL != nil && c.Request.URL.Path != "" {
+		return c.Request.URL.Path
+	}
+	return "unknown"
+}
+
+func resolveMethod(c *gin.Context) string {
+	method := strings.TrimSpace(c.Request.Method)
+	if method == "" {
+		return "UNKNOWN"
+	}
+	return method
 }
 
 // RedisRateLimit returns a Redis-backed rate limiting middleware.
@@ -169,8 +204,14 @@ func RedisRateLimit(config RedisRateLimiterConfig) gin.HandlerFunc {
 // RedisRateLimitPerRoute returns a Redis-backed rate limiting middleware with per-route limits.
 // This allows different rate limits for different routes.
 func RedisRateLimitPerRoute(limiter *ratelimit.RouteRateLimiter, defaultLimit int, defaultWindow int) gin.HandlerFunc {
+	if limiter == nil {
+		return func(c *gin.Context) {
+			c.Next()
+		}
+	}
+
 	return func(c *gin.Context) {
-		route := c.FullPath()
+		route := resolveRoutePattern(c)
 
 		limit, ok := limiter.GetLimit(route)
 		if !ok {
@@ -180,7 +221,7 @@ func RedisRateLimitPerRoute(limiter *ratelimit.RouteRateLimiter, defaultLimit in
 			}
 		}
 
-		key := fmt.Sprintf("%s:%s", c.ClientIP(), route)
+		key := fmt.Sprintf("%s:%s:%s", rateLimitIdentity(c), resolveMethod(c), route)
 
 		allowed, err := limiter.Allow(context.Background(), key, limit.MaxRequests, limit.WindowSeconds)
 		if err != nil {

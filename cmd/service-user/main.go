@@ -223,7 +223,10 @@ func setupHTTPServer(app *App) *gin.Engine {
 
 	// Create Redis rate limiter if enabled
 	if app.Config.RateLimit.Enabled && app.Redis != nil {
-		redisLimiter := ratelimit.NewRedisRateLimiter(app.Redis, "ratelimit")
+		redisLimiter := ratelimit.NewRedisRateLimiter(
+			app.Redis,
+			ratelimit.BuildKeyPrefix(app.Config.App.Env, app.Config.App.Name),
+		)
 		redisLimiter.SetLimits(map[string]ratelimit.RouteLimit{
 			"/api/v1/users":     {MaxRequests: 120, WindowSeconds: 60},
 			"/api/v1/users/:id": {MaxRequests: 5, WindowSeconds: 60},

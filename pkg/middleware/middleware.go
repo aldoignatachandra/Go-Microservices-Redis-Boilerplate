@@ -2,7 +2,6 @@
 package middleware
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -100,9 +99,7 @@ func (r *MiddlewareRegistry) RedisRateLimit(limit int, window time.Duration) gin
 		RedisLimiter: r.redisLimiter,
 		Limit:        limit,
 		Window:       int(window.Seconds()),
-		KeyFunc: func(c *gin.Context) string {
-			return fmt.Sprintf("%s:%s", c.ClientIP(), c.FullPath())
-		},
+		KeyFunc:      defaultRedisKeyFunc,
 	})
 }
 
