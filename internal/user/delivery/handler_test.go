@@ -18,7 +18,7 @@ import (
 	"github.com/ignata/go-microservices-boilerplate/internal/user/dto"
 )
 
-func setupTestRouter(handler *delivery.UserHandler) *gin.Engine {
+func setupTestRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	return router
@@ -29,7 +29,7 @@ func TestGetUser_Success(t *testing.T) {
 	// Setup mock
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	expectedUser := &dto.UserResponse{
 		ID:    "550e8400-e29b-41d4-a716-446655440001",
@@ -67,7 +67,7 @@ func TestGetUser_NotFound(t *testing.T) {
 	// Setup mock
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	mockUseCase.On("GetUser", mock.Anything, mock.AnythingOfType("*dto.GetUserRequest")).
 		Return(nil, domain.ErrUserNotFound)
@@ -99,7 +99,7 @@ func TestListUsers_Success(t *testing.T) {
 	// Setup mock
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	expectedUsers := &dto.UserListResponse{
 		Data: []*dto.UserResponse{
@@ -146,7 +146,7 @@ func TestActivateUser_Success(t *testing.T) {
 	// Setup mock
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	mockUseCase.On("ActivateUser", mock.Anything, mock.AnythingOfType("*dto.ActivateUserRequest")).
 		Return(nil)
@@ -178,7 +178,7 @@ func TestDeactivateUser_Success(t *testing.T) {
 	// Setup mock
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	mockUseCase.On("DeactivateUser", mock.Anything, mock.AnythingOfType("*dto.DeactivateUserRequest")).
 		Return(nil)
@@ -210,7 +210,7 @@ func TestDeleteUser_Success(t *testing.T) {
 	// Setup mock
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	mockUseCase.On("DeleteUser", mock.Anything, mock.AnythingOfType("*dto.DeleteUserRequest")).
 		Return(nil)
@@ -242,7 +242,7 @@ func TestRestoreUser_Success(t *testing.T) {
 	// Setup mock
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	expectedResponse := &dto.RestoreResponse{
 		Success: true,
@@ -284,7 +284,7 @@ func TestGetActivityLogs_Success(t *testing.T) {
 	// Setup mock
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	expectedLogs := &dto.ActivityLogListResponse{
 		Data: []*dto.ActivityLogResponse{

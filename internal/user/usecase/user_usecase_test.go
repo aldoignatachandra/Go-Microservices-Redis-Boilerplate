@@ -484,8 +484,3 @@ func TestLogActivity(t *testing.T) {
 		})
 	}
 }
-
-// Helper functions
-func strPtr(s string) *string {
-	return &s
-}

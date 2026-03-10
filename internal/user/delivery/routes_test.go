@@ -14,7 +14,7 @@ import (
 
 // TestCORSMiddleware tests the CORS middleware.
 func TestCORSMiddleware(t *testing.T) {
-	router := setupTestRouter(nil)
+	router := setupTestRouter()
 	router.Use(delivery.CORSMiddleware())
 	router.GET("/test", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "ok"})

@@ -29,6 +29,7 @@ definitions:
   github_com_ignata_go-microservices-boilerplate_internal_auth_dto.LoginRequest:
     properties:
       email:
+        maxLength: 255
         type: string
       password:
         type: string
@@ -152,7 +153,7 @@ info:
 paths:
   /admin/health:
     get:
-      description: Detailed health with dependency status (requires system auth)
+      description: Detailed health with dependency status
       produces:
       - application/json
       responses:
@@ -164,8 +165,6 @@ paths:
           description: Service Unavailable
           schema:
             $ref: '#/definitions/pkg_server.HealthResponse'
-      security:
-      - SystemAuth: []
       summary: Admin health check
       tags:
       - health
@@ -362,7 +361,7 @@ paths:
       - application/json
       description: Authenticate user and return tokens
       parameters:
-      - description: Login credentials
+      - description: Login credentials (email or username in email field)
         in: body
         name: request
         required: true

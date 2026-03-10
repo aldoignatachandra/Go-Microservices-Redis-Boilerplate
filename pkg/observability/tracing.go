@@ -9,12 +9,14 @@ import (
 
 const (
 	// TraceIDKey is the context key for trace ID.
-	TraceIDKey = "trace_id"
+	TraceIDKey contextKey = "trace_id"
 	// SpanIDKey is the context key for span ID.
-	SpanIDKey = "span_id"
+	SpanIDKey contextKey = "span_id"
 	// ParentSpanIDKey is the context key for parent span ID.
-	ParentSpanIDKey = "parent_span_id"
+	ParentSpanIDKey contextKey = "parent_span_id"
 )
+
+type contextKey string
 
 // Span represents a trace span.
 type Span struct {

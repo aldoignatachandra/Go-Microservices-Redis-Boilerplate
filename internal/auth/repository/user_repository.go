@@ -27,6 +27,8 @@ type UserRepository interface {
 	FindByID(ctx context.Context, id string, opts *domain.ParanoidOptions) (*domain.User, error)
 	// FindByEmail finds a user by email
 	FindByEmail(ctx context.Context, email string, opts *domain.ParanoidOptions) (*domain.User, error)
+	// FindByEmailOrUsername finds a user by email or username
+	FindByEmailOrUsername(ctx context.Context, credential string, opts *domain.ParanoidOptions) (*domain.User, error)
 	// FindByUsername finds a user by username
 	FindByUsername(ctx context.Context, username string, opts *domain.ParanoidOptions) (*domain.User, error)
 	// FindAll finds all users with pagination
@@ -161,6 +163,33 @@ func (r *gormUserRepository) FindByEmail(ctx context.Context, email string, opts
 			return nil, domain.ErrUserNotFound
 		}
 		return nil, fmt.Errorf("failed to find user by email: %w", result.Error)
+	}
+
+	return &user, nil
+}
+
+// FindByEmailOrUsername finds a user by email or username.
+func (r *gormUserRepository) FindByEmailOrUsername(ctx context.Context, credential string, opts *domain.ParanoidOptions) (*domain.User, error) {
+	if opts == nil {
+		opts = domain.DefaultParanoidOptions()
+	}
+
+	query := r.db.WithContext(ctx)
+
+	if opts.ShouldIncludeDeleted() {
+		query = query.Unscoped()
+		if opts.ShouldOnlyDeleted() {
+			query = query.Where("deleted_at IS NOT NULL")
+		}
+	}
+
+	var user domain.User
+	result := query.Where("email = ? OR username = ?", credential, credential).First(&user)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrUserNotFound
+		}
+		return nil, fmt.Errorf("failed to find user by credential: %w", result.Error)
 	}
 
 	return &user, nil

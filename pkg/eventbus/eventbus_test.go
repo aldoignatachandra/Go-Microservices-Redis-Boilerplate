@@ -18,7 +18,7 @@ import (
 )
 
 // setupTestRedis creates a test Redis client using miniredis.
-func setupTestRedis(t *testing.T) (*miniredis.Miniredis, *redis.Client) {
+func setupTestRedis(t *testing.T) *redis.Client {
 	t.Helper()
 
 	mr, err := miniredis.Run()
@@ -33,7 +33,7 @@ func setupTestRedis(t *testing.T) (*miniredis.Miniredis, *redis.Client) {
 		mr.Close()
 	})
 
-	return mr, client
+	return client
 }
 
 // TestNewEvent tests event creation.
@@ -378,7 +378,7 @@ func TestRedisEventBus_Publish(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			_, client := setupTestRedis(t)
+			client := setupTestRedis(t)
 			bus := eventbus.NewRedisEventBus(client, 1000)
 
 			if tt.setup != nil {
@@ -418,7 +418,7 @@ func TestRedisEventBus_Publish(t *testing.T) {
 // TestRedisEventBus_Publish_Concurrent tests concurrent publishing.
 func TestRedisEventBus_Publish_Concurrent(t *testing.T) {
 	// Arrange
-	_, client := setupTestRedis(t)
+	client := setupTestRedis(t)
 	bus := eventbus.NewRedisEventBus(client, 1000)
 	ctx := context.Background()
 
@@ -522,7 +522,7 @@ func TestRedisEventBus_Subscribe(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			_, client := setupTestRedis(t)
+			client := setupTestRedis(t)
 			bus := eventbus.NewRedisEventBus(client, 1000)
 
 			ctx := context.Background()
@@ -616,7 +616,7 @@ func TestRedisEventBus_Ack(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			_, client := setupTestRedis(t)
+			client := setupTestRedis(t)
 			bus := eventbus.NewRedisEventBus(client, 1000)
 			ctx := context.Background()
 
@@ -695,7 +695,7 @@ func TestRedisEventBus_Close(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			_, client := setupTestRedis(t)
+			client := setupTestRedis(t)
 			bus := eventbus.NewRedisEventBus(client, 1000)
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
@@ -719,7 +719,7 @@ func TestRedisEventBus_Close(t *testing.T) {
 // TestRedisEventBus_EndToEnd tests the complete publish-subscribe flow.
 func TestRedisEventBus_EndToEnd(t *testing.T) {
 	// Arrange
-	_, client := setupTestRedis(t)
+	client := setupTestRedis(t)
 	bus := eventbus.NewRedisEventBus(client, 1000)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -846,7 +846,7 @@ func TestEnsureGroupExists(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			_, client := setupTestRedis(t)
+			client := setupTestRedis(t)
 			bus := eventbus.NewRedisEventBus(client, 1000)
 			ctx := context.Background()
 
@@ -1060,7 +1060,7 @@ func TestProducer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			_, client := setupTestRedis(t)
+			client := setupTestRedis(t)
 			producer := eventbus.NewProducer(client, eventbus.ProducerConfig{
 				MaxLen:        10000,
 				DefaultSource: "test-service",
@@ -1087,7 +1087,7 @@ func TestProducer(t *testing.T) {
 // TestProducerConfig_Defaults tests producer configuration defaults.
 func TestProducerConfig_Defaults(t *testing.T) {
 	// Arrange
-	_, client := setupTestRedis(t)
+	client := setupTestRedis(t)
 
 	// Act
 	producer := eventbus.NewProducer(client, eventbus.ProducerConfig{
@@ -1211,7 +1211,7 @@ func TestConsumerGroupConfig(t *testing.T) {
 // TestProducer_GetStreamInfo tests getting stream information.
 func TestProducer_GetStreamInfo(t *testing.T) {
 	// Arrange
-	_, client := setupTestRedis(t)
+	client := setupTestRedis(t)
 	producer := eventbus.NewProducer(client, eventbus.ProducerConfig{
 		MaxLen:        10000,
 		DefaultSource: "test-service",
@@ -1347,7 +1347,7 @@ func TestParseEvent_EdgeCases(t *testing.T) {
 // TestProducer_Publish_DefaultSource tests that default source is used.
 func TestProducer_Publish_DefaultSource(t *testing.T) {
 	// Arrange
-	_, client := setupTestRedis(t)
+	client := setupTestRedis(t)
 	producer := eventbus.NewProducer(client, eventbus.ProducerConfig{
 		MaxLen:        10000,
 		DefaultSource: "default-service",
@@ -1369,7 +1369,7 @@ func TestProducer_Publish_DefaultSource(t *testing.T) {
 // TestProducer_PublishBatch_EmptyList tests publishing empty batch.
 func TestProducer_PublishBatch_EmptyList(t *testing.T) {
 	// Arrange
-	_, client := setupTestRedis(t)
+	client := setupTestRedis(t)
 	producer := eventbus.NewProducer(client, eventbus.ProducerConfig{
 		MaxLen:        10000,
 		DefaultSource: "test-service",
@@ -1388,7 +1388,7 @@ func TestProducer_PublishBatch_EmptyList(t *testing.T) {
 // TestProducer_PublishToMultiple_EmptyList tests publishing to empty stream list.
 func TestProducer_PublishToMultiple_EmptyList(t *testing.T) {
 	// Arrange
-	_, client := setupTestRedis(t)
+	client := setupTestRedis(t)
 	producer := eventbus.NewProducer(client, eventbus.ProducerConfig{
 		MaxLen:        10000,
 		DefaultSource: "test-service",
@@ -1408,7 +1408,7 @@ func TestProducer_PublishToMultiple_EmptyList(t *testing.T) {
 // TestRedisEventBus_Subscribe_RetryLogic tests message retry logic.
 func TestRedisEventBus_Subscribe_RetryLogic(t *testing.T) {
 	// Arrange
-	_, client := setupTestRedis(t)
+	client := setupTestRedis(t)
 	bus := eventbus.NewRedisEventBus(client, 1000)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -1418,7 +1418,7 @@ func TestRedisEventBus_Subscribe_RetryLogic(t *testing.T) {
 	consumer := "test-consumer"
 
 	attemptCount := 0
-	handler := func(ctx context.Context, event *eventbus.Event) error {
+	handler := func(_ context.Context, _ *eventbus.Event) error {
 		attemptCount++
 		if attemptCount < 3 {
 			return errors.New("temporary error")
@@ -1459,7 +1459,7 @@ func TestRedisEventBus_Subscribe_RetryLogic(t *testing.T) {
 // TestConsumer_IsRunning tests checking if consumer is running.
 func TestConsumer_IsRunning(t *testing.T) {
 	// Arrange
-	_, client := setupTestRedis(t)
+	client := setupTestRedis(t)
 	consumer := eventbus.NewConsumer(client, eventbus.ConsumerConfig{
 		Stream:   "test:running",
 		Group:    "test-group",
@@ -1473,7 +1473,7 @@ func TestConsumer_IsRunning(t *testing.T) {
 // TestRedisEventBus_Publish_MaxLen tests publishing with max length trimming.
 func TestRedisEventBus_Publish_MaxLen(t *testing.T) {
 	// Arrange
-	_, client := setupTestRedis(t)
+	client := setupTestRedis(t)
 	bus := eventbus.NewRedisEventBus(client, 5) // Max length of 5
 	ctx := context.Background()
 	stream := "test:maxlen"

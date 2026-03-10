@@ -20,12 +20,7 @@ const docTemplate = `{
     "paths": {
         "/admin/health": {
             "get": {
-                "security": [
-                    {
-                        "SystemAuth": []
-                    }
-                ],
-                "description": "Detailed health with dependency status (requires system auth)",
+                "description": "Detailed health with dependency status",
                 "produces": [
                     "application/json"
                 ],

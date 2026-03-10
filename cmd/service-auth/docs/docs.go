@@ -20,12 +20,7 @@ const docTemplate = `{
     "paths": {
         "/admin/health": {
             "get": {
-                "security": [
-                    {
-                        "SystemAuth": []
-                    }
-                ],
-                "description": "Detailed health with dependency status (requires system auth)",
+                "description": "Detailed health with dependency status",
                 "produces": [
                     "application/json"
                 ],
@@ -356,7 +351,7 @@ const docTemplate = `{
                 "summary": "Login",
                 "parameters": [
                     {
-                        "description": "Login credentials",
+                        "description": "Login credentials (email or username in email field)",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -689,7 +684,8 @@ const docTemplate = `{
             ],
             "properties": {
                 "email": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                 },
                 "password": {
                     "type": "string"

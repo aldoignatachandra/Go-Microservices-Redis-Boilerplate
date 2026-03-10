@@ -1430,28 +1430,19 @@ func TestRegisterRoutes(t *testing.T) {
 	// Act
 	delivery.RegisterRoutes(router, mockUseCase)
 
-	// Assert - verify routes are registered
-	w := httptest.NewRecorder()
+	// Assert - verify business routes are registered and health routes are not
+	routes := router.Routes()
+	routePaths := make(map[string]bool, len(routes))
+	for _, route := range routes {
+		routePaths[route.Path] = true
+	}
 
-	// Test health endpoint
-	req1, _ := http.NewRequest("GET", "/health", nil)
-	router.ServeHTTP(w, req1)
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	// Test ready endpoint
-	w = httptest.NewRecorder()
-	req2, _ := http.NewRequest("GET", "/ready", nil)
-	router.ServeHTTP(w, req2)
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	// Test live endpoint
-	w = httptest.NewRecorder()
-	req3, _ := http.NewRequest("GET", "/live", nil)
-	router.ServeHTTP(w, req3)
-	assert.Equal(t, http.StatusOK, w.Code)
+	assert.False(t, routePaths["/health"], "Health route should not be registered by delivery routes")
+	assert.False(t, routePaths["/ready"], "Ready route should not be registered by delivery routes")
+	assert.False(t, routePaths["/live"], "Live route should not be registered by delivery routes")
 
 	// Test public products list
-	w = httptest.NewRecorder()
+	w := httptest.NewRecorder()
 	req4, _ := http.NewRequest("GET", "/products", nil)
 	router.ServeHTTP(w, req4)
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -1871,11 +1862,17 @@ func TestRegisterRoutesWithRateLimit(t *testing.T) {
 	// since we're passing nil for the limiter
 	delivery.RegisterRoutesWithRateLimit(router, mockUseCase, nil, 100, time.Second)
 
-	// Verify basic routes work
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/health", nil)
-	router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
+	// Verify business routes are registered and health routes are not
+	routes := router.Routes()
+	routePaths := make(map[string]bool, len(routes))
+	for _, route := range routes {
+		routePaths[route.Path] = true
+	}
+
+	assert.False(t, routePaths["/health"], "Health route should not be registered by delivery routes")
+	assert.False(t, routePaths["/ready"], "Ready route should not be registered by delivery routes")
+	assert.False(t, routePaths["/live"], "Live route should not be registered by delivery routes")
+	assert.True(t, routePaths["/products"], "Products route should be registered")
 }
 
 // TestRegisterHealthRoutes tests health route registration.

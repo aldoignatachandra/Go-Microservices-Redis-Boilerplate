@@ -98,6 +98,18 @@ func NewUserLoggedOutEvent(userID string) *UserEvent {
 	}
 }
 
+// NewUserRefreshedTokenEvent creates a new user refreshed token event.
+func NewUserRefreshedTokenEvent(user *User) *UserEvent {
+	return &UserEvent{
+		EventType: EventUserRefreshedToken,
+		UserID:    user.ID,
+		Email:     user.Email,
+		Role:      string(user.Role),
+		Timestamp: time.Now().UTC(),
+		Metadata:  make(map[string]interface{}),
+	}
+}
+
 // WithMetadata adds metadata to the event.
 func (e *UserEvent) WithMetadata(key string, value interface{}) *UserEvent {
 	if e.Metadata == nil {

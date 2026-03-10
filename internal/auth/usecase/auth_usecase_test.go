@@ -66,6 +66,14 @@ func (m *MockUserRepository) FindByEmail(ctx context.Context, email string, opts
 	return nil, args.Error(1)
 }
 
+func (m *MockUserRepository) FindByEmailOrUsername(ctx context.Context, credential string, opts *domain.ParanoidOptions) (*domain.User, error) {
+	args := m.Called(ctx, credential, opts)
+	if user, ok := args.Get(0).(*domain.User); ok {
+		return user, args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
 func (m *MockUserRepository) FindAll(ctx context.Context, req *dto.ListUsersRequest) (*domain.UserList, error) {
 	args := m.Called(ctx, req)
 	if list, ok := args.Get(0).(*domain.UserList); ok {
@@ -151,6 +159,8 @@ func (m *MockEventPublisher) Publish(ctx context.Context, stream string, event *
 // --- Helper ---
 
 func newTestAuthUseCase(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) usecase.AuthUseCase {
+	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil).Maybe()
+
 	return usecase.NewAuthUseCase(
 		userRepo,
 		sessionRepo,
@@ -324,7 +334,7 @@ func TestLogin(t *testing.T) {
 				Password: "password",
 			},
 			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
-				userRepo.On("FindByEmail", mock.Anything, "nonexistent@example.com", mock.AnythingOfType("*domain.ParanoidOptions")).Return((*domain.User)(nil), domain.ErrUserNotFound)
+				userRepo.On("FindByEmailOrUsername", mock.Anything, "nonexistent@example.com", mock.AnythingOfType("*domain.ParanoidOptions")).Return((*domain.User)(nil), domain.ErrUserNotFound)
 			},
 			wantErr:     true,
 			expectedErr: domain.ErrInvalidCredentials,
@@ -337,7 +347,7 @@ func TestLogin(t *testing.T) {
 			},
 			setupMocks: func(userRepo *MockUserRepository, sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
 				user := buildTestUser(withEmail("deleted@example.com"), withDeleted(true))
-				userRepo.On("FindByEmail", mock.Anything, "deleted@example.com", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
+				userRepo.On("FindByEmailOrUsername", mock.Anything, "deleted@example.com", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
 			},
 			wantErr:     true,
 			expectedErr: domain.ErrUserDeleted,
@@ -1052,11 +1062,6 @@ func TestRestoreUser(t *testing.T) {
 	}
 }
 
-// Helper function
-func boolPtr(b bool) *bool {
-	return &b
-}
-
 // TestLogin_Success tests successful login flow.
 func TestLogin_Success(t *testing.T) {
 	// Arrange
@@ -1070,7 +1075,7 @@ func TestLogin_Success(t *testing.T) {
 	require.NoError(t, err)
 	user.PasswordHash = passwordHash
 
-	userRepo.On("FindByEmail", mock.Anything, "login@example.com", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
+	userRepo.On("FindByEmailOrUsername", mock.Anything, "login@example.com", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
 	sessionRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Session")).Return(nil)
 	sessionRepo.On("DeleteByUserID", mock.Anything, mock.AnythingOfType("string")).Return(nil)
 	userRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.User")).Return(nil)
@@ -1087,6 +1092,41 @@ func TestLogin_Success(t *testing.T) {
 	require.NotNil(t, resp)
 	assert.NotEmpty(t, resp.Token)
 	assert.NotEmpty(t, resp.Token)
+	assert.Equal(t, "login@example.com", resp.User.Email)
+
+	userRepo.AssertExpectations(t)
+	sessionRepo.AssertExpectations(t)
+}
+
+// TestLogin_SuccessWithUsernameCredential tests successful login using username in email field.
+func TestLogin_SuccessWithUsernameCredential(t *testing.T) {
+	// Arrange
+	userRepo := new(MockUserRepository)
+	sessionRepo := new(MockSessionRepository)
+	eventBus := new(MockEventPublisher)
+	uc := newTestAuthUseCase(userRepo, sessionRepo, eventBus)
+
+	user := buildTestUser(withEmail("login@example.com"))
+	user.Username = "loginuser"
+	passwordHash, err := utils.HashPasswordWithCost("CorrectPassword123", 4)
+	require.NoError(t, err)
+	user.PasswordHash = passwordHash
+
+	userRepo.On("FindByEmailOrUsername", mock.Anything, "loginuser", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
+	sessionRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Session")).Return(nil)
+	sessionRepo.On("DeleteByUserID", mock.Anything, mock.AnythingOfType("string")).Return(nil)
+	userRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.User")).Return(nil)
+	eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil).Maybe()
+
+	// Act
+	resp, err := uc.Login(context.Background(), &dto.LoginRequest{
+		Email:    "loginuser",
+		Password: "CorrectPassword123",
+	}, "127.0.0.1", "test-agent")
+
+	// Assert
+	require.NoError(t, err)
+	require.NotNil(t, resp)
 	assert.Equal(t, "login@example.com", resp.User.Email)
 
 	userRepo.AssertExpectations(t)
@@ -1329,7 +1369,7 @@ func TestLogin_SessionCreationError(t *testing.T) {
 	require.NoError(t, err)
 	user.PasswordHash = passwordHash
 
-	userRepo.On("FindByEmail", mock.Anything, "login@example.com", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
+	userRepo.On("FindByEmailOrUsername", mock.Anything, "login@example.com", mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
 	sessionRepo.On("DeleteByUserID", mock.Anything, "test-user-id").Return(nil)
 	sessionRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Session")).Return(errors.New("session creation failed"))
 	// Note: Update is not called when session creation fails, so we don't set up that expectation

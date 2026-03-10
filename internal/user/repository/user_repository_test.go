@@ -428,10 +428,8 @@ func TestFindAll(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup test data
-	var users []*domain.User
 	for i := 0; i < 5; i++ {
-		user := createTestUser(t, db)
-		users = append(users, user)
+		_ = createTestUser(t, db)
 	}
 
 	// Create a soft-deleted user

@@ -255,7 +255,7 @@ info:
 paths:
   /admin/health:
     get:
-      description: Detailed health with dependency status (requires system auth)
+      description: Detailed health with dependency status
       produces:
       - application/json
       responses:
@@ -267,8 +267,6 @@ paths:
           description: Service Unavailable
           schema:
             $ref: '#/definitions/pkg_server.HealthResponse'
-      security:
-      - SystemAuth: []
       summary: Admin health check
       tags:
       - health

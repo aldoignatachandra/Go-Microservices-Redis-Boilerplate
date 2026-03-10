@@ -1,485 +1,468 @@
-# 🚀 Local Development Walkthrough
+# Local Development Guide (Step-by-Step)
 
-> **A comprehensive, step-by-step guide to running and testing the Go Microservices Redis Pub/Sub Boilerplate locally.**
->
-> This guide is written for backend developers who are new to Go. Every command is explained.
+This guide is designed for developers coming from Node.js who want to run and test this Go microservices project locally, service by service.
+
+Last synchronized with codebase: **March 10, 2026**.
 
 ---
 
 ## Table of Contents
 
-1. [Architecture Overview](#1-architecture-overview)
+1. [What You Are Running](#1-what-you-are-running)
 2. [Prerequisites](#2-prerequisites)
-3. [Project Structure Quick Reference](#3-project-structure-quick-reference)
-4. [Step 1: Clone and Install Dependencies](#step-1-clone-and-install-dependencies)
-5. [Step 2: Start Infrastructure (Docker)](#step-2-start-infrastructure-docker)
-6. [Step 3: Create PostgreSQL Databases Locally](#step-3-create-postgresql-databases-locally)
-7. [Step 4: Configure Environment for Each Service](#step-4-configure-environment-for-each-service)
-8. [Step 5: Run the Auth Service](#step-5-run-the-auth-service)
-9. [Step 6: Run the User Service](#step-6-run-the-user-service)
-10. [Step 7: Run the Product Service](#step-7-run-the-product-service)
-11. [Step 8: Test API Endpoints](#step-8-test-api-endpoints)
-12. [Step 9: Monitor with Prometheus & Grafana](#step-9-monitor-with-prometheus--grafana)
-13. [Step 10: View Redis Streams Events](#step-10-view-redis-streams-events)
-14. [Troubleshooting](#troubleshooting)
-15. [Useful Makefile Commands](#useful-makefile-commands)
+3. [Important Configuration Behavior](#3-important-configuration-behavior)
+4. [Choose Redis Mode (Local or Docker)](#4-choose-redis-mode-local-or-docker)
+5. [Prepare PostgreSQL](#5-prepare-postgresql)
+6. [Install Project Dependencies](#6-install-project-dependencies)
+7. [Database Workflow (SQL Migration First)](#7-database-workflow-sql-migration-first)
+8. [Run Each Service Locally](#8-run-each-service-locally)
+9. [API Testing Flow (Practical)](#9-api-testing-flow-practical)
+10. [Verify Redis Streams Are Working](#10-verify-redis-streams-are-working)
+11. [Monitoring (Prometheus/Grafana)](#11-monitoring-prometheusgrafana)
+12. [Troubleshooting](#12-troubleshooting)
+13. [Quick Command Cheat Sheet](#13-quick-command-cheat-sheet)
 
 ---
 
-## 1. Architecture Overview
+## 1. What You Are Running
 
-This boilerplate consists of **3 independent microservices** communicating via **Redis Streams** (event-driven):
+This repo currently has 3 Go services:
 
-```
-┌────────────────────┐     ┌────────────────────┐     ┌────────────────────┐
-│   AUTH SERVICE     │     │   USER SERVICE     │     │  PRODUCT SERVICE   │
-│   Port: 3100       │     │   Port: 3101       │     │   Port: 3102       │
-│   DB: auth_db      │     │   DB: user_db      │     │   DB: product_db   │
-└────────┬───────────┘     └────────┬───────────┘     └────────┬───────────┘
-         │                          │                          │
-         └──────────────────────────┼──────────────────────────┘
-                                    │
-                          ┌─────────▼──────────┐
-                          │   REDIS STREAMS    │
-                          │   (Event Bus)      │
-                          │   Port: 6379       │
-                          └────────────────────┘
-```
+- `cmd/service-auth` (default local port `3100`)
+- `cmd/service-user` (default local port `3101`)
+- `cmd/service-product` (default local port `3102`)
 
-**What each service does:**
+Current DB architecture in this branch:
 
-| Service     | Port   | Database     | Responsibility                                        |
-| :---------- | :----- | :----------- | :---------------------------------------------------- |
-| **Auth**    | `3100` | `auth_db`    | User registration, login, JWT tokens, password change |
-| **User**    | `3101` | `user_db`    | User profiles, user management, activity logs         |
-| **Product** | `3102` | `product_db` | Product CRUD, stock management, product events        |
+- **One shared PostgreSQL database**: `microservices_db`
+- SQL migrations in `migrations/*.sql` are the source of truth
+- Seeder in `cmd/db-seed` inserts starter data
 
-**Infrastructure services (Docker):**
+Core infra:
 
-| Service           | Port   | Purpose                         |
-| :---------------- | :----- | :------------------------------ |
-| **Redis**         | `6379` | Event bus (Redis Streams)       |
-| **Redis Insight** | `5540` | Redis GUI for debugging streams |
-| **Prometheus**    | `9090` | Metrics collection              |
-| **Grafana**       | `3000` | Metrics visualization           |
-| **Alertmanager**  | `9093` | Alert management                |
+- PostgreSQL (local recommended)
+- Redis (local OR Docker)
+- Optional: Redis Insight + Prometheus + Grafana (Docker)
 
 ---
 
 ## 2. Prerequisites
 
-Before starting, make sure you have the following installed on your machine:
+Required:
 
-### Required
+- Go >= `1.23`
+- PostgreSQL >= `15`
+- Redis >= `7` (if running locally)
+- Docker + Docker Compose v2 (if running Redis/monitoring via Docker)
+- `make`
+- `curl`
 
-| Tool                   | Version | Check Command            | Install                                                       |
-| :--------------------- | :------ | :----------------------- | :------------------------------------------------------------ |
-| **Go**                 | ≥ 1.23  | `go version`             | [golang.org/dl](https://golang.org/dl/)                       |
-| **Docker**             | ≥ 24    | `docker --version`       | [docker.com](https://www.docker.com/products/docker-desktop/) |
-| **Docker Compose**     | ≥ 2.0   | `docker compose version` | Included with Docker Desktop                                  |
-| **PostgreSQL**         | ≥ 15    | `psql --version`         | `brew install postgresql@15` (macOS)                          |
-| **Make**               | any     | `make --version`         | Pre-installed on macOS                                        |
-| **curl** or **httpie** | any     | `curl --version`         | Pre-installed on macOS                                        |
+Check versions:
 
-### Optional (but recommended)
-
-| Tool              | Purpose            | Install                                                                 |
-| :---------------- | :----------------- | :---------------------------------------------------------------------- |
-| **Air**           | Hot reload for Go  | `go install github.com/air-verse/air@latest`                            |
-| **golangci-lint** | Go linter          | `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest` |
-| **Wire**          | DI code generation | `go install github.com/google/wire/cmd/wire@latest`                     |
-
-> **💡 Node.js Analogy:**
->
-> - `go version` is like `node --version`
-> - `go install` is like `npm install -g`
-> - `go run ./cmd/auth-service` is like `npx ts-node src/index.ts`
-
----
-
-## 3. Project Structure Quick Reference
-
+```bash
+go version
+psql --version
+redis-server --version || true
+docker --version
+docker compose version
+make --version
+curl --version
 ```
-go-microservices-redis-pubsub-boilerplate/
-├── cmd/                     ← Entry points for each service (like src/index.ts)
-│   ├── auth-service/        ← main.go, wire.go, wire_gen.go
-│   ├── user-service/        ← main.go, wire.go, wire_gen.go
-│   └── product-service/     ← main.go, wire.go, wire_gen.go
-├── internal/                ← Private business logic (Clean Architecture)
-│   ├── auth/                ← domain/, dto/, repository/, usecase/, delivery/
-│   ├── user/                ← domain/, dto/, repository/, usecase/, delivery/
-│   ├── product/             ← domain/, dto/, repository/, usecase/, delivery/
-│   └── common/              ← Shared constants, errors, middleware
-├── pkg/                     ← Shared libraries ("Platform Kit")
-│   ├── config/              ← Viper-based config loader
-│   ├── database/            ← PostgreSQL + Redis connection helpers
-│   ├── eventbus/            ← Redis Streams producer/consumer
-│   ├── logger/              ← Zap structured logging
-│   ├── metrics/             ← Prometheus metrics
-│   ├── middleware/          ← HTTP middleware (auth, rate-limit, etc.)
-│   ├── server/              ← Graceful server + health checks
-│   └── utils/               ← JWT, hashing, HTTP response helpers
-├── configs/                 ← YAML config files per service
-│   ├── local.yaml           ← Auth service config (APP_ENV=local)
-│   ├── user-local.yaml      ← User service config
-│   └── product-local.yaml   ← Product service config
-├── deployments/             ← Docker & K8s infrastructure
-│   ├── docker-compose.yml   ← All containers
-│   ├── docker/              ← Dockerfiles per service
-│   └── monitoring/          ← Prometheus, Grafana, Alertmanager configs
-├── scripts/
-│   └── init-db.sql          ← Creates auth_db, user_db, product_db
-├── Makefile                 ← 315 lines of build/test/deploy commands
-└── .env                     ← Environment variable overrides
+
+Optional but useful:
+
+- `jq` (for parsing JSON in terminal)
+- `httpie`
+
+Install `jq` (macOS):
+
+```bash
+brew install jq
 ```
 
 ---
 
-## Step 1: Clone and Install Dependencies
+## 3. Important Configuration Behavior
 
-```bash
-# Navigate to the project directory
-cd ~/Desktop/Self\ Project/Project-Golang/go-microservices-redis-pubsub-boilerplate
+### 3.1 How config is loaded
 
-# Download all Go module dependencies
-go mod download
+Config loader behavior:
 
-# Tidy up (remove unused, add missing)
-go mod tidy
+1. Load `configs/<APP_ENV>.yaml`
+2. Then apply environment variable overrides
+
+Examples:
+
+- `APP_ENV=local` -> `configs/local.yaml`
+- `APP_ENV=user-local` -> `configs/user-local.yaml`
+- `APP_ENV=product-local` -> `configs/product-local.yaml`
+
+### 3.2 Very important `.env` behavior in this repo
+
+`pkg/utils/LoadEnv()` currently loads `.env` and sets env vars directly.
+Because of this, if `.env` contains `APP_ENV=local`, it can override your per-command `APP_ENV` when running services.
+
+For multi-service development, **recommended**:
+
+1. Open `.env`
+2. Comment out service-scoped keys:
+   - `APP_NAME`
+   - `APP_ENV`
+   - `SERVER_PORT`
+   - `STREAMS_CONSUMER_GROUP`
+   - `STREAMS_CONSUMER_NAME`
+3. Keep shared keys active (DB, Redis, JWT, etc)
+
+Example:
+
+```dotenv
+# APP_NAME=service-auth
+# APP_ENV=local
+# SERVER_PORT=3100
+# STREAMS_CONSUMER_GROUP=service-auth
+# STREAMS_CONSUMER_NAME=auth-1
+
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_NAME=microservices_db
+DB_SSLMODE=disable
+
+REDIS_HOST=localhost
+REDIS_PORT=6379
 ```
 
-Or, using the Makefile shortcut:
-
-```bash
-make deps
-```
-
-> **💡 What this does:** `go mod download` is like `npm install`. It reads `go.mod` (like `package.json`) and downloads all dependencies to `$GOPATH/pkg/mod/` (like `node_modules/`, but global).
-
-### Verify the build compiles
-
-```bash
-make build
-```
-
-This builds all 3 services into the `bin/` directory. If it compiles without errors, you're good to go.
+If you skip this, user/product services may accidentally boot with `local` config and collide on port `3100`.
 
 ---
 
-## Step 2: Start Infrastructure (Docker)
+## 4. Choose Redis Mode (Local or Docker)
 
-We'll run **Redis** and **monitoring stack** in Docker, but keep **PostgreSQL** and the **Go services** running locally so you can see the logs directly in your terminal.
+You can use either approach.
 
-### 2a. Start Redis + Redis Insight only
+### Option A: Use local Redis service
 
-```bash
-# From the project root directory, start only Redis and Redis Insight
-docker compose -f deployments/docker-compose.yml up -d redis redis-insight
-```
-
-**Verify Redis is running:**
+Start local Redis (macOS Homebrew):
 
 ```bash
-# Ping Redis (should respond with PONG)
-docker exec go-microservices-redis redis-cli ping
+brew services start redis
+redis-cli ping
 ```
 
-Expected output:
+Expected:
 
-```
+```text
 PONG
 ```
 
-**Access Redis Insight GUI:**
-
-Open your browser and go to: **http://localhost:5540**
-
-In Redis Insight, add a new database connection:
-
-- **Host:** `host.docker.internal` (or `localhost` if on Linux)
-- **Port:** `6379`
-- **Name:** `Go Microservices Redis`
-
-### 2b. Start Monitoring Stack (Prometheus + Grafana + Alertmanager)
+### Option B: Use Redis in Docker (recommended if you do not want local Redis install)
 
 ```bash
-# Start the monitoring profile
-docker compose -f deployments/docker-compose.yml --profile monitoring up -d
+docker compose -f deployments/docker-compose.yml up -d redis redis-insight
+docker exec go-microservices-redis redis-cli ping
 ```
 
-> **Note:** The `--profile monitoring` flag tells Docker Compose to also start the Prometheus, Grafana, and Alertmanager containers which are defined under the `monitoring` profile.
+Expected:
 
-**Verify monitoring is running:**
+```text
+PONG
+```
 
-| Service      | URL                   | Expected                 |
-| :----------- | :-------------------- | :----------------------- |
-| Prometheus   | http://localhost:9090 | Prometheus web UI        |
-| Grafana      | http://localhost:3000 | Login page (admin/admin) |
-| Alertmanager | http://localhost:9093 | Alertmanager web UI      |
+Redis Insight UI:
+
+- URL: `http://localhost:5540`
+- Host: `host.docker.internal` (macOS) or `localhost`
+- Port: `6379`
 
 ---
 
-## Step 3: Create PostgreSQL Databases Locally
+## 5. Prepare PostgreSQL
 
-Since we're running PostgreSQL **locally** (not in Docker), we need to create the 3 databases manually.
+Use local PostgreSQL for this workflow.
 
-### 3a. Make sure PostgreSQL is running
+### 5.1 Start PostgreSQL
+
+macOS (Homebrew):
 
 ```bash
-# Check if PostgreSQL is running (macOS with Homebrew)
 brew services list | grep postgresql
-
-# If not running, start it:
 brew services start postgresql@15
 ```
 
-### 3b. Create the databases
+### 5.2 Verify connection
 
 ```bash
-# Connect to your local PostgreSQL instance
-psql -U postgres
-
-# If you get a "role does not exist" error, try:
-# psql -U $(whoami) -d postgres
+pg_isready -h localhost -p 5432
 ```
 
-Once in the `psql` shell, run:
+Expected:
 
-```sql
--- Create the 3 databases (one per service)
-CREATE DATABASE auth_db;
-CREATE DATABASE user_db;
-CREATE DATABASE product_db;
-
--- Enable UUID extension in each database
-\c auth_db;
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
-\c user_db;
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
-\c product_db;
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Verify all databases exist
-\l
-
--- Exit psql
-\q
+```text
+localhost:5432 - accepting connections
 ```
 
-> **💡 Why 3 databases?** Each microservice owns its own database — this is the **Database per Service** pattern. It ensures services are truly independent and can't accidentally read/write each other's data.
+### 5.3 Check DB credentials match your config
 
-### 3c. Alternatively, use the init script
+Review these files:
 
-If your local PostgreSQL user is `postgres`, you can run the project's init script:
+- `configs/local.yaml`
+- `configs/user-local.yaml`
+- `configs/product-local.yaml`
 
-```bash
-psql -U postgres -f scripts/init-db.sql
-```
+All should point to:
+
+- host: `localhost`
+- port: `5432`
+- name: `microservices_db`
+- user/password matching your local PostgreSQL
+
+If your local user is not `postgres`, update YAML or set env vars.
 
 ---
 
-## Step 4: Configure Environment for Each Service
+## 6. Install Project Dependencies
 
-The config system uses **Viper** (a Go config library similar to `dotenv` + `config` in Node.js). It loads config from:
+From repo root:
 
-1. **YAML file** in `configs/` directory (selected by `APP_ENV` environment variable)
-2. **Environment variables** (override YAML values)
-
-### How config file selection works
-
-The config loader (`pkg/config/loader.go`) does this:
-
-```
-APP_ENV=local → reads configs/local.yaml
-APP_ENV=user-local → reads configs/user-local.yaml
-APP_ENV=product-local → reads configs/product-local.yaml
+```bash
+make deps
+make build
 ```
 
-### Verify your YAML configs
+What this does:
 
-The project already has 3 config files pre-configured for local development:
-
-| Config File                  | Service | Port   | Database     |
-| :--------------------------- | :------ | :----- | :----------- |
-| `configs/local.yaml`         | Auth    | `3100` | `auth_db`    |
-| `configs/user-local.yaml`    | User    | `3101` | `user_db`    |
-| `configs/product-local.yaml` | Product | `3102` | `product_db` |
-
-All configs point to `localhost:5432` (PostgreSQL) and `localhost:6379` (Redis).
-
-### Verify PostgreSQL credentials
-
-Open `configs/local.yaml` and make sure the `database` section matches your local PostgreSQL setup:
-
-```yaml
-database:
-  host: "localhost"
-  port: 5432
-  name: "auth_db"
-  user: "postgres" # ← Change if your pg user is different
-  password: "postgres" # ← Change if your pg password is different
-  sslmode: "disable"
-```
-
-> **⚠️ Common Issue:** On macOS, if you installed PostgreSQL via Homebrew, your default superuser is your macOS username (not `postgres`). You may need to update the `user` field in all 3 YAML configs, or create a `postgres` user:
->
-> ```bash
-> createuser -s postgres
-> ```
+- `make deps` -> `go mod download` + `go mod tidy`
+- `make build` -> builds all services into `bin/`
 
 ---
 
-## Step 5: Run the Auth Service
+## 7. Database Workflow (SQL Migration First)
 
-Open a **new terminal window/tab** (you'll need one per service for logs).
+This project is configured for SQL-migration-first development.
 
-### 5a. Start the auth service
-
-```bash
-# From the project root
-APP_ENV=local go run ./cmd/auth-service
-```
-
-Or using the Makefile:
+### 7.1 Create DB
 
 ```bash
-make run-auth-service
+make db-create
 ```
 
-### 5b. What you should see
-
-```
-{"level":"info","msg":"Starting auth service","host":"0.0.0.0","port":3100}
-```
-
-> **💡 What happened under the hood:**
->
-> 1. Go compiled and ran `cmd/auth-service/main.go`
-> 2. `config.Load("")` read `configs/local.yaml` (because `APP_ENV=local`)
-> 3. Wire injected all dependencies (logger → database → redis → eventbus → usecase → handler)
-> 4. **GORM auto-migrated** the auth database tables (users, sessions)
-> 5. Gin HTTP server started listening on port `3100`
-
-### 5c. Verify it's running
+### 7.2 Run all migrations
 
 ```bash
-# Health check
+make db-migrate
+```
+
+Expected style output:
+
+- `Applied N migration(s) using action 'up-all'`
+- list of applied files under `migrations/`
+
+### 7.3 Seed data (optional but recommended for fast testing)
+
+```bash
+make db-seed
+```
+
+Seeder inserts/updates:
+
+- admin user
+- regular user
+- products
+- attributes/variants for selected products
+
+### 7.4 Migration management commands
+
+Apply one migration file:
+
+```bash
+make db-migrate-up-one
+```
+
+Rollback one migration file (latest only):
+
+```bash
+make db-migrate-down-one
+```
+
+Rollback all:
+
+```bash
+make db-migrate-down-all
+```
+
+Create new sequential migration template:
+
+```bash
+make db-migrate-create name=add_status_to_products
+```
+
+### 7.5 Safety behavior on destructive rollback
+
+Down migrations are guarded:
+
+- If a down action would drop table/column with data, command fails by default
+
+Force override (if you accept data loss):
+
+```bash
+MIGRATION_FORCE=1 make db-migrate-down-one
+```
+
+Rollback order is always latest-first (stack behavior), not arbitrary middle rollback.
+
+---
+
+## 8. Run Each Service Locally
+
+Open **3 terminal tabs/windows** from project root.
+
+### Terminal 1: Auth service
+
+```bash
+APP_ENV=local make run-service-auth
+```
+
+Expected log includes routes like:
+
+- `/health`
+- `/auth/register`
+- `/auth/login`
+- `/admin/users`
+
+### Terminal 2: User service
+
+```bash
+APP_ENV=user-local make run-service-user
+```
+
+Expected log includes routes like:
+
+- `/health`
+- `/started`
+- `/api/v1/users`
+- `/api/v1/activity-logs`
+
+### Terminal 3: Product service
+
+```bash
+APP_ENV=product-local make run-service-product
+```
+
+Expected log includes routes like:
+
+- `/health`
+- `/products`
+- `/products/:id`
+- `/products/:id/stock`
+
+### Verify all health checks
+
+```bash
 curl http://localhost:3100/health
-
-# Expected response:
-# {"status":"ok","service":"auth-service"}
-```
-
-### 5d. Auth service endpoints
-
-| Method | Endpoint                   | Auth Required | Description                 |
-| :----- | :------------------------- | :------------ | :-------------------------- |
-| POST   | `/auth/register`           | No            | Register new user           |
-| POST   | `/auth/login`             | No            | Login and get JWT token     |
-| POST   | `/auth/refresh`           | No            | Refresh JWT token          |
-| POST   | `/auth/logout`            | ✅ JWT        | Logout (invalidate session)|
-| GET    | `/auth/me`                | ✅ JWT        | Get current user info      |
-| POST   | `/auth/change-password`  | ✅ JWT        | Change password           |
-| GET    | `/admin/users`            | ✅ Admin      | List all users            |
-| GET    | `/admin/users/:id`        | ✅ Admin      | Get user by ID            |
-| DELETE | `/admin/users/:id`        | ✅ Admin      | Delete user               |
-| POST   | `/admin/users/:id/restore`| ✅ Admin      | Restore deleted user      |
-| GET    | `/health`                 | No            | Health check              |
-| GET    | `/ready`                  | No            | Readiness probe           |
-| GET    | `/live`                   | No            | Liveness probe            |
-| GET    | `/metrics`                | No            | Prometheus metrics        |
-
----
-
-## Step 6: Run the User Service
-
-Open a **second terminal window/tab**.
-
-### 6a. Start the user service
-
-```bash
-# From the project root
-APP_ENV=user-local go run ./cmd/user-service
-```
-
-Or:
-
-```bash
-make run-user-service
-# Note: you'll need to set APP_ENV=user-local beforehand or it will default to local.yaml
-```
-
-> **⚠️ Important:** You MUST set `APP_ENV=user-local` so it reads `configs/user-local.yaml` (port 3101, database `user_db`). If you forget, it will try to use `configs/local.yaml` and conflict with the auth service on port 3100.
-
-### 6b. Verify it's running
-
-```bash
 curl http://localhost:3101/health
-
-# Expected: {"status":"ok","service":"user-service"}
-```
-
-### 6c. User service endpoints
-
-| Method | Endpoint                       | Description          |
-| :----- | :----------------------------- | :------------------- |
-| GET    | `/api/v1/users`                | List all users       |
-| GET    | `/api/v1/users/:id`            | Get user by ID       |
-| POST   | `/api/v1/users/:id/activate`   | Activate user        |
-| POST   | `/api/v1/users/:id/deactivate` | Deactivate user      |
-| DELETE | `/api/v1/users/:id`            | Delete user          |
-| POST   | `/api/v1/users/:id/restore`    | Restore deleted user |
-| GET    | `/api/v1/activity-logs`        | Get activity logs    |
-| GET    | `/health`                      | Health check         |
-| GET    | `/metrics`                     | Prometheus metrics   |
-
----
-
-## Step 7: Run the Product Service
-
-Open a **third terminal window/tab**.
-
-### 7a. Start the product service
-
-```bash
-# From the project root
-APP_ENV=product-local go run ./cmd/product-service
-```
-
-### 7b. Verify it's running
-
-```bash
 curl http://localhost:3102/health
-
-# Expected: {"status":"ok","service":"product-service"}
 ```
 
-### 7c. Product service endpoints
+Expected JSON style:
 
-| Method | Endpoint                | Description             |
-| :----- | :---------------------- | :---------------------- |
-| GET    | `/products`             | List products           |
-| GET    | `/products/:id`         | Get product by ID       |
-| POST   | `/products`             | Create product          |
-| PUT    | `/products/:id`         | Update product          |
-| DELETE | `/products/:id`         | Delete product          |
-| POST   | `/products/:id/restore` | Restore deleted product |
-| PUT    | `/products/:id/stock`   | Update product stock    |
-| GET    | `/health`               | Health check            |
-| GET    | `/metrics`              | Prometheus metrics      |
+```json
+{"status":"ok","service":"service-auth"}
+```
+
+Note: service name differs per service.
 
 ---
 
-## Step 8: Test API Endpoints
+## 9. API Testing Flow (Practical)
 
-Now that all 3 services are running, let's test the full API workflow.
+Below is a practical sequence you can run manually.
 
-### 8a. Register a new user (Auth Service)
+## 9.1 If you seeded already, use default credentials
+
+After `make db-seed`:
+
+- admin: `admin@example.com` / `Admin123!`
+- user: `user@example.com` / `User123!`
+
+### 9.1.1 Login seeded user
 
 ```bash
-curl -X POST http://localhost:3100/auth/register \
+curl -s -X POST http://localhost:3100/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "User123!"
+  }'
+```
+
+If you have `jq`, capture token/user id:
+
+```bash
+LOGIN_JSON=$(curl -s -X POST http://localhost:3100/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"User123!"}')
+
+TOKEN=$(echo "$LOGIN_JSON" | jq -r '.data.token')
+USER_ID=$(echo "$LOGIN_JSON" | jq -r '.data.user.id')
+
+echo "TOKEN length: ${#TOKEN}"
+echo "USER_ID: $USER_ID"
+```
+
+### 9.1.2 Verify auth/me
+
+```bash
+curl -s http://localhost:3100/auth/me \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### 9.1.3 List users from user service
+
+```bash
+curl -s http://localhost:3101/api/v1/users
+```
+
+### 9.1.4 Create a product
+
+```bash
+curl -s -X POST http://localhost:3102/products \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{
+    \"name\": \"NodeJS to Go Journey Tee\",
+    \"price\": 22.99,
+    \"stock\": 20,
+    \"ownerId\": \"$USER_ID\",
+    \"images\": \"https://example.com/tee.jpg\"
+  }"
+```
+
+### 9.1.5 List products
+
+```bash
+curl -s http://localhost:3102/products
+```
+
+### 9.1.6 Update stock
+
+Use product ID from create/list response:
+
+```bash
+PRODUCT_ID="<replace-with-product-id>"
+
+curl -s -X PUT http://localhost:3102/products/$PRODUCT_ID/stock \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"stock":15}'
+```
+
+## 9.2 If you do not seed, register first
+
+Register:
+
+```bash
+curl -s -X POST http://localhost:3100/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "email": "john@example.com",
@@ -489,162 +472,104 @@ curl -X POST http://localhost:3100/auth/register \
   }'
 ```
 
-**Expected Response (201):**
-
-```json
-{
-  "success": true,
-  "data": {
-    "token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_in": 900,
-    "user": {
-      "id": "uuid-here",
-      "email": "john@example.com",
-      "username": "johndoe",
-      "name": "John Doe",
-      "role": "USER",
-      "createdAt": "2026-03-09T12:00:00Z",
-      "updatedAt": "2026-03-09T12:00:00Z"
-    }
-  }
-}
-```
-
-### 8b. Login (Auth Service)
-
-```bash
-curl -X POST http://localhost:3100/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "john@example.com",
-    "password": "MyP@ssw0rd123"
-  }'
-```
-
-**Expected Response (200):**
-
-```json
-{
-  "success": true,
-  "data": {
-    "token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_in": 900,
-    "user": {
-      "id": "uuid-here",
-      "email": "john@example.com",
-      "username": "johndoe",
-      "name": "John Doe",
-      "role": "USER",
-      "createdAt": "2026-03-09T12:00:00Z",
-      "updatedAt": "2026-03-09T12:00:00Z"
-    }
-  }
-}
-```
-
-> **📋 Save the `token`** — you'll need it for authenticated requests.
-
-### 8c. Get Current User (Auth Service — Authenticated)
-
-```bash
-# Replace <ACCESS_TOKEN> with the token from the login response
-curl http://localhost:3100/auth/me \
-  -H "Authorization: Bearer <ACCESS_TOKEN>"
-```
-
-### 8d. Create a Product (Product Service)
-
-```bash
-curl -X POST http://localhost:3102/products \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <TOKEN>" \
-  -d '{
-    "name": "MacBook Pro M4",
-    "price": 2499.99,
-    "stock": 100,
-    "ownerId": "<USER_ID>"
-  }'
-```
-
-> **Note:** You'll need to get the `ownerId` from the `/auth/me` endpoint response.
-
-### 8e. List Products (Product Service)
-
-```bash
-curl http://localhost:3102/products
-```
-
-### 8f. Update Stock (Product Service)
-
-```bash
-# Replace <PRODUCT_ID> with the ID from the create response
-curl -X PUT http://localhost:3102/products/<PRODUCT_ID>/stock \
-  -H "Content-Type: application/json" \
-  -d '{
-    "stock": 5
-  }'
-```
-
-### 8g. List Users (User Service)
-
-```bash
-curl http://localhost:3101/api/v1/users
-```
-
-### 8h. Check Prometheus Metrics
-
-```bash
-# Auth service metrics
-curl http://localhost:3100/metrics
-
-# User service metrics
-curl http://localhost:3101/metrics
-
-# Product service metrics
-curl http://localhost:3102/metrics
-```
-
-The output will be in Prometheus text format. Look for:
-
-- `http_requests_total` — total HTTP requests by method, path, and status
-- `http_request_duration_seconds` — request latency histogram
-- `redis_publish_total` — events published to Redis Streams
+Then login and continue same flow.
 
 ---
 
-## Step 9: Monitor with Prometheus & Grafana
+## 10. Verify Redis Streams Are Working
 
-### 9a. Update Prometheus targets for local services
+After register/login/create/update actions, verify stream data.
 
-The default `deployments/monitoring/prometheus.yml` assumes services run inside Docker with container names. Since we're running services locally, we need to update the scrape targets.
+Important:
 
-Create or edit a local prometheus override:
+- `service-auth` publishes auth events to `auth:events`
+- `service-user` consumes `auth:events` and writes into `user_activity_logs`
+- If `service-user` is not running, stream entries still exist, but no activity log rows are created
+- On startup, `service-user` now logs `Starting auth events consumer ...`
+
+### 10.1 List keys
+
+If Redis in Docker:
 
 ```bash
-# Check current targets in Prometheus UI
-open http://localhost:9090/targets
+docker exec go-microservices-redis redis-cli KEYS "*"
 ```
 
-> **⚠️ Note:** The default prometheus.yml uses Docker container names (e.g., `auth-service:8080`). Since our services run locally on the host, Prometheus (running in Docker) needs to reach them via `host.docker.internal` on macOS.
+If local Redis:
 
-To fix this temporarily, you can use the Prometheus **Targets** page (http://localhost:9090/targets) to verify which targets are UP/DOWN.
-
-For a quick fix, you can update `deployments/monitoring/prometheus.yml`:
-
-```yaml
-# Replace the service targets with host.docker.internal
-- job_name: "auth-service"
-  static_configs:
-    - targets: ["host.docker.internal:3100"]
-
-- job_name: "user-service"
-  static_configs:
-    - targets: ["host.docker.internal:3101"]
-
-- job_name: "product-service"
-  static_configs:
-    - targets: ["host.docker.internal:3102"]
+```bash
+redis-cli KEYS "*"
 ```
+
+### 10.2 Inspect main streams
+
+Known stream names in code (`pkg/eventbus/options.go`):
+
+- `auth:events`
+- `users:events`
+- `products:events`
+
+Check stream metadata:
+
+```bash
+redis-cli XINFO STREAM auth:events
+redis-cli XINFO STREAM users:events
+redis-cli XINFO STREAM products:events
+```
+
+Show latest entries:
+
+```bash
+redis-cli XREVRANGE auth:events + - COUNT 5
+redis-cli XREVRANGE users:events + - COUNT 5
+redis-cli XREVRANGE products:events + - COUNT 5
+```
+
+Equivalent for Docker Redis:
+
+```bash
+docker exec go-microservices-redis redis-cli XREVRANGE products:events + - COUNT 5
+```
+
+### 10.3 Quick interpretation
+
+You should see message IDs like `174...-0` with fields such as:
+
+- `id`
+- `type`
+- `source`
+- `timestamp`
+- `payload`
+
+If stream exists but no new entries, trigger events again:
+
+- login/register on auth service
+- create/update product on product service
+
+---
+
+## 11. Monitoring (Prometheus/Grafana)
+
+Optional monitoring stack:
+
+```bash
+docker compose -f deployments/docker-compose.yml --profile monitoring up -d
+```
+
+UI URLs:
+
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3000` (`admin` / `admin`)
+- Alertmanager: `http://localhost:9093`
+
+### 11.1 Important target note
+
+Current `deployments/monitoring/prometheus.yml` uses container-host targets by default.
+If Go services are running on host machine, update targets to:
+
+- `host.docker.internal:3100`
+- `host.docker.internal:3101`
+- `host.docker.internal:3102`
 
 Then restart Prometheus:
 
@@ -652,297 +577,166 @@ Then restart Prometheus:
 docker compose -f deployments/docker-compose.yml --profile monitoring restart prometheus
 ```
 
-### 9b. Access Grafana
+### 11.2 Quick metrics checks
 
-1. Open http://localhost:3000
-2. Login with **admin** / **admin** (skip password change for dev)
-3. Prometheus should already be configured as a data source
-4. You can create dashboards or explore metrics via **Explore** → select `prometheus` → type a query like `http_requests_total`
+```bash
+curl http://localhost:3100/metrics
+curl http://localhost:3101/metrics
+curl http://localhost:3102/metrics
+```
 
-### 9c. Useful Prometheus Queries
+Look for metrics families such as:
 
-| Query                                                                      | What it shows                   |
-| :------------------------------------------------------------------------- | :------------------------------ |
-| `http_requests_total`                                                      | Total requests per service      |
-| `rate(http_requests_total[5m])`                                            | Requests per second (5m window) |
-| `http_request_duration_seconds_bucket`                                     | Latency distribution            |
-| `histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))` | P95 latency                     |
-| `redis_publish_total`                                                      | Events published to Redis       |
+- `http_requests_total`
+- `http_request_duration_seconds`
+- `redis_publish_total`
 
 ---
 
-## Step 10: View Redis Streams Events
+## 12. Troubleshooting
 
-When you create a product or register a user, events are published to Redis Streams. You can observe them in two ways:
+### 12.1 `service-user` / `service-product` runs on wrong port
 
-### 10a. Using Redis CLI
+Cause:
 
-```bash
-# Check which streams exist
-docker exec go-microservices-redis redis-cli KEYS "*"
+- `.env` still forcing `APP_ENV=local` and/or `SERVER_PORT=3100`
 
-# Read all events from the product stream
-docker exec go-microservices-redis redis-cli XRANGE products:events - +
+Fix:
 
-# Read all events from the auth stream
-docker exec go-microservices-redis redis-cli XRANGE auth:events - +
+- comment out service-scoped keys in `.env` (section 3)
+- restart service terminal
 
-# Read all events from the user stream
-docker exec go-microservices-redis redis-cli XRANGE users:events - +
+### 12.2 `bind: address already in use`
 
-# Watch events in real-time (like `tail -f`)
-docker exec go-microservices-redis redis-cli MONITOR
-```
-
-### 10b. Using Redis Insight GUI
-
-1. Open http://localhost:5540
-2. Connect to your Redis instance
-3. Navigate to the **Streams** section
-4. You'll see streams like `products:events`, `auth:events`
-5. Click on a stream to view its messages and consumer groups
-
-### 10c. Understanding Event Flow
-
-When you create a product, the following happens:
-
-```
-1. POST /products → Product Service Handler
-2. Handler → Product UseCase (business logic)
-3. UseCase → Product Repository (save to PostgreSQL)
-4. UseCase → EventBus Producer (publish event to Redis Stream)
-5. Redis Stream "products:events" receives:
-   {
-     "id": "unique-event-id",
-     "type": "product.created",
-     "source": "product-service",
-     "timestamp": 1741152000,
-     "payload": { "id": "...", "name": "MacBook Pro M4", ... }
-   }
-6. Any service with a Consumer for "products:events" will receive this event
-```
-
----
-
-## Troubleshooting
-
-### ❌ "connection refused" when starting a service
-
-**Cause:** PostgreSQL or Redis is not running.
+Find and kill process:
 
 ```bash
-# Check PostgreSQL
-pg_isready -h localhost -p 5432
-
-# Check Redis
-docker exec go-microservices-redis redis-cli ping
-```
-
-### ❌ "role postgres does not exist"
-
-**Cause:** On macOS with Homebrew PostgreSQL, the default superuser is your macOS username.
-
-**Fix:** Create the postgres user:
-
-```bash
-createuser -s postgres
-```
-
-Or update the `database.user` field in all config files to your macOS username.
-
-### ❌ "database auth_db does not exist"
-
-**Cause:** You haven't created the databases yet.
-
-**Fix:** See [Step 3: Create PostgreSQL Databases](#step-3-create-postgresql-databases-locally).
-
-### ❌ "address already in use" on a port
-
-**Cause:** Another service or process is using that port.
-
-```bash
-# Find what's using port 3100
 lsof -i :3100
-
-# Kill the process
+lsof -i :3101
+lsof -i :3102
 kill -9 <PID>
 ```
 
-### ❌ Services can't connect to Redis
+### 12.3 `migration up-all failed: context canceled handling ...`
 
-**Cause:** Redis container might not be running.
-
-```bash
-# Check container status
-docker ps | grep redis
-
-# Restart if needed
-docker compose -f deployments/docker-compose.yml up -d redis
-```
-
-### ❌ "yaml: line X: mapping values are not allowed in this context"
-
-**Cause:** The wrong YAML config file is being loaded.
-
-**Fix:** Make sure you're setting `APP_ENV` correctly:
+Checks:
 
 ```bash
-# Auth service
-APP_ENV=local go run ./cmd/auth-service
-
-# User service (NOT just "local"!)
-APP_ENV=user-local go run ./cmd/user-service
-
-# Product service
-APP_ENV=product-local go run ./cmd/product-service
+pg_isready -h localhost -p 5432
+make db-migrate
 ```
 
-### ❌ GORM auto-migration errors
+If still failing:
 
-**Cause:** Database schema conflicts from a previous run.
+- ensure DB credentials in config/env are correct
+- ensure database exists (`make db-create`)
 
-**Fix:** Drop and recreate the database:
+### 12.4 Seeder says table missing
+
+Run setup in order:
 
 ```bash
-psql -U postgres -c "DROP DATABASE auth_db;"
-psql -U postgres -c "CREATE DATABASE auth_db;"
-psql -U postgres -d auth_db -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
+make db-create
+make db-migrate
+make db-seed
 ```
+
+### 12.5 Down migration blocked by safety check
+
+Expected when data exists in dropped table/column.
+
+Force only if you are okay with data loss:
+
+```bash
+MIGRATION_FORCE=1 make db-migrate-down-one
+```
+
+### 12.6 Redis stream seems empty
+
+Checklist:
+
+1. Redis ping is `PONG`
+2. At least one event-producing API was executed
+3. Read with correct stream names (`auth:events`, `users:events`, `products:events`)
+4. Use `XINFO STREAM <name>` to confirm stream exists
+
+### 12.7 I changed schema and not reflected in DB
+
+This project is SQL-migration-first.
+Do not rely on runtime schema auto migration.
+
+Workflow:
+
+1. add new sequential SQL migration in `migrations/`
+2. run `make db-migrate`
 
 ---
 
-## Useful Makefile Commands
+## 13. Quick Command Cheat Sheet
 
-The project includes a comprehensive `Makefile` with 315 lines of commands. Here are the most useful ones:
-
-### Build & Run
+### First-time setup
 
 ```bash
-make build              # Build all 3 services → bin/ directory
-make build-auth-service # Build only auth service
-make run-auth-service   # Run auth service (go run)
-make dev                # Run with hot reload (requires Air)
-```
+make deps
+make build
 
-### Testing
-
-```bash
-make test               # Run all tests
-make test-coverage      # Run tests with HTML coverage report
-make test-integration   # Run integration tests
-```
-
-### Code Quality
-
-```bash
-make fmt                # Format all Go code
-make lint               # Run golangci-lint
-make lint-fix           # Auto-fix lint errors
-make vet                # Run go vet (built-in static analysis)
-make security           # Check for known vulnerabilities
-```
-
-### Docker
-
-```bash
-make docker-up          # Start all Docker containers
-make docker-down        # Stop all Docker containers
-make docker-logs        # Tail container logs
-make docker-restart     # Restart all containers
-```
-
-### Generation
-
-```bash
-make wire               # Regenerate Wire dependency injection
-make swagger            # Generate Swagger/OpenAPI docs (outputs to cmd/*/docs/)
-make mocks              # Generate test mocks
-```
-
-### Dependencies
-
-```bash
-make deps               # Download dependencies + tidy
-make update-deps        # Update all dependencies to latest
-```
-
----
-
-## How It All Connects: A Visual Summary
-
-Here's the complete local development setup when everything is running:
-
-```
-YOUR TERMINAL WINDOWS:
-┌─────────────────────────────────────────────────────────────────┐
-│ Tab 1: Auth Service                                             │
-│ $ APP_ENV=local go run ./cmd/auth-service                       │
-│ → Listening on :3100                                            │
-│ → Connected to PostgreSQL (auth_db) on localhost:5432           │
-│ → Connected to Redis on localhost:6379                          │
-├─────────────────────────────────────────────────────────────────┤
-│ Tab 2: User Service                                             │
-│ $ APP_ENV=user-local go run ./cmd/user-service                  │
-│ → Listening on :3101                                            │
-│ → Connected to PostgreSQL (user_db) on localhost:5432           │
-│ → Connected to Redis on localhost:6379                          │
-├─────────────────────────────────────────────────────────────────┤
-│ Tab 3: Product Service                                          │
-│ $ APP_ENV=product-local go run ./cmd/product-service            │
-│ → Listening on :3102                                            │
-│ → Connected to PostgreSQL (product_db) on localhost:5432        │
-│ → Connected to Redis on localhost:6379                          │
-└─────────────────────────────────────────────────────────────────┘
-
-DOCKER CONTAINERS (background):
-┌─────────────────────────────────────────────────────────────────┐
-│ Redis             → localhost:6379  (Event Bus)                  │
-│ Redis Insight     → localhost:5540  (Redis GUI)                  │
-│ Prometheus        → localhost:9090  (Metrics Collection)         │
-│ Grafana           → localhost:3000  (Dashboards, admin/admin)    │
-│ Alertmanager      → localhost:9093  (Alert Management)           │
-└─────────────────────────────────────────────────────────────────┘
-
-LOCAL PostgreSQL:
-┌─────────────────────────────────────────────────────────────────┐
-│ PostgreSQL        → localhost:5432                               │
-│   ├── auth_db     (auth-service tables)                         │
-│   ├── user_db     (user-service tables)                         │
-│   └── product_db  (product-service tables)                      │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Quick Start Cheat Sheet
-
-For when you come back tomorrow and need to start everything again:
-
-```bash
-# 1. Start infrastructure
+# Redis (docker option)
 docker compose -f deployments/docker-compose.yml up -d redis redis-insight
-docker compose -f deployments/docker-compose.yml --profile monitoring up -d
 
-# 2. Start services (each in a separate terminal)
-APP_ENV=local go run ./cmd/auth-service
-APP_ENV=user-local go run ./cmd/user-service
-APP_ENV=product-local go run ./cmd/product-service
+# DB
+make db-create
+make db-migrate
+make db-seed
+```
 
-# 3. Verify everything is running
-curl http://localhost:3100/health  # Auth
-curl http://localhost:3101/health  # User
-curl http://localhost:3102/health  # Product
+### Run services
 
-# 4. Stop everything when done
-# Ctrl+C in each service terminal
-docker compose -f deployments/docker-compose.yml --profile monitoring down
+```bash
+APP_ENV=local make run-service-auth
+APP_ENV=user-local make run-service-user
+APP_ENV=product-local make run-service-product
+```
+
+### Health checks
+
+```bash
+curl http://localhost:3100/health
+curl http://localhost:3101/health
+curl http://localhost:3102/health
+```
+
+### Migration operations
+
+```bash
+make db-migrate
+make db-migrate-up-one
+make db-migrate-down-one
+make db-migrate-down-all
+make db-migrate-create name=your_migration_name
+```
+
+### Redis stream checks
+
+```bash
+redis-cli XINFO STREAM products:events
+redis-cli XREVRANGE products:events + - COUNT 5
 ```
 
 ---
 
-> **📚 Next Steps:**
->
-> - Explore the codebase starting from `cmd/auth-service/main.go` → follow the dependency injection chain
-> - Read `docs/standardization/CODE_STYLE.md` for coding conventions
-> - Read `docs/standardization/GORM_BEST_PRACTICES.md` for database patterns
-> - Try adding Swagger annotations to handlers and running `make swagger`
+## Notes for Node.js Developers
+
+If you are used to Drizzle/Sequelize style workflows:
+
+- `migrations/*.sql` in this project is the equivalent migration log source
+- `make db-migrate-create` is the helper to scaffold new migration file
+- `make db-migrate` is equivalent to applying pending migrations
+- `make db-migrate-down-one` is equivalent to rollback latest migration
+- rollback safety is built in for destructive down migrations
+
+If you want, next step we can add a small `scripts/smoke-test.sh` to automate:
+
+1. login
+2. create product
+3. verify product list
+4. verify Redis stream event

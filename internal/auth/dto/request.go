@@ -23,8 +23,9 @@ func (r *RegisterRequest) Validate() error {
 }
 
 // LoginRequest represents a login request (aligned with Bun-Hono).
+// The "email" field accepts either email or username as credential.
 type LoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
+	Email    string `json:"email" binding:"required,max=255"`
 	Password string `json:"password" binding:"required"`
 }
 

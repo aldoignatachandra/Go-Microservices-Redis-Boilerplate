@@ -9,11 +9,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 
 	"github.com/ignata/go-microservices-boilerplate/internal/auth/domain"
 	"github.com/ignata/go-microservices-boilerplate/internal/auth/dto"
 	"github.com/ignata/go-microservices-boilerplate/internal/auth/repository"
 	"github.com/ignata/go-microservices-boilerplate/pkg/eventbus"
+	"github.com/ignata/go-microservices-boilerplate/pkg/logger"
 	"github.com/ignata/go-microservices-boilerplate/pkg/utils"
 )
 
@@ -153,8 +155,10 @@ func (uc *authUseCase) Register(ctx context.Context, req *dto.RegisterRequest) (
 
 // Login authenticates a user.
 func (uc *authUseCase) Login(ctx context.Context, req *dto.LoginRequest, ipAddress, userAgent string) (*dto.AuthResponse, error) {
-	// Find user by email (include deleted to check for deleted users)
-	user, err := uc.userRepo.FindByEmail(ctx, req.Email, &domain.ParanoidOptions{IncludeDeleted: true})
+	credential := strings.TrimSpace(req.Email)
+
+	// Find user by email or username (include deleted to check for deleted users)
+	user, err := uc.userRepo.FindByEmailOrUsername(ctx, credential, &domain.ParanoidOptions{IncludeDeleted: true})
 	if err != nil {
 		if errors.Is(err, domain.ErrUserNotFound) {
 			return nil, domain.ErrInvalidCredentials
@@ -279,6 +283,11 @@ func (uc *authUseCase) RefreshToken(ctx context.Context, req *dto.RefreshTokenRe
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
+	// Publish event
+	if uc.eventBus != nil {
+		uc.publishEvent(ctx, domain.NewUserRefreshedTokenEvent(user))
+	}
+
 	return &dto.AuthResponse{
 		Token:     tokenPair.AccessToken,
 		ExpiresIn: tokenPair.ExpiresIn,
@@ -381,6 +390,12 @@ func (uc *authUseCase) ChangePassword(ctx context.Context, userID string, req *d
 	// Revoke all sessions (force re-login)
 	_ = uc.sessionRepo.RevokeAllForUser(ctx, userID)
 
+	// Publish event
+	if uc.eventBus != nil {
+		uc.publishEvent(ctx, domain.NewUserUpdatedEvent(user).
+			WithMetadata("update_type", "password_changed"))
+	}
+
 	return nil
 }
 
@@ -450,7 +465,23 @@ func (uc *authUseCase) publishEvent(ctx context.Context, event *domain.UserEvent
 
 	// Publish asynchronously
 	go func() {
-		_, _ = uc.eventBus.Publish(context.Background(), eventbus.StreamAuthEvents, ebEvent)
+		eventID, err := uc.eventBus.Publish(context.Background(), eventbus.StreamAuthEvents, ebEvent)
+		if err != nil {
+			logger.Error("Failed to publish auth event",
+				zap.String("stream", eventbus.StreamAuthEvents),
+				zap.String("event_type", event.EventType),
+				zap.String("user_id", event.UserID),
+				zap.Error(err),
+			)
+			return
+		}
+
+		logger.Info("Published auth event",
+			zap.String("stream", eventbus.StreamAuthEvents),
+			zap.String("event_id", eventID),
+			zap.String("event_type", event.EventType),
+			zap.String("user_id", event.UserID),
+		)
 	}()
 }
 

@@ -62,22 +62,25 @@ func main() {
 		log.Fatalf("failed to open database connection: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	pingCtx, cancelPing, migrationCtx, cancelMigration := newMigrationContexts(60 * time.Second)
 
-	if err := db.PingContext(ctx); err != nil {
-		cancel()
+	if err := db.PingContext(pingCtx); err != nil {
+		cancelPing()
+		cancelMigration()
 		_ = db.Close()
 		log.Fatalf("failed to ping database: %v", err)
 	}
-	cancel()
+	cancelPing()
 
 	source := &migrate.FileMigrationSource{Dir: migrationsDir}
 
-	applied, migrationIDs, err := runMigration(ctx, db, source, action)
+	applied, migrationIDs, err := runMigration(migrationCtx, db, source, action)
 	if err != nil {
+		cancelMigration()
 		_ = db.Close()
 		log.Fatalf("migration %s failed: %v", action, err)
 	}
+	cancelMigration()
 	_ = db.Close()
 
 	if applied == 0 {
@@ -87,6 +90,17 @@ func main() {
 
 	fmt.Printf("✅ Applied %d migration(s) using action '%s'.\n", applied, action)
 	printAppliedMigrations(applied, migrationIDs)
+}
+
+func newMigrationContexts(timeout time.Duration) (
+	context.Context,
+	context.CancelFunc,
+	context.Context,
+	context.CancelFunc,
+) {
+	pingCtx, cancelPing := context.WithTimeout(context.Background(), timeout)
+	migrationCtx, cancelMigration := context.WithTimeout(context.Background(), timeout)
+	return pingCtx, cancelPing, migrationCtx, cancelMigration
 }
 
 func runMigration(

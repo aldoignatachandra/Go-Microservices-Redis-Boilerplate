@@ -1076,6 +1076,66 @@ func TestFindByEmail(t *testing.T) {
 	})
 }
 
+// TestFindByEmailOrUsername tests the FindByEmailOrUsername method.
+func TestFindByEmailOrUsername(t *testing.T) {
+	db := setupTestDB(t)
+	defer teardownTestDB(t, db)
+
+	repo := repository.NewUserRepository(db)
+	ctx := context.Background()
+
+	t.Run("successful find by email", func(t *testing.T) {
+		// Arrange
+		user := createTestUser(t, db)
+
+		// Act
+		found, err := repo.FindByEmailOrUsername(ctx, user.Email, domain.DefaultParanoidOptions())
+
+		// Assert
+		require.NoError(t, err)
+		assert.Equal(t, user.ID, found.ID)
+		assert.Equal(t, user.Email, found.Email)
+	})
+
+	t.Run("successful find by username", func(t *testing.T) {
+		// Arrange
+		user := createTestUser(t, db)
+
+		// Act
+		found, err := repo.FindByEmailOrUsername(ctx, user.Username, domain.DefaultParanoidOptions())
+
+		// Assert
+		require.NoError(t, err)
+		assert.Equal(t, user.ID, found.ID)
+		assert.Equal(t, user.Username, found.Username)
+	})
+
+	t.Run("successful find deleted user with include deleted", func(t *testing.T) {
+		// Arrange
+		user := createTestUser(t, db)
+		err := db.Delete(user).Error
+		require.NoError(t, err)
+
+		// Act
+		found, err := repo.FindByEmailOrUsername(ctx, user.Username, &domain.ParanoidOptions{IncludeDeleted: true})
+
+		// Assert
+		require.NoError(t, err)
+		assert.Equal(t, user.ID, found.ID)
+		assert.True(t, found.DeletedAt.Valid)
+	})
+
+	t.Run("fail - user not found", func(t *testing.T) {
+		// Act
+		found, err := repo.FindByEmailOrUsername(ctx, "nonexistent-credential", domain.DefaultParanoidOptions())
+
+		// Assert
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrUserNotFound)
+		assert.Nil(t, found)
+	})
+}
+
 // TestFindAll tests the FindAll method with pagination and filtering.
 func TestFindAll(t *testing.T) {
 	db := setupTestDB(t)
@@ -1085,10 +1145,8 @@ func TestFindAll(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup test data
-	var users []*domain.User
 	for i := 0; i < 5; i++ {
-		user := createTestUser(t, db)
-		users = append(users, user)
+		_ = createTestUser(t, db)
 	}
 
 	// Create a soft-deleted user

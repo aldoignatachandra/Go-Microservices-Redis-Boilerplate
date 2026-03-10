@@ -16,11 +16,6 @@ import (
 func RegisterRoutes(r *gin.Engine, authUseCase usecase.AuthUseCase, jwtSecret string) {
 	handler := NewHandler(authUseCase)
 
-	// Health check endpoints (public)
-	r.GET("/health", handler.PublicHealth)
-	r.GET("/ready", handler.ReadyProbe)
-	r.GET("/live", handler.LiveProbe)
-
 	// Public auth routes
 	auth := r.Group("/auth")
 	auth.POST("/register", handler.Register)
@@ -54,11 +49,6 @@ func RegisterRoutesWithRateLimit(
 	window time.Duration,
 ) {
 	handler := NewHandler(authUseCase)
-
-	// Health check endpoints (public)
-	r.GET("/health", handler.PublicHealth)
-	r.GET("/ready", handler.ReadyProbe)
-	r.GET("/live", handler.LiveProbe)
 
 	// Rate limiting middleware with per-route configuration
 	rateLimitMiddleware := middleware.RedisRateLimitPerRoute(redisLimiter, limit, int(window.Seconds()))

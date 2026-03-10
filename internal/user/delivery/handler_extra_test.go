@@ -20,7 +20,7 @@ import (
 func TestActivateUser_NotFound(t *testing.T) {
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	mockUseCase.On("ActivateUser", mock.Anything, mock.AnythingOfType("*dto.ActivateUserRequest")).
 		Return(domain.ErrUserNotFound)
@@ -38,7 +38,7 @@ func TestActivateUser_NotFound(t *testing.T) {
 func TestDeactivateUser_NotFound(t *testing.T) {
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	mockUseCase.On("DeactivateUser", mock.Anything, mock.AnythingOfType("*dto.DeactivateUserRequest")).
 		Return(domain.ErrUserNotFound)
@@ -56,7 +56,7 @@ func TestDeactivateUser_NotFound(t *testing.T) {
 func TestDeleteUser_NotFound(t *testing.T) {
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	mockUseCase.On("DeleteUser", mock.Anything, mock.AnythingOfType("*dto.DeleteUserRequest")).
 		Return(domain.ErrUserNotFound)
@@ -74,7 +74,7 @@ func TestDeleteUser_NotFound(t *testing.T) {
 func TestRestoreUser_InternalError(t *testing.T) {
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	mockUseCase.On("RestoreUser", mock.Anything, mock.AnythingOfType("*dto.RestoreUserRequest")).
 		Return(nil, errors.New("internal server error"))
@@ -92,7 +92,7 @@ func TestRestoreUser_InternalError(t *testing.T) {
 func TestGetActivityLogs_InternalError(t *testing.T) {
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	mockUseCase.On("GetActivityLogs", mock.Anything, mock.AnythingOfType("*dto.ListActivityLogsRequest")).
 		Return(nil, errors.New("internal server error"))
@@ -110,7 +110,7 @@ func TestGetActivityLogs_InternalError(t *testing.T) {
 func TestListUsers_InternalError(t *testing.T) {
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	mockUseCase.On("ListUsers", mock.Anything, mock.AnythingOfType("*dto.ListUsersRequest")).
 		Return(nil, errors.New("internal error"))
@@ -129,7 +129,7 @@ func TestListUsers_InternalError(t *testing.T) {
 func TestGetUser_IncludeDeleted(t *testing.T) {
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	expectedUser := &dto.UserResponse{
 		ID:    "550e8400-e29b-41d4-a716-446655440001",
@@ -213,7 +213,7 @@ func TestListUsers_WithFilters(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockUseCase := new(mocks.MockUserUseCase)
 			handler := delivery.NewUserHandler(mockUseCase)
-			router := setupTestRouter(handler)
+			router := setupTestRouter()
 
 			tt.setup(mockUseCase)
 
@@ -233,7 +233,7 @@ func TestListUsers_WithFilters(t *testing.T) {
 func TestDeleteUser_ForceDelete(t *testing.T) {
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	mockUseCase.On("DeleteUser", mock.Anything, mock.MatchedBy(func(r *dto.DeleteUserRequest) bool {
 		return r.ID == "550e8400-e29b-41d4-a716-446655440001" && r.Force == true
@@ -257,7 +257,7 @@ func TestDeleteUser_ForceDelete(t *testing.T) {
 func TestRestoreUser_AlreadyActive(t *testing.T) {
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	expectedResponse := &dto.RestoreResponse{
 		Success: false,
@@ -337,7 +337,7 @@ func TestGetActivityLogs_WithFilters(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockUseCase := new(mocks.MockUserUseCase)
 			handler := delivery.NewUserHandler(mockUseCase)
-			router := setupTestRouter(handler)
+			router := setupTestRouter()
 
 			tt.setup(mockUseCase)
 
@@ -357,7 +357,7 @@ func TestGetActivityLogs_WithFilters(t *testing.T) {
 func TestGetUser_InternalError(t *testing.T) {
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	mockUseCase.On("GetUser", mock.Anything, mock.AnythingOfType("*dto.GetUserRequest")).
 		Return(nil, errors.New("database error"))
@@ -376,7 +376,7 @@ func TestGetUser_InternalError(t *testing.T) {
 func TestActivateUser_InternalError(t *testing.T) {
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	mockUseCase.On("ActivateUser", mock.Anything, mock.AnythingOfType("*dto.ActivateUserRequest")).
 		Return(errors.New("database error"))
@@ -395,7 +395,7 @@ func TestActivateUser_InternalError(t *testing.T) {
 func TestDeactivateUser_InternalError(t *testing.T) {
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	mockUseCase.On("DeactivateUser", mock.Anything, mock.AnythingOfType("*dto.DeactivateUserRequest")).
 		Return(errors.New("database error"))
@@ -414,7 +414,7 @@ func TestDeactivateUser_InternalError(t *testing.T) {
 func TestDeleteUser_InternalError(t *testing.T) {
 	mockUseCase := new(mocks.MockUserUseCase)
 	handler := delivery.NewUserHandler(mockUseCase)
-	router := setupTestRouter(handler)
+	router := setupTestRouter()
 
 	mockUseCase.On("DeleteUser", mock.Anything, mock.AnythingOfType("*dto.DeleteUserRequest")).
 		Return(errors.New("database error"))
@@ -427,9 +427,4 @@ func TestDeleteUser_InternalError(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	mockUseCase.AssertExpectations(t)
-}
-
-// Helper function to create a string pointer.
-func ptrString(s string) *string {
-	return &s
 }

@@ -5,8 +5,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
@@ -21,30 +23,37 @@ import (
 const (
 	adminEmail    = "admin@example.com"
 	adminPassword = "Admin123!"
-	adminRole     = "ADMIN"
 
 	userEmail    = "user@example.com"
 	userPassword = "User123!"
 	userRole     = "USER"
 )
 
-// SeedData contains all seed data configuration.
-type SeedData struct {
-	AdminEmail    string
-	AdminPassword string
-	UserEmail     string
-	UserPassword  string
-}
-
 // seeder handles database seeding operations.
 type seeder struct {
 	db *gorm.DB
 }
 
+func newGormLogger(writer io.Writer) logger.Interface {
+	if writer == nil {
+		writer = os.Stdout
+	}
+
+	return logger.New(
+		log.New(writer, "", log.LstdFlags),
+		logger.Config{
+			SlowThreshold:             200 * time.Millisecond,
+			LogLevel:                  logger.Info,
+			IgnoreRecordNotFoundError: true,
+			Colorful:                  false,
+		},
+	)
+}
+
 // newSeeder creates a new seeder instance.
 func newSeeder(dsn string) (*seeder, error) {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: newGormLogger(os.Stdout),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
@@ -384,15 +393,17 @@ func (s *seeder) seedProductAttributes(ctx context.Context, productID string, p 
 			}
 			log.Printf("      ✅ Attribute created: %s (%s)", a.name, p.name)
 		case attrErr == nil:
+			updatePayload := &productDomain.ProductAttribute{
+				Values:       a.values,
+				DisplayOrder: a.displayOrder,
+				DeletedAt:    gorm.DeletedAt{},
+			}
 			if err := s.db.WithContext(ctx).
 				Model(&productDomain.ProductAttribute{}).
 				Unscoped().
 				Where("id = ?", existingAttribute.ID).
-				Updates(map[string]interface{}{
-					"values":        a.values,
-					"display_order": a.displayOrder,
-					"deleted_at":    nil,
-				}).Error; err != nil {
+				Select("values", "display_order", "deleted_at").
+				Updates(updatePayload).Error; err != nil {
 				return fmt.Errorf("failed to update attribute %s for product %s: %w", a.name, p.name, err)
 			}
 		default:
@@ -436,20 +447,22 @@ func (s *seeder) seedProductVariants(ctx context.Context, productID string, p pr
 			if existingVariant.ProductID != productID {
 				return 0, 0, fmt.Errorf("variant SKU %s belongs to another product (product_id=%s)", v.sku, existingVariant.ProductID)
 			}
+			updatePayload := &productDomain.ProductVariant{
+				Name:            v.name,
+				Price:           v.price,
+				StockQuantity:   v.stockQuantity,
+				StockReserved:   0,
+				IsActive:        true,
+				AttributeValues: v.attributeValues,
+				Images:          v.images,
+				DeletedAt:       gorm.DeletedAt{},
+			}
 			updateResult := s.db.WithContext(ctx).
 				Model(&productDomain.ProductVariant{}).
 				Unscoped().
 				Where("id = ?", existingVariant.ID).
-				Updates(map[string]interface{}{
-					"name":             v.name,
-					"price":            v.price,
-					"stock_quantity":   v.stockQuantity,
-					"stock_reserved":   0,
-					"is_active":        true,
-					"attribute_values": v.attributeValues,
-					"images":           v.images,
-					"deleted_at":       nil,
-				})
+				Select("name", "price", "stock_quantity", "stock_reserved", "is_active", "attribute_values", "images", "deleted_at").
+				Updates(updatePayload)
 			if updateResult.Error != nil {
 				return 0, 0, fmt.Errorf("failed to update variant %s for product %s: %w", v.sku, p.name, updateResult.Error)
 			}

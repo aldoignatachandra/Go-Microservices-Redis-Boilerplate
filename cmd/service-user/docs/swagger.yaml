@@ -120,13 +120,13 @@ info:
     name: API Support
     url: https://github.com/aldoignatachandra/Go-Microservices-Redis-Boilerplate
   description: User service for Go Microservices Redis Pub/Sub Boilerplate. Manages
-    users, activity logs, and consumes auth events from Redis Streams.
+    user profiles, activity logs, and consumes auth events from Redis Streams.
   title: User Service API
   version: "1.0"
 paths:
   /admin/health:
     get:
-      description: Detailed health with dependency status (requires system auth)
+      description: Detailed health with dependency status
       produces:
       - application/json
       responses:
@@ -138,8 +138,6 @@ paths:
           description: Service Unavailable
           schema:
             $ref: '#/definitions/pkg_server.HealthResponse'
-      security:
-      - SystemAuth: []
       summary: Admin health check
       tags:
       - health

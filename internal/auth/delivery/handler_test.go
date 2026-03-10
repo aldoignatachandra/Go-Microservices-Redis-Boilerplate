@@ -296,6 +296,52 @@ func TestLogin_Success(t *testing.T) {
 	mockUseCase.AssertExpectations(t)
 }
 
+// TestLogin_SuccessWithUsernameCredential tests successful login using username in the email field.
+func TestLogin_SuccessWithUsernameCredential(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	expectedResponse := &dto.AuthResponse{
+		Token:     "access-token-123",
+		ExpiresIn: 3600,
+		User: &dto.UserResponse{
+			ID:       "550e8400-e29b-41d4-a716-446655440001",
+			Email:    "test@example.com",
+			Username: "testuser",
+			Role:     "USER",
+		},
+	}
+
+	mockUseCase.On("Login", mock.Anything, mock.AnythingOfType("*dto.LoginRequest"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+		Return(expectedResponse, nil)
+
+	// Act
+	reqBody := map[string]interface{}{
+		"email":    "testuser",
+		"password": "CorrectPassword123",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "test-agent")
+	w := httptest.NewRecorder()
+
+	router.POST("/auth/login", handler.Login)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.True(t, response["success"].(bool))
+
+	mockUseCase.AssertExpectations(t)
+}
+
 // TestLogin_InvalidCredentials tests login with invalid credentials.
 func TestLogin_InvalidCredentials(t *testing.T) {
 	// Arrange
@@ -1766,11 +1812,6 @@ func TestLogin_ValidationErrors(t *testing.T) {
 			name:     "empty password",
 			email:    "test@example.com",
 			password: "",
-		},
-		{
-			name:     "invalid email format",
-			email:    "invalid-email",
-			password: "password123",
 		},
 	}
 

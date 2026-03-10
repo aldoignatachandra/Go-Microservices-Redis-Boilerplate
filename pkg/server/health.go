@@ -83,13 +83,12 @@ func (h *HealthHandler) PublicHealth(c *gin.Context) {
 
 // AdminHealth handles admin health check with dependency status.
 // @Summary Admin health check
-// @Description Detailed health with dependency status (requires system auth)
+// @Description Detailed health with dependency status
 // @Tags health
 // @Produce json
 // @Success 200 {object} HealthResponse
 // @Failure 503 {object} HealthResponse
 // @Router /admin/health [get]
-// @Security SystemAuth
 func (h *HealthHandler) AdminHealth(c *gin.Context) {
 	ctx := c.Request.Context()
 	status := http.StatusOK

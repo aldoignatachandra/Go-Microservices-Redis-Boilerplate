@@ -94,7 +94,7 @@ func TestRegisterRoutes(t *testing.T) {
 		routePaths[route.Path] = true
 	}
 
-	assert.True(t, routePaths["/health"], "Health route should be registered")
+	assert.False(t, routePaths["/health"], "Health route should not be registered by delivery routes")
 	assert.True(t, routePaths["/auth/register"], "Register route should be registered")
 	assert.True(t, routePaths["/auth/login"], "Login route should be registered")
 }

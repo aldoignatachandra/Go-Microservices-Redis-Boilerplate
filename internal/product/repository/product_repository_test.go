@@ -439,10 +439,8 @@ func TestFindAll(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup test data
-	var products []*domain.Product
 	for range 5 {
-		product := createTestProduct(t, db)
-		products = append(products, product)
+		_ = createTestProduct(t, db)
 	}
 
 	// Create a soft-deleted product

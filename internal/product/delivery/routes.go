@@ -33,11 +33,6 @@ func CORSMiddleware() gin.HandlerFunc {
 func RegisterRoutes(r *gin.Engine, productUseCase usecase.ProductUseCase) {
 	handler := NewHandler(productUseCase)
 
-	// Health check endpoints (public)
-	r.GET("/health", handler.PublicHealth)
-	r.GET("/ready", handler.ReadyProbe)
-	r.GET("/live", handler.LiveProbe)
-
 	// Public product routes
 	r.GET("/products", handler.ListProducts)
 	r.GET("/products/:id", handler.GetProduct)
@@ -62,11 +57,6 @@ func RegisterRoutesWithRateLimit(
 
 	// Rate limiting middleware with per-route configuration
 	rateLimitMiddleware := middleware.RedisRateLimitPerRoute(redisLimiter, limit, int(window.Seconds()))
-
-	// Health check endpoints (public)
-	r.GET("/health", handler.PublicHealth)
-	r.GET("/ready", handler.ReadyProbe)
-	r.GET("/live", handler.LiveProbe)
 
 	// Public product routes with rate limiting
 	products := r.Group("/products")

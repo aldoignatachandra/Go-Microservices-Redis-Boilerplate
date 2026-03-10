@@ -55,7 +55,7 @@ func (h *Handler) Register(c *gin.Context) {
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param request body dto.LoginRequest true "Login credentials"
+// @Param request body dto.LoginRequest true "Login credentials (email or username in email field)"
 // @Success 200 {object} dto.AuthResponse
 // @Failure 400 {object} utils.Response
 // @Failure 401 {object} utils.Response

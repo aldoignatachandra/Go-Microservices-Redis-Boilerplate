@@ -146,11 +146,6 @@ func TestAuth(t *testing.T) {
 
 			// Assert
 			assert.Equal(t, tt.expectedStatus, w.Code)
-
-			if tt.checkContext != nil && tt.expectedStatus == http.StatusOK {
-				// Get the gin context from the response writer
-				// Note: This is a simplified check; in real tests you might need to access the context differently
-			}
 		})
 	}
 }

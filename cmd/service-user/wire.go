@@ -1,13 +1,10 @@
 //go:build wireinject
 // +build wireinject
 
-// Package main provides Wire dependency injection setup for the user service.
+// Package main provides wire dependency injection setup.
 package main
 
 import (
-	"context"
-
-	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	"go.uber.org/zap"
 
@@ -17,54 +14,32 @@ import (
 	"github.com/ignata/go-microservices-boilerplate/pkg/database"
 	"github.com/ignata/go-microservices-boilerplate/pkg/eventbus"
 	"github.com/ignata/go-microservices-boilerplate/pkg/logger"
-	"github.com/ignata/go-microservices-boilerplate/pkg/server"
 )
 
-// AppServer contains all dependencies for the user service.
-type AppServer struct {
-	Engine      *gin.Engine
-	UserUseCase usecase.UserUseCase
-	PostgresDB  *database.PostgresDB
-	RedisClient *database.RedisClient
-	Log         *zap.Logger
-	Config      *config.Config
-}
-
-// Shutdown gracefully shuts down the server.
-func (s *AppServer) Shutdown(ctx context.Context) error {
-	return server.GracefulShutdown(ctx, s.Config, s.Engine, s.Log, s.PostgresDB.DB, s.RedisClient)
-}
-
-// initializeApp initializes the application with all dependencies using Wire.
-//
-//go:generate wire
-func initializeApp(cfg *config.Config) (*AppServer, error) {
+// InitializeApp creates a new application with all dependencies.
+func InitializeApp(cfg *config.Config) (*App, error) {
 	wire.Build(
-		// Core providers
-		wire.Struct(new(AppServer), "*"),
-		provideLogger,
-		provideGinEngine,
+		// Database
 		providePostgresDB,
 		provideRedisClient,
+
+		// Logger
+		provideLogger,
+
+		// Event Bus
 		provideEventBusProducer,
+
+		// Repositories
 		provideUserRepository,
 		provideActivityRepository,
+
+		// Use Cases
 		provideUserUseCase,
+
+		// App
+		NewApp,
 	)
-	return &AppServer{}, nil
-}
-
-// provideLogger creates a logger.
-func provideLogger(cfg *config.Config) (*zap.Logger, error) {
-	return logger.New(&logger.Config{
-		Level:  cfg.Logging.Level,
-		Format: cfg.Logging.Format,
-	})
-}
-
-// provideGinEngine creates a Gin engine.
-func provideGinEngine() *gin.Engine {
-	return gin.Default()
+	return nil, nil
 }
 
 // providePostgresDB creates a PostgreSQL connection.
@@ -92,6 +67,14 @@ func provideRedisClient(cfg *config.Config) (*database.RedisClient, error) {
 		Password: cfg.Redis.Password,
 		DB:       cfg.Redis.DB,
 		PoolSize: cfg.Redis.PoolSize,
+	})
+}
+
+// provideLogger creates a logger.
+func provideLogger(cfg *config.Config) (*zap.Logger, error) {
+	return logger.New(&logger.Config{
+		Level:  cfg.Logging.Level,
+		Format: cfg.Logging.Format,
 	})
 }
 

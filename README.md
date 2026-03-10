@@ -96,15 +96,17 @@ graph TB
 
 ### Event-Driven Flow
 
-When a user registers, the auth service creates the user synchronously and publishes an event to Redis Streams. Other services consume this event asynchronously using consumer groups.
+Write APIs persist data first, then publish a domain event to Redis Streams. Consumers process events asynchronously using dedicated consumer groups per service.
 
 ```mermaid
 sequenceDiagram
   participant C as Client
   participant A as Auth Service
+  participant P as Product Service
+  participant US as User Service
   participant D as PostgreSQL
   participant R as Redis Streams
-  participant U as User Service
+  participant AU as Auth Consumer
 
   Note over C,A: Command Side (Write)
   C->>A: POST /auth/register
@@ -113,10 +115,20 @@ sequenceDiagram
   A->>R: XADD "auth:events" user.created
   A-->>C: 201 Created
 
-  Note over R,U: Async Event Processing (Consumer Group)
-  R->>U: XREADGROUP "auth:events"
-  U->>D: Create user
-  U->>R: XACK acknowledge message
+  Note over C,P: Another Write API
+  C->>P: PUT /products/{id}
+  P->>D: UPDATE products
+  P->>R: XADD "products:events" product.updated
+  P-->>C: 200 OK
+
+  Note over R,US: Async Consumption
+  R->>US: XREADGROUP "auth:events"
+  US->>D: INSERT user_activity_logs
+  US->>R: XACK
+
+  Note over R,AU: Auth Observability Consumer
+  R->>AU: XREADGROUP users/products/auth events
+  AU->>R: XACK
 ```
 
 ### Clean Architecture Layers
@@ -887,25 +899,26 @@ internal/
 
 | Stream             | Description                          | Producer      | Consumer      |
 | :----------------- | :----------------------------------- | :------------ | :------------ |
-| `auth:events`      | Authentication events                | Auth Service  | User Service  |
-| `users:events`     | User events                  | User Service  | All Services  |
-| `products:events`  | Product catalog events               | Product Service | All Services |
-| `activity:log`     | User activity tracking               | All Services  | Analytics     |
+| `auth:events`      | Auth + user lifecycle events from auth APIs | Auth Service | User Service, Auth Service |
+| `users:events`     | User lifecycle events from user APIs | User Service | Auth Service |
+| `products:events`  | Product lifecycle events             | Product Service | Auth Service |
 
 ### Event Structure
 
 ```json
 {
-  "id": "1700000000000-0",
+  "id": "6f7d9b0c-4d42-4b48-90d9-f58f329830d1",
   "type": "user.created",
   "source": "auth-service",
-  "timestamp": 1699999999,
+  "timestamp": 1699999999000,
   "payload": {
     "user_id": "123",
     "email": "user@example.com",
-    "name": "Test User"
+    "role": "USER"
   },
-  "correlation_id": "abc-123-def"
+  "metadata": {
+    "correlation_id": "abc-123-def"
+  }
 }
 ```
 
@@ -914,11 +927,40 @@ internal/
 | Event Type          | Stream          | Description                    |
 | :------------------ | :-------------- | :----------------------------- |
 | `user.created`      | auth:events     | New user registered            |
-| `user.login`        | auth:events     | User logged in                 |
-| `user.logout`       | auth:events     | User logged out                |
+| `user.updated`      | auth:events     | User updated / password changed |
+| `user.deleted`      | auth:events     | User deleted from auth admin   |
+| `user.restored`     | auth:events     | User restored from auth admin  |
+| `user.logged_in`    | auth:events     | User logged in                 |
+| `user.logged_out`   | auth:events     | User logged out                |
+| `user.refreshed_token` | auth:events  | Refresh token rotated          |
+| `user.deleted`      | users:events    | User deleted/deactivated in user service |
+| `user.restored`     | users:events    | User restored/activated in user service |
 | `product.created`   | products:events | New product added              |
 | `product.updated`   | products:events | Product details updated        |
-| `stock.updated`     | products:events | Product stock changed          |
+| `product.deleted`   | products:events | Product deleted                |
+| `product.restored`  | products:events | Product restored               |
+| `product.stock_updated` | products:events | Product stock changed      |
+
+### Write API -> Event Mapping
+
+| Service | Write API | DB Mutation | Published Event |
+| :------ | :-------- | :---------- | :-------------- |
+| Auth | `POST /auth/register` | `users` + `user_sessions` insert | `user.created` -> `auth:events` |
+| Auth | `POST /auth/login` | `user_sessions` replace + `users.last_login_at` update | `user.logged_in` -> `auth:events` |
+| Auth | `POST /auth/logout` | `user_sessions` revoke | `user.logged_out` -> `auth:events` |
+| Auth | `POST /auth/refresh` | session rotate | `user.refreshed_token` -> `auth:events` |
+| Auth | `POST /auth/change-password` | `users.password_hash` update + sessions revoke | `user.updated` -> `auth:events` |
+| Auth | `DELETE /admin/users/:id` | user soft/hard delete | `user.deleted` -> `auth:events` |
+| Auth | `POST /admin/users/:id/restore` | user restore | `user.restored` -> `auth:events` |
+| User | `POST /api/v1/users/:id/activate` | user restore | `user.restored` -> `users:events` |
+| User | `POST /api/v1/users/:id/deactivate` | user soft delete | `user.deleted` -> `users:events` |
+| User | `DELETE /api/v1/users/:id` | user soft/hard delete | `user.deleted` -> `users:events` |
+| User | `POST /api/v1/users/:id/restore` | user restore | `user.restored` -> `users:events` |
+| Product | `POST /products` | product insert | `product.created` -> `products:events` |
+| Product | `PUT /products/:id` | product update | `product.updated` -> `products:events` |
+| Product | `DELETE /products/:id` | product soft/hard delete | `product.deleted` -> `products:events` |
+| Product | `POST /products/:id/restore` | product restore | `product.restored` -> `products:events` |
+| Product | `PUT /products/:id/stock` | product stock update | `product.stock_updated` -> `products:events` |
 
 ### Redis Streams Commands
 
@@ -930,10 +972,10 @@ docker exec -it go-microservices-redis redis-cli
 XRANGE auth:events - +
 
 # Read from stream (consumer group)
-XREADGROUP GROUP auth-service auth-1 STREAMS auth:events >
+XREADGROUP GROUP service-auth auth-1 STREAMS auth:events >
 
 # Acknowledge message
-XACK auth:events auth-service 1700000000000-0
+XACK auth:events service-auth 1700000000000-0
 
 # Get stream info
 XINFO STREAM auth:events

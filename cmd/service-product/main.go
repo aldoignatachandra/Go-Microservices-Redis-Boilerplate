@@ -38,6 +38,7 @@ import (
 	"github.com/ignata/go-microservices-boilerplate/pkg/eventbus"
 	"github.com/ignata/go-microservices-boilerplate/pkg/logger"
 	"github.com/ignata/go-microservices-boilerplate/pkg/metrics"
+	pkgmiddleware "github.com/ignata/go-microservices-boilerplate/pkg/middleware"
 	"github.com/ignata/go-microservices-boilerplate/pkg/ratelimit"
 	"github.com/ignata/go-microservices-boilerplate/pkg/server"
 	"github.com/ignata/go-microservices-boilerplate/pkg/utils"
@@ -160,6 +161,12 @@ func setupHTTPServer(app *App) *gin.Engine {
 	// Create router
 	engine := gin.New()
 
+	// Add request tracing and structured request logging
+	engine.Use(pkgmiddleware.RequestID())
+	engine.Use(pkgmiddleware.Logging(pkgmiddleware.LoggingConfig{
+		Logger: app.Logger,
+	}))
+
 	// Add recovery middleware
 	engine.Use(gin.Recovery())
 
@@ -183,6 +190,9 @@ func setupHTTPServer(app *App) *gin.Engine {
 	engine.GET("/health", healthHandler.PublicHealth)
 	engine.GET("/ready", healthHandler.ReadyProbe)
 	engine.GET("/live", healthHandler.LiveProbe)
+	engine.GET("/started", healthHandler.StartupProbe)
+	admin := engine.Group("/admin")
+	admin.GET("/health", healthHandler.AdminHealth)
 
 	// Metrics endpoint
 	if app.Config.Metrics.Enabled {

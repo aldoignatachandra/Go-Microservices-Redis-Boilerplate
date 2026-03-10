@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -38,6 +39,7 @@ import (
 	"github.com/ignata/go-microservices-boilerplate/pkg/eventbus"
 	"github.com/ignata/go-microservices-boilerplate/pkg/logger"
 	"github.com/ignata/go-microservices-boilerplate/pkg/metrics"
+	pkgmiddleware "github.com/ignata/go-microservices-boilerplate/pkg/middleware"
 	"github.com/ignata/go-microservices-boilerplate/pkg/ratelimit"
 	"github.com/ignata/go-microservices-boilerplate/pkg/server"
 	"github.com/ignata/go-microservices-boilerplate/pkg/utils"
@@ -101,6 +103,14 @@ func main() {
 	// Setup HTTP server
 	engine := setupHTTPServer(app)
 
+	// Start stream consumers for observability and cross-service event handling
+	consumerCtx, stopConsumers := context.WithCancel(context.Background())
+	streamConsumers := []*eventbus.Consumer{
+		startStreamConsumer(consumerCtx, app, eventbus.StreamAuthEvents, "auth"),
+		startStreamConsumer(consumerCtx, app, eventbus.StreamUserEvents, "users"),
+		startStreamConsumer(consumerCtx, app, eventbus.StreamProductEvents, "products"),
+	}
+
 	// Create HTTP server
 	srv := &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
@@ -132,6 +142,14 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
 	defer cancel()
 
+	// Stop consumers before closing dependencies
+	stopConsumers()
+	for _, consumer := range streamConsumers {
+		if consumer != nil {
+			consumer.Stop()
+		}
+	}
+
 	// Shutdown HTTP server
 	if err := srv.Shutdown(ctx); err != nil {
 		logger.Error("Server shutdown error", zap.Error(err))
@@ -160,6 +178,12 @@ func setupHTTPServer(app *App) *gin.Engine {
 	// Create router
 	engine := gin.New()
 
+	// Add request tracing and structured request logging
+	engine.Use(pkgmiddleware.RequestID())
+	engine.Use(pkgmiddleware.Logging(pkgmiddleware.LoggingConfig{
+		Logger: app.Logger,
+	}))
+
 	// Add recovery middleware
 	engine.Use(gin.Recovery())
 
@@ -183,6 +207,9 @@ func setupHTTPServer(app *App) *gin.Engine {
 	engine.GET("/health", healthHandler.PublicHealth)
 	engine.GET("/ready", healthHandler.ReadyProbe)
 	engine.GET("/live", healthHandler.LiveProbe)
+	engine.GET("/started", healthHandler.StartupProbe)
+	admin := engine.Group("/admin")
+	admin.GET("/health", healthHandler.AdminHealth)
 
 	// Metrics endpoint
 	if app.Config.Metrics.Enabled {
@@ -219,4 +246,76 @@ func setupHTTPServer(app *App) *gin.Engine {
 	}
 
 	return engine
+}
+
+func startStreamConsumer(ctx context.Context, app *App, stream, consumerSuffix string) *eventbus.Consumer {
+	if app.Redis == nil {
+		app.Logger.Warn("Redis client is nil, stream consumer not started",
+			zap.String("stream", stream),
+		)
+		return nil
+	}
+
+	consumerGroup := app.Config.Streams.ConsumerGroup
+	if consumerGroup == "" {
+		consumerGroup = app.Config.App.Name
+	}
+
+	consumerName := app.Config.Streams.ConsumerName
+	if consumerName == "" {
+		consumerName = fmt.Sprintf("%s-1", app.Config.App.Name)
+	}
+	consumerName = fmt.Sprintf("%s-%s", consumerName, consumerSuffix)
+
+	consumer := eventbus.NewConsumer(app.Redis.Client, eventbus.ConsumerConfig{
+		Stream:     stream,
+		Group:      consumerGroup,
+		Consumer:   consumerName,
+		BatchSize:  app.Config.Streams.BatchSize,
+		BlockMs:    app.Config.Streams.BlockMs,
+		MaxRetries: 3,
+	})
+
+	go func() {
+		app.Logger.Info("Starting stream consumer",
+			zap.String("stream", stream),
+			zap.String("group", consumerGroup),
+			zap.String("consumer", consumerName),
+		)
+
+		err := consumer.Consume(ctx, func(_ context.Context, event *eventbus.Event) error {
+			app.Logger.Info("Consumed stream event",
+				zap.String("stream", stream),
+				zap.String("event_id", event.ID),
+				zap.String("event_type", event.Type),
+				zap.String("source", event.Source),
+			)
+			return nil
+		}, func(_ context.Context, event *eventbus.Event, err error) {
+			eventType := "unknown"
+			eventID := ""
+			if event != nil {
+				eventType = event.Type
+				eventID = event.ID
+			}
+			app.Logger.Error("Stream consumer error",
+				zap.String("stream", stream),
+				zap.String("event_id", eventID),
+				zap.String("event_type", eventType),
+				zap.Error(err),
+			)
+		})
+
+		if err != nil && !errors.Is(err, context.Canceled) {
+			app.Logger.Error("Stream consumer stopped with error",
+				zap.String("stream", stream),
+				zap.Error(err),
+			)
+			return
+		}
+
+		app.Logger.Info("Stream consumer stopped", zap.String("stream", stream))
+	}()
+
+	return consumer
 }
