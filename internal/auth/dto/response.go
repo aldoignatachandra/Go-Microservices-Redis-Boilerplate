@@ -9,9 +9,10 @@ import (
 
 // AuthResponse represents an authentication response (aligned with Bun-Hono).
 type AuthResponse struct {
-	Token     string        `json:"token"`
-	ExpiresIn int64         `json:"expires_in,omitempty"`
-	User      *UserResponse `json:"user"`
+	Token        string        `json:"token"`
+	RefreshToken string        `json:"refresh_token,omitempty"`
+	ExpiresIn    int64         `json:"expires_in,omitempty"`
+	User         *UserResponse `json:"user"`
 }
 
 // UserResponse represents a user in responses (aligned with Bun-Hono).

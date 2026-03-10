@@ -163,6 +163,7 @@ func setupHTTPServer(app *App) *gin.Engine {
 
 	// Add request tracing and structured request logging
 	engine.Use(pkgmiddleware.RequestID())
+	engine.Use(pkgmiddleware.RequestContextMetadata())
 	engine.Use(pkgmiddleware.Logging(pkgmiddleware.LoggingConfig{
 		Logger: app.Logger,
 	}))

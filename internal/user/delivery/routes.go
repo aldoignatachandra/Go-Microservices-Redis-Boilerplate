@@ -28,46 +28,66 @@ func CORSMiddleware() gin.HandlerFunc {
 }
 
 // RegisterRoutes registers all user service routes.
-func RegisterRoutes(r *gin.Engine, handler *UserHandler) {
+func RegisterRoutes(r *gin.Engine, handler *UserHandler, jwtSecret string, sessionValidator middleware.SessionValidator) {
+	authMiddleware := middleware.Auth(middleware.AuthConfig{
+		JWTSecret:        []byte(jwtSecret),
+		SessionValidator: sessionValidator,
+	})
+
 	// API v1 group
 	v1 := r.Group("/api/v1")
-	// User routes
+	v1.Use(authMiddleware)
+	// User routes for authenticated user
 	users := v1.Group("/users")
-	// Public routes (with auth middleware in actual implementation)
 	users.GET("/:id", handler.GetUser)
-	users.GET("", handler.ListUsers)
-	// Admin routes
-	users.POST("/:id/activate", handler.ActivateUser)
-	users.POST("/:id/deactivate", handler.DeactivateUser)
-	users.DELETE("/:id", handler.DeleteUser)
-	users.POST("/:id/restore", handler.RestoreUser)
-	// Activity log routes
-	v1.GET("/activity-logs", handler.GetActivityLogs)
+
+	// Admin-only routes
+	admin := v1.Group("")
+	admin.Use(middleware.RequireAdmin())
+	admin.GET("/users", handler.ListUsers)
+	admin.GET("/activity-logs", handler.GetActivityLogs)
+
+	adminUsers := admin.Group("/users")
+	adminUsers.POST("/:id/activate", handler.ActivateUser)
+	adminUsers.POST("/:id/deactivate", handler.DeactivateUser)
+	adminUsers.DELETE("/:id", handler.DeleteUser)
+	adminUsers.POST("/:id/restore", handler.RestoreUser)
 }
 
 // RegisterRoutesWithRateLimit registers all user service routes with Redis-backed rate limiting.
 func RegisterRoutesWithRateLimit(
 	r *gin.Engine,
 	handler *UserHandler,
+	jwtSecret string,
+	sessionValidator middleware.SessionValidator,
 	redisLimiter *ratelimit.RouteRateLimiter,
 	limit int,
 	window time.Duration,
 ) {
+	authMiddleware := middleware.Auth(middleware.AuthConfig{
+		JWTSecret:        []byte(jwtSecret),
+		SessionValidator: sessionValidator,
+	})
 	rateLimitMiddleware := middleware.RedisRateLimitPerRoute(redisLimiter, limit, int(window.Seconds()))
 
 	// API v1 group
 	v1 := r.Group("/api/v1")
-	// User routes with rate limiting
+	v1.Use(authMiddleware)
+	// User self routes with rate limiting
 	users := v1.Group("/users")
 	users.Use(rateLimitMiddleware)
-	// Public routes
 	users.GET("/:id", handler.GetUser)
-	users.GET("", handler.ListUsers)
-	// Admin routes
-	users.POST("/:id/activate", handler.ActivateUser)
-	users.POST("/:id/deactivate", handler.DeactivateUser)
-	users.DELETE("/:id", handler.DeleteUser)
-	users.POST("/:id/restore", handler.RestoreUser)
-	// Activity log routes
-	v1.GET("/activity-logs", handler.GetActivityLogs)
+
+	// Admin-only routes with rate limiting
+	admin := v1.Group("")
+	admin.Use(middleware.RequireAdmin())
+	admin.Use(rateLimitMiddleware)
+	admin.GET("/users", handler.ListUsers)
+	admin.GET("/activity-logs", handler.GetActivityLogs)
+
+	adminUsers := admin.Group("/users")
+	adminUsers.POST("/:id/activate", handler.ActivateUser)
+	adminUsers.POST("/:id/deactivate", handler.DeactivateUser)
+	adminUsers.DELETE("/:id", handler.DeleteUser)
+	adminUsers.POST("/:id/restore", handler.RestoreUser)
 }

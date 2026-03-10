@@ -2,6 +2,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -17,6 +18,9 @@ const (
 	UserRoleKey = "user_role"
 )
 
+// SessionValidator validates that a user still has an active server-side session.
+type SessionValidator func(ctx context.Context, userID, sessionID string) (bool, error)
+
 // AuthConfig holds authentication configuration.
 type AuthConfig struct {
 	// JWTSecret is the secret key for JWT validation
@@ -24,6 +28,9 @@ type AuthConfig struct {
 
 	// SkipPaths is a list of paths to skip authentication
 	SkipPaths []string
+
+	// SessionValidator optionally verifies active session state in persistent storage.
+	SessionValidator SessionValidator
 }
 
 // Auth returns an authentication middleware using JWT.
@@ -64,6 +71,21 @@ func Auth(config AuthConfig) gin.HandlerFunc {
 			utils.ErrorResponse(c, http.StatusUnauthorized, "Invalid or expired token", err)
 			c.Abort()
 			return
+		}
+
+		// Optional server-side session validation (token revocation support).
+		if config.SessionValidator != nil {
+			valid, sessionErr := config.SessionValidator(c.Request.Context(), claims.UserID, claims.SessionID)
+			if sessionErr != nil {
+				utils.ErrorResponse(c, http.StatusInternalServerError, "Failed to validate session", nil)
+				c.Abort()
+				return
+			}
+			if !valid {
+				utils.ErrorResponse(c, http.StatusUnauthorized, "Invalid or expired token", nil)
+				c.Abort()
+				return
+			}
 		}
 
 		// Set user info in context
@@ -136,6 +158,14 @@ func OptionalAuth(config AuthConfig) gin.HandlerFunc {
 		// Try to validate token
 		claims, err := utils.ValidateJWT(token, config.JWTSecret)
 		if err == nil {
+			if config.SessionValidator != nil {
+				valid, sessionErr := config.SessionValidator(c.Request.Context(), claims.UserID, claims.SessionID)
+				if sessionErr != nil || !valid {
+					c.Next()
+					return
+				}
+			}
+
 			// Set user info in context if token is valid
 			c.Set(UserIDKey, claims.UserID)
 			c.Set(UserRoleKey, claims.Role)

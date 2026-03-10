@@ -14,6 +14,7 @@ import (
 	"github.com/ignata/go-microservices-boilerplate/internal/product/dto"
 	"github.com/ignata/go-microservices-boilerplate/internal/product/repository"
 	"github.com/ignata/go-microservices-boilerplate/pkg/eventbus"
+	"github.com/ignata/go-microservices-boilerplate/pkg/utils"
 )
 
 // ProductUseCase defines the interface for product business logic.
@@ -290,11 +291,7 @@ func (uc *productUseCase) publishEvent(ctx context.Context, event *domain.Produc
 
 	// Create event bus event
 	ebEvent := eventbus.NewEvent(event.EventType, uc.config.ServiceName, event.ToMap())
-
-	// Add correlation ID from context if available
-	if correlationID, ok := ctx.Value("correlation_id").(string); ok && correlationID != "" {
-		ebEvent.WithCorrelationID(correlationID)
-	}
+	utils.ApplyRequestMetadataToEvent(ctx, ebEvent)
 
 	// Publish asynchronously with error logging
 	go func() {

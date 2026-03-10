@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/ignata/go-microservices-boilerplate/internal/auth/delivery"
 	authusecasemocks "github.com/ignata/go-microservices-boilerplate/internal/auth/usecase/mocks"
+	"github.com/ignata/go-microservices-boilerplate/pkg/utils"
 )
 
 // TestPublicHealth tests public health endpoint.
@@ -82,7 +84,7 @@ func TestRegisterRoutes(t *testing.T) {
 	jwtSecret := "test-secret"
 
 	// Act - This should not panic
-	delivery.RegisterRoutes(router, mockUseCase, jwtSecret)
+	delivery.RegisterRoutes(router, mockUseCase, jwtSecret, nil)
 
 	// Assert - Verify routes are registered
 	routes := router.Routes()
@@ -95,8 +97,10 @@ func TestRegisterRoutes(t *testing.T) {
 	}
 
 	assert.False(t, routePaths["/health"], "Health route should not be registered by delivery routes")
-	assert.True(t, routePaths["/auth/register"], "Register route should be registered")
-	assert.True(t, routePaths["/auth/login"], "Login route should be registered")
+	assert.True(t, routePaths["/api/v1/auth/register"], "Register route should be registered")
+	assert.True(t, routePaths["/api/v1/auth/login"], "Login route should be registered")
+	assert.True(t, routePaths["/api/v1/users"], "Admin user list route should be registered")
+	assert.False(t, routePaths["/admin/users"], "Legacy admin users route should not be registered")
 }
 
 // TestPublicHealth_Response tests public health response format.
@@ -173,4 +177,49 @@ func TestLiveProbe_Response(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, true, response["alive"])
+}
+
+func TestRegisterRoute_RequiresAuthentication(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	delivery.RegisterRoutes(router, mockUseCase, "test-secret", nil)
+
+	req, _ := http.NewRequest("POST", "/api/v1/auth/register", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestRegisterRoute_RejectsUserRole(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+
+	const jwtSecret = "test-secret-key-at-least-32-chars-long!!"
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	delivery.RegisterRoutes(router, mockUseCase, jwtSecret, nil)
+
+	token := mustGenerateAuthToken(t, jwtSecret, "550e8400-e29b-41d4-a716-446655440010", "USER")
+	req, _ := http.NewRequest("POST", "/api/v1/auth/register", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func mustGenerateAuthToken(t *testing.T, secret, userID, role string) string {
+	t.Helper()
+
+	manager := utils.NewJWTManager(utils.JWTConfig{
+		Secret:           secret,
+		ExpiresIn:        time.Hour,
+		RefreshExpiresIn: 24 * time.Hour,
+	})
+
+	token, err := manager.GenerateToken(userID, "test@example.com", role)
+	require.NoError(t, err)
+	return token
 }

@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/gin-gonic/gin"
@@ -176,6 +177,7 @@ func setupHTTPServer(app *App) *gin.Engine {
 
 	// Add request tracing and structured request logging
 	engine.Use(pkgmiddleware.RequestID())
+	engine.Use(pkgmiddleware.RequestContextMetadata())
 	engine.Use(pkgmiddleware.Logging(pkgmiddleware.LoggingConfig{
 		Logger: app.Logger,
 	}))
@@ -217,6 +219,7 @@ func setupHTTPServer(app *App) *gin.Engine {
 
 	// Register user routes
 	handler := delivery.NewUserHandler(app.UserUseCase)
+	sessionValidator := buildSessionValidator(app)
 
 	// Create Redis rate limiter if enabled
 	if app.Config.RateLimit.Enabled && app.Redis != nil {
@@ -225,24 +228,37 @@ func setupHTTPServer(app *App) *gin.Engine {
 			"/api/v1/users":     {MaxRequests: 120, WindowSeconds: 60},
 			"/api/v1/users/:id": {MaxRequests: 5, WindowSeconds: 60},
 		})
-		delivery.RegisterRoutesWithRateLimit(engine, handler, redisLimiter, app.Config.RateLimit.Requests, app.Config.RateLimit.Duration)
+		delivery.RegisterRoutesWithRateLimit(
+			engine,
+			handler,
+			app.Config.Auth.JWT.Secret,
+			sessionValidator,
+			redisLimiter,
+			app.Config.RateLimit.Requests,
+			app.Config.RateLimit.Duration,
+		)
 	} else {
-		delivery.RegisterRoutes(engine, handler)
+		delivery.RegisterRoutes(engine, handler, app.Config.Auth.JWT.Secret, sessionValidator)
 	}
 
 	return engine
 }
 
-func startAuthEventConsumer(ctx context.Context, app *App) *eventbus.Consumer {
-	consumerGroup := app.Config.Streams.ConsumerGroup
-	if consumerGroup == "" {
-		consumerGroup = app.Config.App.Name
+func buildSessionValidator(app *App) pkgmiddleware.SessionValidator {
+	if app == nil || app.Postgres == nil {
+		return nil
 	}
 
-	consumerName := app.Config.Streams.ConsumerName
-	if consumerName == "" {
-		consumerName = fmt.Sprintf("%s-1", app.Config.App.Name)
+	return func(ctx context.Context, userID, sessionID string) (bool, error) {
+		if strings.TrimSpace(sessionID) == "" {
+			return false, nil
+		}
+		return app.Postgres.HasActiveSessionByID(ctx, userID, sessionID)
 	}
+}
+
+func startAuthEventConsumer(ctx context.Context, app *App) *eventbus.Consumer {
+	consumerGroup, consumerName := resolveConsumerIdentity(app)
 
 	consumer := eventbus.NewConsumer(app.Redis.Client, eventbus.ConsumerConfig{
 		Stream:     eventbus.StreamAuthEvents,
@@ -261,8 +277,9 @@ func startAuthEventConsumer(ctx context.Context, app *App) *eventbus.Consumer {
 		)
 
 		err := consumer.Consume(ctx, func(handlerCtx context.Context, event *eventbus.Event) error {
-			userID, _ := event.Payload["user_id"].(string)
-			if userID == "" {
+			actorUserID := resolveEventActorUserID(event)
+			targetUserID, _ := event.Payload["user_id"].(string)
+			if actorUserID == "" {
 				app.Logger.Warn("Skipping auth event without user_id",
 					zap.String("event_type", event.Type),
 					zap.String("event_id", event.ID),
@@ -281,11 +298,15 @@ func startAuthEventConsumer(ctx context.Context, app *App) *eventbus.Consumer {
 				return fmt.Errorf("failed to marshal auth event details: %w", marshalErr)
 			}
 
+			ipAddress, userAgent := extractRequestInfo(event)
+
 			if err := app.UserUseCase.LogActivity(handlerCtx, &dto.LogActivityRequest{
-				UserID:   userID,
-				Action:   event.Type,
-				Resource: "auth",
-				Details:  string(details),
+				UserID:    actorUserID,
+				Action:    event.Type,
+				Resource:  "auth",
+				IPAddress: ipAddress,
+				UserAgent: userAgent,
+				Details:   string(details),
 			}); err != nil {
 				return fmt.Errorf("failed to create activity log: %w", err)
 			}
@@ -294,7 +315,8 @@ func startAuthEventConsumer(ctx context.Context, app *App) *eventbus.Consumer {
 				zap.String("stream", eventbus.StreamAuthEvents),
 				zap.String("event_id", event.ID),
 				zap.String("event_type", event.Type),
-				zap.String("user_id", userID),
+				zap.String("actor_user_id", actorUserID),
+				zap.String("target_user_id", targetUserID),
 			)
 			return nil
 		}, func(_ context.Context, event *eventbus.Event, err error) {
@@ -322,4 +344,121 @@ func startAuthEventConsumer(ctx context.Context, app *App) *eventbus.Consumer {
 	}()
 
 	return consumer
+}
+
+func extractRequestInfo(event *eventbus.Event) (string, string) {
+	if event == nil || event.Payload == nil {
+		return "", ""
+	}
+
+	ipAddress, _ := event.Payload["ip_address"].(string)
+	userAgent, _ := event.Payload["user_agent"].(string)
+
+	if strings.TrimSpace(ipAddress) == "" {
+		ipAddress = extractMetadataString(event.Payload, "ip_address")
+	}
+	if strings.TrimSpace(userAgent) == "" {
+		userAgent = extractMetadataString(event.Payload, "user_agent")
+	}
+
+	if strings.TrimSpace(ipAddress) == "" && event.Metadata != nil {
+		ipAddress = event.Metadata["ip_address"]
+	}
+	if strings.TrimSpace(userAgent) == "" && event.Metadata != nil {
+		userAgent = event.Metadata["user_agent"]
+	}
+
+	return strings.TrimSpace(ipAddress), strings.TrimSpace(userAgent)
+}
+
+func extractMetadataString(payload map[string]interface{}, key string) string {
+	metadataRaw, ok := payload["metadata"]
+	if !ok {
+		return ""
+	}
+
+	switch metadata := metadataRaw.(type) {
+	case map[string]interface{}:
+		value, _ := metadata[key].(string)
+		return strings.TrimSpace(value)
+	case map[string]string:
+		return strings.TrimSpace(metadata[key])
+	default:
+		return ""
+	}
+}
+
+func resolveEventActorUserID(event *eventbus.Event) string {
+	if event == nil || event.Payload == nil {
+		return ""
+	}
+
+	if actorUserID, ok := event.Payload["actor_user_id"].(string); ok && strings.TrimSpace(actorUserID) != "" {
+		return strings.TrimSpace(actorUserID)
+	}
+
+	if metadataRaw, ok := event.Payload["metadata"]; ok {
+		switch metadata := metadataRaw.(type) {
+		case map[string]interface{}:
+			if value, ok := metadata["actor_user_id"].(string); ok && strings.TrimSpace(value) != "" {
+				return strings.TrimSpace(value)
+			}
+		case map[string]string:
+			if value := strings.TrimSpace(metadata["actor_user_id"]); value != "" {
+				return value
+			}
+		}
+	}
+
+	if event.Metadata != nil {
+		if value := strings.TrimSpace(event.Metadata["actor_user_id"]); value != "" {
+			return value
+		}
+	}
+
+	fallbackUserID, _ := event.Payload["user_id"].(string)
+	return strings.TrimSpace(fallbackUserID)
+}
+
+func resolveConsumerIdentity(app *App) (string, string) {
+	configuredGroup := strings.TrimSpace(app.Config.Streams.ConsumerGroup)
+	configuredName := strings.TrimSpace(app.Config.Streams.ConsumerName)
+
+	defaultGroup := app.Config.App.Name
+	defaultName := fmt.Sprintf("%s-1", strings.TrimPrefix(app.Config.App.Name, "service-"))
+
+	if defaultName == "-1" {
+		defaultName = fmt.Sprintf("%s-1", app.Config.App.Name)
+	}
+
+	consumerGroup := configuredGroup
+	if consumerGroup == "" {
+		consumerGroup = defaultGroup
+	}
+
+	consumerName := configuredName
+	if consumerName == "" {
+		consumerName = defaultName
+	}
+
+	// Guard against shared auth identity in non-auth service.
+	// Shared groups cause XREADGROUP load-balancing, which makes activity logs appear delayed/missing.
+	if app.Config.App.Name != "service-auth" {
+		if consumerGroup == "service-auth" {
+			app.Logger.Warn("Detected shared auth consumer group in non-auth service; overriding to service-specific group",
+				zap.String("configured_group", configuredGroup),
+				zap.String("effective_group", defaultGroup),
+			)
+			consumerGroup = defaultGroup
+		}
+		if consumerName == "auth-1" {
+			app.Logger.Warn("Detected shared auth consumer name in non-auth service; overriding to service-specific consumer",
+				zap.String("configured_consumer", configuredName),
+				zap.String("effective_consumer", defaultName),
+			)
+			consumerName = defaultName
+		}
+	}
+
+	return consumerGroup, consumerName
 }

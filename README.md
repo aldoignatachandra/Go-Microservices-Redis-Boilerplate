@@ -386,11 +386,13 @@ cp .env.example .env
 | `REDIS_HOST`            | Redis host                            | `localhost`                      |
 | `REDIS_PORT`            | Redis port                            | `6379`                           |
 | `REDIS_PASSWORD`        | Redis password (if any)               | *(empty)*                        |
-| `STREAMS_CONSUMER_GROUP`| Consumer group name                   | `auth-service`                   |
+| `STREAMS_CONSUMER_GROUP`| Consumer group name                   | Set per service in `configs/*.yaml` |
 | `JWT_SECRET`            | Secret key for signing JWT tokens     | **Change in production!**        |
 | `JWT_EXPIRES_IN`        | Access token expiration               | `24h`                            |
 | `LOG_LEVEL`             | Logging level (debug, info, warn)     | `debug`                          |
 | `METRICS_ENABLED`       | Enable Prometheus metrics             | `true`                           |
+
+For local multi-service runs, keep `STREAMS_CONSUMER_GROUP` and `STREAMS_CONSUMER_NAME` service-specific in `configs/local.yaml`, `configs/user-local.yaml`, and `configs/product-local.yaml` to avoid consumer-group collisions.
 
 ### 3. Start Infrastructure (Redis & Postgres)
 

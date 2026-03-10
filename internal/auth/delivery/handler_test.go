@@ -50,9 +50,10 @@ func TestRegister_Success(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"email":    "test@example.com",
-		"username": "testuser",
-		"password": "SecurePass123",
+		"email":           "test@example.com",
+		"username":        "testuser",
+		"password":        "SecurePass123",
+		"confirmPassword": "SecurePass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
@@ -88,8 +89,9 @@ func TestRegister_ValidationError(t *testing.T) {
 		{
 			name: "missing email",
 			requestBody: map[string]interface{}{
-				"username": "testuser",
-				"password": "SecurePass123",
+				"username":        "testuser",
+				"password":        "SecurePass123",
+				"confirmPassword": "SecurePass123",
 			},
 			expectedStatus: http.StatusBadRequest,
 			setupMock:      func(m *authusecasemocks.AuthUseCase, body map[string]interface{}) {},
@@ -97,9 +99,10 @@ func TestRegister_ValidationError(t *testing.T) {
 		{
 			name: "invalid email format",
 			requestBody: map[string]interface{}{
-				"email":    "invalid-email",
-				"username": "testuser",
-				"password": "SecurePass123",
+				"email":           "invalid-email",
+				"username":        "testuser",
+				"password":        "SecurePass123",
+				"confirmPassword": "SecurePass123",
 			},
 			expectedStatus: http.StatusBadRequest,
 			setupMock:      func(m *authusecasemocks.AuthUseCase, body map[string]interface{}) {},
@@ -107,15 +110,27 @@ func TestRegister_ValidationError(t *testing.T) {
 		{
 			name: "password too short",
 			requestBody: map[string]interface{}{
-				"email":    "test@example.com",
-				"username": "testuser",
-				"password": "short",
+				"email":           "test@example.com",
+				"username":        "testuser",
+				"password":        "short",
+				"confirmPassword": "short",
 			},
 			expectedStatus: http.StatusUnprocessableEntity,
 			setupMock: func(m *authusecasemocks.AuthUseCase, body map[string]interface{}) {
 				m.On("Register", mock.Anything, mock.AnythingOfType("*dto.RegisterRequest")).
 					Return(nil, domain.ErrPasswordTooShort)
 			},
+		},
+		{
+			name: "password confirmation mismatch",
+			requestBody: map[string]interface{}{
+				"email":           "test@example.com",
+				"username":        "testuser",
+				"password":        "SecurePass123",
+				"confirmPassword": "SecurePass124",
+			},
+			expectedStatus: http.StatusUnprocessableEntity,
+			setupMock:      func(m *authusecasemocks.AuthUseCase, body map[string]interface{}) {},
 		},
 		{
 			name:           "malformed JSON",
@@ -170,9 +185,10 @@ func TestRegister_EmailAlreadyUsed(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"email":    "test@example.com",
-		"username": "testuser",
-		"password": "SecurePass123",
+		"email":           "test@example.com",
+		"username":        "testuser",
+		"password":        "SecurePass123",
+		"confirmPassword": "SecurePass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
@@ -220,10 +236,11 @@ func TestRegister_WithRole(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"email":    "admin@example.com",
-		"username": "adminuser",
-		"password": "SecurePass123",
-		"role":     "ADMIN",
+		"email":           "admin@example.com",
+		"username":        "adminuser",
+		"password":        "SecurePass123",
+		"confirmPassword": "SecurePass123",
+		"role":            "ADMIN",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
@@ -270,8 +287,9 @@ func TestLogin_Success(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"email":    "test@example.com",
-		"password": "CorrectPassword123",
+		"email":           "test@example.com",
+		"password":        "CorrectPassword123",
+		"confirmPassword": "CorrectPassword123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
@@ -319,8 +337,9 @@ func TestLogin_SuccessWithUsernameCredential(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"email":    "testuser",
-		"password": "CorrectPassword123",
+		"email":           "testuser",
+		"password":        "CorrectPassword123",
+		"confirmPassword": "CorrectPassword123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
@@ -354,9 +373,10 @@ func TestLogin_InvalidCredentials(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"email":    "test@example.com",
-		"username": "testuser",
-		"password": "SecurePass123",
+		"email":           "test@example.com",
+		"username":        "testuser",
+		"password":        "SecurePass123",
+		"confirmPassword": "SecurePass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
@@ -391,8 +411,9 @@ func TestLogin_UserDeleted(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"email":    "deleted@example.com",
-		"password": "password123",
+		"email":           "deleted@example.com",
+		"password":        "password123",
+		"confirmPassword": "password123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
@@ -426,8 +447,9 @@ func TestLogin_UserInactive(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"email":    "inactive@example.com",
-		"password": "password123",
+		"email":           "inactive@example.com",
+		"password":        "password123",
+		"confirmPassword": "password123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
@@ -1071,9 +1093,10 @@ func TestHandleError_ValidationError(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"email":    "test@example.com",
-		"username": "testuser",
-		"password": "SecurePass123",
+		"email":           "test@example.com",
+		"username":        "testuser",
+		"password":        "SecurePass123",
+		"confirmPassword": "SecurePass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
@@ -1174,9 +1197,10 @@ func TestRegister_InternalError(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"email":    "test@example.com",
-		"username": "testuser",
-		"password": "SecurePass123",
+		"email":           "test@example.com",
+		"username":        "testuser",
+		"password":        "SecurePass123",
+		"confirmPassword": "SecurePass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
@@ -1223,9 +1247,10 @@ func TestRegister_WithDefaultRole(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"email":    "user@example.com",
-		"username": "user",
-		"password": "SecurePass123",
+		"email":           "user@example.com",
+		"username":        "user",
+		"password":        "SecurePass123",
+		"confirmPassword": "SecurePass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
@@ -1259,8 +1284,9 @@ func TestLogin_EmptyPassword(t *testing.T) {
 
 	// Act - Gin validation will fail for empty password
 	reqBody := map[string]interface{}{
-		"email":    "test@example.com",
-		"password": "",
+		"email":           "test@example.com",
+		"password":        "",
+		"confirmPassword": "",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
@@ -1302,8 +1328,9 @@ func TestLogin_WithIPAndUserAgent(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"email":    "test@example.com",
-		"password": "CorrectPassword123",
+		"email":           "test@example.com",
+		"password":        "CorrectPassword123",
+		"confirmPassword": "CorrectPassword123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
@@ -1824,8 +1851,9 @@ func TestLogin_ValidationErrors(t *testing.T) {
 
 			// Act - Gin validation will fail
 			reqBody := map[string]interface{}{
-				"email":    tt.email,
-				"password": tt.password,
+				"email":           tt.email,
+				"password":        tt.password,
+				"confirmPassword": tt.password,
 			}
 			bodyBytes, _ := json.Marshal(reqBody)
 			req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
@@ -2113,8 +2141,9 @@ func TestHandleError_MultipleErrorTypes(t *testing.T) {
 			case "auth error":
 				router.POST("/auth/login", handler.Login)
 				reqBody := map[string]interface{}{
-					"email":    "test@example.com",
-					"password": "password123",
+					"email":           "test@example.com",
+					"password":        "password123",
+					"confirmPassword": "password123",
 				}
 				bodyBytes, _ := json.Marshal(reqBody)
 				req, _ = http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
@@ -2164,12 +2193,12 @@ func TestRegister_PasswordComplexity(t *testing.T) {
 		{
 			name:           "password with only numbers",
 			password:       "12345678",
-			shouldPass:     true, // Gin validation requires min 8 chars
-			expectedStatus: http.StatusCreated,
+			shouldPass:     false,
+			expectedStatus: http.StatusUnprocessableEntity,
 		},
 		{
 			name:           "password exactly 8 characters",
-			password:       "12345678",
+			password:       "Pass1234",
 			shouldPass:     true,
 			expectedStatus: http.StatusCreated,
 		},
@@ -2200,9 +2229,10 @@ func TestRegister_PasswordComplexity(t *testing.T) {
 
 			// Act
 			reqBody := map[string]interface{}{
-				"email":    "test@example.com",
-				"username": "testuser",
-				"password": tt.password,
+				"email":           "test@example.com",
+				"username":        "testuser",
+				"password":        tt.password,
+				"confirmPassword": tt.password,
 			}
 			bodyBytes, _ := json.Marshal(reqBody)
 			req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
@@ -2259,7 +2289,8 @@ func TestRegister_MissingEmail(t *testing.T) {
 
 	// Act - missing email field
 	reqBody := map[string]interface{}{
-		"password": "SecurePass123",
+		"password":        "SecurePass123",
+		"confirmPassword": "SecurePass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
@@ -2288,9 +2319,10 @@ func TestRegister_InvalidRole(t *testing.T) {
 
 	// Act - invalid role parameter
 	reqBody := map[string]interface{}{
-		"email":    "test@example.com",
-		"password": "SecurePass123",
-		"role":     "INVALID_ROLE",
+		"email":           "test@example.com",
+		"password":        "SecurePass123",
+		"confirmPassword": "SecurePass123",
+		"role":            "INVALID_ROLE",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
@@ -2313,7 +2345,8 @@ func TestLogin_MissingEmailField(t *testing.T) {
 
 	// Act - missing email field
 	reqBody := map[string]interface{}{
-		"password": "password123",
+		"password":        "password123",
+		"confirmPassword": "password123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/login", bytes.NewBuffer(bodyBytes))
@@ -2517,9 +2550,10 @@ func TestHandleError_DatabaseConnectionError(t *testing.T) {
 
 	// Act
 	reqBody := map[string]interface{}{
-		"email":    "test@example.com",
-		"username": "testuser",
-		"password": "SecurePass123",
+		"email":           "test@example.com",
+		"username":        "testuser",
+		"password":        "SecurePass123",
+		"confirmPassword": "SecurePass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
@@ -2626,9 +2660,10 @@ func TestRegister_Concurrency(t *testing.T) {
 
 	// Act - make a single request (concurrency testing is complex in unit tests)
 	reqBody := map[string]interface{}{
-		"email":    "test@example.com",
-		"username": "testuser",
-		"password": "SecurePass123",
+		"email":           "test@example.com",
+		"username":        "testuser",
+		"password":        "SecurePass123",
+		"confirmPassword": "SecurePass123",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))

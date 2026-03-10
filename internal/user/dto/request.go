@@ -125,10 +125,12 @@ func (r *DeactivateUserRequest) Validate() error {
 
 // LogActivityRequest represents a request to log user activity.
 type LogActivityRequest struct {
-	UserID   string `json:"user_id" binding:"required,uuid"`
-	Action   string `json:"action" binding:"required"`
-	Resource string `json:"resource" binding:"required"`
-	Details  string `json:"details,omitempty"`
+	UserID    string `json:"user_id" binding:"required,uuid"`
+	Action    string `json:"action" binding:"required"`
+	Resource  string `json:"resource" binding:"required"`
+	IPAddress string `json:"ip_address,omitempty"`
+	UserAgent string `json:"user_agent,omitempty"`
+	Details   string `json:"details,omitempty"`
 }
 
 // Validate validates the log activity request.

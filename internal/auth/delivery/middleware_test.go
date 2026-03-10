@@ -3,6 +3,7 @@ package delivery_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -46,6 +47,42 @@ func TestAuthMiddleware_Success(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestAuthMiddleware_SessionBoundToken ensures validator receives token session ID.
+func TestAuthMiddleware_SessionBoundToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+
+	jwtSecret := "test-secret-key-for-testing"
+	jwtManager := utils.NewJWTManager(utils.JWTConfig{
+		Secret:    jwtSecret,
+		ExpiresIn: 3600 * time.Second,
+	})
+
+	const expectedUserID = "550e8400-e29b-41d4-a716-446655440001"
+	const expectedSessionID = "6e0f7d89-32ff-4d58-a005-fce95d6b8e45"
+	token, err := jwtManager.GenerateTokenWithSession(expectedUserID, "test@example.com", string(domain.RoleUser), expectedSessionID)
+	require.NoError(t, err)
+
+	var gotUserID, gotSessionID string
+	router.Use(delivery.AuthMiddleware(jwtSecret, func(_ context.Context, userID, sessionID string) (bool, error) {
+		gotUserID = userID
+		gotSessionID = sessionID
+		return true, nil
+	}))
+	router.GET("/protected", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "success"})
+	})
+
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/protected", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, expectedUserID, gotUserID)
+	assert.Equal(t, expectedSessionID, gotSessionID)
 }
 
 // TestAuthMiddleware_MissingHeader tests authentication with missing Authorization header.
@@ -136,6 +173,66 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+// TestAuthMiddleware_RevokedSession tests authentication with revoked server-side session.
+func TestAuthMiddleware_RevokedSession(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+
+	jwtSecret := "test-secret-key-for-testing"
+	jwtManager := utils.NewJWTManager(utils.JWTConfig{
+		Secret:    jwtSecret,
+		ExpiresIn: 3600 * time.Second,
+	})
+
+	token, err := jwtManager.GenerateToken("550e8400-e29b-41d4-a716-446655440001", "test@example.com", string(domain.RoleUser))
+	require.NoError(t, err)
+
+	router.Use(delivery.AuthMiddleware(jwtSecret, func(_ context.Context, _, _ string) (bool, error) {
+		return false, nil
+	}))
+	router.GET("/protected", func(c *gin.Context) {
+		c.JSON(200, gin.H{"message": "success"})
+	})
+
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/protected", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+// TestAuthMiddleware_SessionValidatorError tests middleware behavior on validator failure.
+func TestAuthMiddleware_SessionValidatorError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+
+	jwtSecret := "test-secret-key-for-testing"
+	jwtManager := utils.NewJWTManager(utils.JWTConfig{
+		Secret:    jwtSecret,
+		ExpiresIn: 3600 * time.Second,
+	})
+
+	token, err := jwtManager.GenerateToken("550e8400-e29b-41d4-a716-446655440001", "test@example.com", string(domain.RoleUser))
+	require.NoError(t, err)
+
+	router.Use(delivery.AuthMiddleware(jwtSecret, func(_ context.Context, _, _ string) (bool, error) {
+		return false, errors.New("db unavailable")
+	}))
+	router.GET("/protected", func(c *gin.Context) {
+		c.JSON(200, gin.H{"message": "success"})
+	})
+
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", "/protected", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
 // TestAdminOnlyMiddleware_Success tests admin middleware with admin user.

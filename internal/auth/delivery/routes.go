@@ -13,30 +13,37 @@ import (
 )
 
 // RegisterRoutes registers all auth service routes.
-func RegisterRoutes(r *gin.Engine, authUseCase usecase.AuthUseCase, jwtSecret string) {
+func RegisterRoutes(r *gin.Engine, authUseCase usecase.AuthUseCase, jwtSecret string, sessionValidator SessionValidator) {
 	handler := NewHandler(authUseCase)
 
+	v1 := r.Group("/api/v1")
+
 	// Public auth routes
-	auth := r.Group("/auth")
-	auth.POST("/register", handler.Register)
+	auth := v1.Group("/auth")
 	auth.POST("/login", handler.Login)
 	auth.POST("/refresh", handler.RefreshToken)
 
+	// Register route (admin only)
+	authAdmin := v1.Group("/auth")
+	authAdmin.Use(AuthMiddleware(jwtSecret, sessionValidator))
+	authAdmin.Use(AdminOnlyMiddleware())
+	authAdmin.POST("/register", handler.Register)
+
 	// Protected auth routes (require authentication)
-	authProtected := r.Group("/auth")
-	authProtected.Use(AuthMiddleware(jwtSecret))
+	authProtected := v1.Group("/auth")
+	authProtected.Use(AuthMiddleware(jwtSecret, sessionValidator))
 	authProtected.POST("/logout", handler.Logout)
 	authProtected.GET("/me", handler.GetCurrentUser)
 	authProtected.POST("/change-password", handler.ChangePassword)
 
 	// Admin routes (require admin role)
-	admin := r.Group("/admin")
-	admin.Use(AuthMiddleware(jwtSecret))
-	admin.Use(AdminOnlyMiddleware())
-	admin.GET("/users", handler.ListUsers)
-	admin.GET("/users/:id", handler.GetUser)
-	admin.DELETE("/users/:id", handler.DeleteUser)
-	admin.POST("/users/:id/restore", handler.RestoreUser)
+	adminUsers := v1.Group("/users")
+	adminUsers.Use(AuthMiddleware(jwtSecret, sessionValidator))
+	adminUsers.Use(AdminOnlyMiddleware())
+	adminUsers.GET("", handler.ListUsers)
+	adminUsers.GET("/:id", handler.GetUser)
+	adminUsers.DELETE("/:id", handler.DeleteUser)
+	adminUsers.POST("/:id/restore", handler.RestoreUser)
 }
 
 // RegisterRoutesWithRateLimit registers all auth service routes with Redis-backed rate limiting.
@@ -44,37 +51,47 @@ func RegisterRoutesWithRateLimit(
 	r *gin.Engine,
 	authUseCase usecase.AuthUseCase,
 	jwtSecret string,
+	sessionValidator SessionValidator,
 	redisLimiter *ratelimit.RouteRateLimiter,
 	limit int,
 	window time.Duration,
 ) {
 	handler := NewHandler(authUseCase)
+	v1 := r.Group("/api/v1")
 
 	// Rate limiting middleware with per-route configuration
 	rateLimitMiddleware := middleware.RedisRateLimitPerRoute(redisLimiter, limit, int(window.Seconds()))
 
 	// Public auth routes with rate limiting
-	auth := r.Group("/auth")
+	auth := v1.Group("/auth")
 	auth.Use(rateLimitMiddleware)
-	auth.POST("/register", handler.Register)
 	auth.POST("/login", handler.Login)
 	auth.POST("/refresh", handler.RefreshToken)
 
+	// Register route (admin only)
+	authAdmin := v1.Group("/auth")
+	authAdmin.Use(rateLimitMiddleware)
+	authAdmin.Use(AuthMiddleware(jwtSecret, sessionValidator))
+	authAdmin.Use(AdminOnlyMiddleware())
+	authAdmin.POST("/register", handler.Register)
+
 	// Protected auth routes (require authentication)
-	authProtected := r.Group("/auth")
-	authProtected.Use(AuthMiddleware(jwtSecret))
+	authProtected := v1.Group("/auth")
+	authProtected.Use(rateLimitMiddleware)
+	authProtected.Use(AuthMiddleware(jwtSecret, sessionValidator))
 	authProtected.POST("/logout", handler.Logout)
 	authProtected.GET("/me", handler.GetCurrentUser)
 	authProtected.POST("/change-password", handler.ChangePassword)
 
 	// Admin routes (require admin role)
-	admin := r.Group("/admin")
-	admin.Use(AuthMiddleware(jwtSecret))
-	admin.Use(AdminOnlyMiddleware())
-	admin.GET("/users", handler.ListUsers)
-	admin.GET("/users/:id", handler.GetUser)
-	admin.DELETE("/users/:id", handler.DeleteUser)
-	admin.POST("/users/:id/restore", handler.RestoreUser)
+	adminUsers := v1.Group("/users")
+	adminUsers.Use(rateLimitMiddleware)
+	adminUsers.Use(AuthMiddleware(jwtSecret, sessionValidator))
+	adminUsers.Use(AdminOnlyMiddleware())
+	adminUsers.GET("", handler.ListUsers)
+	adminUsers.GET("/:id", handler.GetUser)
+	adminUsers.DELETE("/:id", handler.DeleteUser)
+	adminUsers.POST("/:id/restore", handler.RestoreUser)
 }
 
 // PublicHealth is a public health check.

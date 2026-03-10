@@ -2,20 +2,26 @@
 package dto
 
 import (
+	"errors"
+
 	"github.com/ignata/go-microservices-boilerplate/internal/auth/domain"
 	"github.com/ignata/go-microservices-boilerplate/pkg/validator"
 )
 
 // RegisterRequest represents a user registration request (aligned with Bun-Hono).
 type RegisterRequest struct {
-	Email    string `json:"email" binding:"required,email,max=255"`
-	Username string `json:"username" binding:"required,min=3,max=50"`
-	Password string `json:"password" binding:"required"`
-	Name     string `json:"name" binding:"omitempty,max=255"`
+	Email           string `json:"email" binding:"required,email,max=255"`
+	Username        string `json:"username" binding:"required,min=3,max=50"`
+	Password        string `json:"password" binding:"required"`
+	ConfirmPassword string `json:"confirmPassword" binding:"required"`
+	Name            string `json:"name" binding:"omitempty,max=255"`
 }
 
 // Validate validates the registration request.
 func (r *RegisterRequest) Validate() error {
+	if r.ConfirmPassword != r.Password {
+		return errors.New("confirmPassword must match password")
+	}
 	if err := validator.ValidateUsername(r.Username); err != nil {
 		return err
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/ignata/go-microservices-boilerplate/internal/user/dto"
 	"github.com/ignata/go-microservices-boilerplate/internal/user/repository"
 	"github.com/ignata/go-microservices-boilerplate/pkg/eventbus"
+	"github.com/ignata/go-microservices-boilerplate/pkg/utils"
 )
 
 // UserUseCase defines the interface for user business logic.
@@ -153,6 +154,7 @@ func (uc *userUseCase) DeleteUser(ctx context.Context, req *dto.DeleteUserReques
 
 	// Publish event
 	event := domain.NewUserDeletedEvent(req.ID)
+	utils.ApplyRequestMetadataToEvent(ctx, event)
 	if _, err := uc.eventBus.Publish(ctx, eventbus.StreamUserEvents, event); err != nil {
 		uc.logger.Error("failed to publish user deleted event", zap.Error(err))
 	}
@@ -178,6 +180,7 @@ func (uc *userUseCase) RestoreUser(ctx context.Context, req *dto.RestoreUserRequ
 
 	// Publish event
 	event := domain.NewUserRestoredEvent(req.ID, user.Email)
+	utils.ApplyRequestMetadataToEvent(ctx, event)
 	if _, err := uc.eventBus.Publish(ctx, eventbus.StreamUserEvents, event); err != nil {
 		uc.logger.Error("failed to publish user restored event", zap.Error(err))
 	}
@@ -196,6 +199,7 @@ func (uc *userUseCase) LogActivity(ctx context.Context, req *dto.LogActivityRequ
 	}
 
 	activity := domain.NewActivityLog(req.UserID, req.Action, req.Resource, req.UserID).
+		WithRequestInfo(req.IPAddress, req.UserAgent).
 		WithDetails(req.Details)
 
 	if err := uc.activityRepo.Create(ctx, activity); err != nil {

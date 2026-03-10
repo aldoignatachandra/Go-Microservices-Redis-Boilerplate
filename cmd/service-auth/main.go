@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/gin-gonic/gin"
@@ -180,6 +181,7 @@ func setupHTTPServer(app *App) *gin.Engine {
 
 	// Add request tracing and structured request logging
 	engine.Use(pkgmiddleware.RequestID())
+	engine.Use(pkgmiddleware.RequestContextMetadata())
 	engine.Use(pkgmiddleware.Logging(pkgmiddleware.LoggingConfig{
 		Logger: app.Logger,
 	}))
@@ -221,13 +223,14 @@ func setupHTTPServer(app *App) *gin.Engine {
 
 	// Create Redis rate limiter if enabled
 	var redisLimiter *ratelimit.RouteRateLimiter
+	sessionValidator := buildSessionValidator(app)
 	if app.Config.RateLimit.Enabled && app.Redis != nil {
 		redisLimiter = ratelimit.NewRedisRateLimiter(app.Redis, "ratelimit")
 
 		redisLimiter.SetLimits(map[string]ratelimit.RouteLimit{
-			"/auth/login":    {MaxRequests: 10, WindowSeconds: 60},
-			"/auth/logout":   {MaxRequests: 30, WindowSeconds: 60},
-			"/auth/register": {MaxRequests: 10, WindowSeconds: 60},
+			"/api/v1/auth/login":    {MaxRequests: 10, WindowSeconds: 60},
+			"/api/v1/auth/logout":   {MaxRequests: 30, WindowSeconds: 60},
+			"/api/v1/auth/register": {MaxRequests: 10, WindowSeconds: 60},
 		})
 	}
 
@@ -237,15 +240,29 @@ func setupHTTPServer(app *App) *gin.Engine {
 			engine,
 			app.AuthUseCase,
 			app.Config.Auth.JWT.Secret,
+			sessionValidator,
 			redisLimiter,
 			app.Config.RateLimit.Requests,
 			app.Config.RateLimit.Duration,
 		)
 	} else {
-		delivery.RegisterRoutes(engine, app.AuthUseCase, app.Config.Auth.JWT.Secret)
+		delivery.RegisterRoutes(engine, app.AuthUseCase, app.Config.Auth.JWT.Secret, sessionValidator)
 	}
 
 	return engine
+}
+
+func buildSessionValidator(app *App) delivery.SessionValidator {
+	if app == nil || app.Postgres == nil {
+		return nil
+	}
+
+	return func(ctx context.Context, userID, sessionID string) (bool, error) {
+		if strings.TrimSpace(sessionID) == "" {
+			return false, nil
+		}
+		return app.Postgres.HasActiveSessionByID(ctx, userID, sessionID)
+	}
 }
 
 func startStreamConsumer(ctx context.Context, app *App, stream, consumerSuffix string) *eventbus.Consumer {

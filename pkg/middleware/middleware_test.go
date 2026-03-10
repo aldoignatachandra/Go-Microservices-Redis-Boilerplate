@@ -2,7 +2,9 @@
 package middleware
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -57,6 +59,46 @@ func TestAuth(t *testing.T) {
 				assert.True(t, exists, "user ID should exist in context")
 				assert.Equal(t, "user-123", userID)
 			},
+		},
+		{
+			name: "revoked session",
+			config: AuthConfig{
+				JWTSecret: jwtSecret,
+				SkipPaths: []string{},
+				SessionValidator: func(_ context.Context, _, _ string) (bool, error) {
+					return false, nil
+				},
+			},
+			setupRequest: func(req *http.Request) {
+				manager := utils.NewJWTManager(utils.JWTConfig{
+					Secret:    string(jwtSecret),
+					ExpiresIn: time.Hour,
+				})
+				token, err := manager.GenerateToken("user-123", "test@example.com", string(domain.RoleUser))
+				require.NoError(t, err)
+				req.Header.Set("Authorization", "Bearer "+token)
+			},
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name: "session validator error",
+			config: AuthConfig{
+				JWTSecret: jwtSecret,
+				SkipPaths: []string{},
+				SessionValidator: func(_ context.Context, _, _ string) (bool, error) {
+					return false, errors.New("db unavailable")
+				},
+			},
+			setupRequest: func(req *http.Request) {
+				manager := utils.NewJWTManager(utils.JWTConfig{
+					Secret:    string(jwtSecret),
+					ExpiresIn: time.Hour,
+				})
+				token, err := manager.GenerateToken("user-123", "test@example.com", string(domain.RoleUser))
+				require.NoError(t, err)
+				req.Header.Set("Authorization", "Bearer "+token)
+			},
+			expectedStatus: http.StatusInternalServerError,
 		},
 		{
 			name: "missing authorization header",
@@ -148,6 +190,42 @@ func TestAuth(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, w.Code)
 		})
 	}
+}
+
+func TestAuth_SessionBoundToken(t *testing.T) {
+	jwtSecret := []byte("test-secret-key-for-auth-middleware-tests")
+	manager := utils.NewJWTManager(utils.JWTConfig{
+		Secret:    string(jwtSecret),
+		ExpiresIn: time.Hour,
+	})
+
+	const expectedUserID = "user-123"
+	const expectedSessionID = "5ff70a4d-3a43-49e8-a2e3-92682e5acc44"
+	token, err := manager.GenerateTokenWithSession(expectedUserID, "test@example.com", string(domain.RoleUser), expectedSessionID)
+	require.NoError(t, err)
+
+	var gotUserID, gotSessionID string
+	router := gin.New()
+	router.Use(Auth(AuthConfig{
+		JWTSecret: jwtSecret,
+		SessionValidator: func(_ context.Context, userID, sessionID string) (bool, error) {
+			gotUserID = userID
+			gotSessionID = sessionID
+			return true, nil
+		},
+	}))
+	router.GET("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, expectedUserID, gotUserID)
+	assert.Equal(t, expectedSessionID, gotSessionID)
 }
 
 // TestRequireRole tests the role-based authorization middleware.

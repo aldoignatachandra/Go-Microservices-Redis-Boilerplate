@@ -24,6 +24,14 @@ func setupTestRouter() *gin.Engine {
 	return router
 }
 
+func withAuthContext(userID, role string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Set("user_id", userID)
+		c.Set("user_role", role)
+		c.Next()
+	}
+}
+
 // TestGetUser_Success tests successful user retrieval.
 func TestGetUser_Success(t *testing.T) {
 	// Setup mock
@@ -92,6 +100,28 @@ func TestGetUser_NotFound(t *testing.T) {
 	assert.Contains(t, errObj["message"], "not found")
 
 	mockUseCase.AssertExpectations(t)
+}
+
+// TestGetUser_ForbiddenForNonOwner ensures USER cannot access another user's profile.
+func TestGetUser_ForbiddenForNonOwner(t *testing.T) {
+	mockUseCase := new(mocks.MockUserUseCase)
+	handler := delivery.NewUserHandler(mockUseCase)
+	router := setupTestRouter()
+
+	req, _ := http.NewRequest("GET", "/api/v1/users/550e8400-e29b-41d4-a716-446655440001", nil)
+	w := httptest.NewRecorder()
+
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440099")
+		c.Set("user_role", "USER")
+		c.Next()
+	})
+
+	router.GET("/api/v1/users/:id", handler.GetUser)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	mockUseCase.AssertNotCalled(t, "GetUser", mock.Anything, mock.Anything)
 }
 
 // TestListUsers_Success tests successful user list retrieval.
@@ -173,6 +203,23 @@ func TestActivateUser_Success(t *testing.T) {
 	mockUseCase.AssertExpectations(t)
 }
 
+func TestActivateUser_ForbiddenForSelf(t *testing.T) {
+	mockUseCase := new(mocks.MockUserUseCase)
+	handler := delivery.NewUserHandler(mockUseCase)
+	router := setupTestRouter()
+
+	targetID := "550e8400-e29b-41d4-a716-446655440001"
+	req, _ := http.NewRequest("POST", "/api/v1/users/"+targetID+"/activate", nil)
+	w := httptest.NewRecorder()
+
+	router.Use(withAuthContext(targetID, "ADMIN"))
+	router.POST("/api/v1/users/:id/activate", handler.ActivateUser)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	mockUseCase.AssertNotCalled(t, "ActivateUser", mock.Anything, mock.Anything)
+}
+
 // TestDeactivateUser_Success tests successful user deactivation.
 func TestDeactivateUser_Success(t *testing.T) {
 	// Setup mock
@@ -205,6 +252,23 @@ func TestDeactivateUser_Success(t *testing.T) {
 	mockUseCase.AssertExpectations(t)
 }
 
+func TestDeactivateUser_ForbiddenForSelf(t *testing.T) {
+	mockUseCase := new(mocks.MockUserUseCase)
+	handler := delivery.NewUserHandler(mockUseCase)
+	router := setupTestRouter()
+
+	targetID := "550e8400-e29b-41d4-a716-446655440001"
+	req, _ := http.NewRequest("POST", "/api/v1/users/"+targetID+"/deactivate", nil)
+	w := httptest.NewRecorder()
+
+	router.Use(withAuthContext(targetID, "ADMIN"))
+	router.POST("/api/v1/users/:id/deactivate", handler.DeactivateUser)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	mockUseCase.AssertNotCalled(t, "DeactivateUser", mock.Anything, mock.Anything)
+}
+
 // TestDeleteUser_Success tests successful user deletion.
 func TestDeleteUser_Success(t *testing.T) {
 	// Setup mock
@@ -235,6 +299,23 @@ func TestDeleteUser_Success(t *testing.T) {
 	assert.Equal(t, "User deleted successfully", data["message"])
 
 	mockUseCase.AssertExpectations(t)
+}
+
+func TestDeleteUser_ForbiddenForSelf(t *testing.T) {
+	mockUseCase := new(mocks.MockUserUseCase)
+	handler := delivery.NewUserHandler(mockUseCase)
+	router := setupTestRouter()
+
+	targetID := "550e8400-e29b-41d4-a716-446655440001"
+	req, _ := http.NewRequest("DELETE", "/api/v1/users/"+targetID, nil)
+	w := httptest.NewRecorder()
+
+	router.Use(withAuthContext(targetID, "ADMIN"))
+	router.DELETE("/api/v1/users/:id", handler.DeleteUser)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	mockUseCase.AssertNotCalled(t, "DeleteUser", mock.Anything, mock.Anything)
 }
 
 // TestRestoreUser_Success tests successful user restoration.
@@ -277,6 +358,23 @@ func TestRestoreUser_Success(t *testing.T) {
 	assert.Equal(t, "User restored successfully", data["message"])
 
 	mockUseCase.AssertExpectations(t)
+}
+
+func TestRestoreUser_ForbiddenForSelf(t *testing.T) {
+	mockUseCase := new(mocks.MockUserUseCase)
+	handler := delivery.NewUserHandler(mockUseCase)
+	router := setupTestRouter()
+
+	targetID := "550e8400-e29b-41d4-a716-446655440001"
+	req, _ := http.NewRequest("POST", "/api/v1/users/"+targetID+"/restore", nil)
+	w := httptest.NewRecorder()
+
+	router.Use(withAuthContext(targetID, "ADMIN"))
+	router.POST("/api/v1/users/:id/restore", handler.RestoreUser)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	mockUseCase.AssertNotCalled(t, "RestoreUser", mock.Anything, mock.Anything)
 }
 
 // TestGetActivityLogs_Success tests successful activity logs retrieval.

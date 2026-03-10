@@ -444,6 +444,25 @@ func TestLogActivity(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "successful log activity with request metadata",
+			req: &dto.LogActivityRequest{
+				UserID:    "test-user-id",
+				Action:    "user.logged_in",
+				Resource:  "auth",
+				IPAddress: "127.0.0.1",
+				UserAgent: "PostmanRuntime/7.43.0",
+				Details:   "login activity",
+			},
+			setupMocks: func(activityRepo *mocks.MockActivityRepository) {
+				activityRepo.On("Create", mock.Anything, mock.MatchedBy(func(log *domain.ActivityLog) bool {
+					return log != nil &&
+						log.IPAddress == "127.0.0.1" &&
+						log.UserAgent == "PostmanRuntime/7.43.0"
+				})).Return(nil)
+			},
+			wantErr: false,
+		},
+		{
 			name: "validation error - missing user ID",
 			req: &dto.LogActivityRequest{
 				Action:   "login",

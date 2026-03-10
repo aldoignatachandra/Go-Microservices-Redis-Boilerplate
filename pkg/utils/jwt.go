@@ -27,6 +27,8 @@ type Claims struct {
 	UserID string `json:"user_id"`
 	Email  string `json:"email"`
 	Role   string `json:"role"`
+	// SessionID ties access tokens to a specific server-side session row.
+	SessionID string `json:"session_id,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -50,16 +52,30 @@ func NewJWTManager(config JWTConfig) *JWTManager {
 
 // GenerateToken generates a new access token for a user.
 func (m *JWTManager) GenerateToken(userID, email, role string) (string, error) {
-	return m.GenerateTokenWithExpiry(userID, email, role, m.config.ExpiresIn)
+	return m.GenerateTokenWithSession(userID, email, role, "")
+}
+
+// GenerateTokenWithSession generates an access token bound to a session ID.
+func (m *JWTManager) GenerateTokenWithSession(userID, email, role, sessionID string) (string, error) {
+	return m.generateTokenWithExpiryAndSession(userID, email, role, m.config.ExpiresIn, sessionID)
 }
 
 // GenerateTokenWithExpiry generates a token with custom expiry.
 func (m *JWTManager) GenerateTokenWithExpiry(userID, email, role string, expiresIn time.Duration) (string, error) {
+	return m.generateTokenWithExpiryAndSession(userID, email, role, expiresIn, "")
+}
+
+func (m *JWTManager) generateTokenWithExpiryAndSession(
+	userID, email, role string,
+	expiresIn time.Duration,
+	sessionID string,
+) (string, error) {
 	now := time.Now()
 	claims := &Claims{
-		UserID: userID,
-		Email:  email,
-		Role:   role,
+		UserID:    userID,
+		Email:     email,
+		Role:      role,
+		SessionID: sessionID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(expiresIn)),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -90,7 +106,12 @@ func (m *JWTManager) GenerateRefreshToken(userID string) (string, error) {
 
 // GenerateTokenPair generates both access and refresh tokens.
 func (m *JWTManager) GenerateTokenPair(userID, email, role string) (*TokenPair, error) {
-	accessToken, err := m.GenerateToken(userID, email, role)
+	return m.GenerateTokenPairWithSession(userID, email, role, "")
+}
+
+// GenerateTokenPairWithSession generates both tokens and binds access token to a session ID.
+func (m *JWTManager) GenerateTokenPairWithSession(userID, email, role, sessionID string) (*TokenPair, error) {
+	accessToken, err := m.GenerateTokenWithSession(userID, email, role, sessionID)
 	if err != nil {
 		return nil, err
 	}

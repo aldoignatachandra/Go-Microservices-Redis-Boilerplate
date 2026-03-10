@@ -2,17 +2,27 @@
 package delivery
 
 import (
+	"context"
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/ignata/go-microservices-boilerplate/internal/auth/domain"
 	"github.com/ignata/go-microservices-boilerplate/pkg/utils"
 )
 
+// SessionValidator validates that a user still has an active server-side session.
+type SessionValidator func(ctx context.Context, userID, sessionID string) (bool, error)
+
 // AuthMiddleware validates JWT tokens and sets user info in context.
-func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
+func AuthMiddleware(jwtSecret string, sessionValidator ...SessionValidator) gin.HandlerFunc {
 	jwtManager := utils.NewJWTManager(utils.JWTConfig{
 		Secret: jwtSecret,
 	})
+
+	var validator SessionValidator
+	if len(sessionValidator) > 0 {
+		validator = sessionValidator[0]
+	}
 
 	return func(c *gin.Context) {
 		// Get token from Authorization header
@@ -37,6 +47,20 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 			utils.Unauthorized(c, "Invalid or expired token")
 			c.Abort()
 			return
+		}
+
+		if validator != nil {
+			valid, sessionErr := validator(c.Request.Context(), claims.UserID, claims.SessionID)
+			if sessionErr != nil {
+				utils.InternalError(c, "Failed to validate session")
+				c.Abort()
+				return
+			}
+			if !valid {
+				utils.Unauthorized(c, "Invalid or expired token")
+				c.Abort()
+				return
+			}
 		}
 
 		// Set user info in context
@@ -70,10 +94,15 @@ func AdminOnlyMiddleware() gin.HandlerFunc {
 
 // OptionalAuthMiddleware optionally validates JWT tokens.
 // It sets user info if token is valid, but doesn't require it.
-func OptionalAuthMiddleware(jwtSecret string) gin.HandlerFunc {
+func OptionalAuthMiddleware(jwtSecret string, sessionValidator ...SessionValidator) gin.HandlerFunc {
 	jwtManager := utils.NewJWTManager(utils.JWTConfig{
 		Secret: jwtSecret,
 	})
+
+	var validator SessionValidator
+	if len(sessionValidator) > 0 {
+		validator = sessionValidator[0]
+	}
 
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -92,6 +121,14 @@ func OptionalAuthMiddleware(jwtSecret string) gin.HandlerFunc {
 		if err != nil {
 			c.Next()
 			return
+		}
+
+		if validator != nil {
+			valid, sessionErr := validator(c.Request.Context(), claims.UserID, claims.SessionID)
+			if sessionErr != nil || !valid {
+				c.Next()
+				return
+			}
 		}
 
 		c.Set("user_id", claims.UserID)

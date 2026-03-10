@@ -2,6 +2,8 @@
 package delivery
 
 import (
+	"strings"
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/ignata/go-microservices-boilerplate/internal/auth/domain"
@@ -24,7 +26,7 @@ func NewHandler(authUseCase usecase.AuthUseCase) *Handler {
 
 // Register handles user registration.
 // @Summary Register a new user
-// @Description Register a new user with email and password
+// @Description Register a new USER account (admin only)
 // @Tags auth
 // @Accept json
 // @Produce json
@@ -32,7 +34,8 @@ func NewHandler(authUseCase usecase.AuthUseCase) *Handler {
 // @Success 201 {object} dto.AuthResponse
 // @Failure 400 {object} utils.Response
 // @Failure 409 {object} utils.Response
-// @Router /auth/register [post]
+// @Router /api/v1/auth/register [post]
+// @Security BearerAuth
 func (h *Handler) Register(c *gin.Context) {
 	var req dto.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -40,7 +43,17 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	response, err := h.authUseCase.Register(c.Request.Context(), &req)
+	if err := req.Validate(); err != nil {
+		utils.ValidationError(c, err.Error())
+		return
+	}
+
+	requestCtx := c.Request.Context()
+	if actorUserID := strings.TrimSpace(c.GetString("user_id")); actorUserID != "" {
+		requestCtx = utils.WithActorUserID(requestCtx, actorUserID)
+	}
+
+	response, err := h.authUseCase.Register(requestCtx, &req)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -59,7 +72,7 @@ func (h *Handler) Register(c *gin.Context) {
 // @Success 200 {object} dto.AuthResponse
 // @Failure 400 {object} utils.Response
 // @Failure 401 {object} utils.Response
-// @Router /auth/login [post]
+// @Router /api/v1/auth/login [post]
 func (h *Handler) Login(c *gin.Context) {
 	var req dto.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -86,7 +99,7 @@ func (h *Handler) Login(c *gin.Context) {
 // @Produce json
 // @Success 200 {object} utils.Response
 // @Failure 401 {object} utils.Response
-// @Router /auth/logout [post]
+// @Router /api/v1/auth/logout [post]
 // @Security BearerAuth
 func (h *Handler) Logout(c *gin.Context) {
 	userID := c.GetString("user_id")
@@ -113,7 +126,7 @@ func (h *Handler) Logout(c *gin.Context) {
 // @Success 200 {object} dto.AuthResponse
 // @Failure 400 {object} utils.Response
 // @Failure 401 {object} utils.Response
-// @Router /auth/refresh [post]
+// @Router /api/v1/auth/refresh [post]
 func (h *Handler) RefreshToken(c *gin.Context) {
 	var req dto.RefreshTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -137,7 +150,7 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 // @Produce json
 // @Success 200 {object} dto.UserResponse
 // @Failure 401 {object} utils.Response
-// @Router /auth/me [get]
+// @Router /api/v1/auth/me [get]
 // @Security BearerAuth
 func (h *Handler) GetCurrentUser(c *gin.Context) {
 	userID := c.GetString("user_id")
@@ -165,7 +178,7 @@ func (h *Handler) GetCurrentUser(c *gin.Context) {
 // @Success 200 {object} utils.Response
 // @Failure 400 {object} utils.Response
 // @Failure 401 {object} utils.Response
-// @Router /auth/change-password [post]
+// @Router /api/v1/auth/change-password [post]
 // @Security BearerAuth
 func (h *Handler) ChangePassword(c *gin.Context) {
 	userID := c.GetString("user_id")
@@ -199,7 +212,7 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 // @Failure 400 {object} utils.Response
 // @Failure 401 {object} utils.Response
 // @Failure 404 {object} utils.Response
-// @Router /admin/users/{id} [get]
+// @Router /api/v1/users/{id} [get]
 // @Security BearerAuth
 func (h *Handler) GetUser(c *gin.Context) {
 	var req dto.GetUserRequest
@@ -235,7 +248,7 @@ func (h *Handler) GetUser(c *gin.Context) {
 // @Param only_deleted query bool false "Only deleted users"
 // @Success 200 {object} dto.UserListResponse
 // @Failure 401 {object} utils.Response
-// @Router /admin/users [get]
+// @Router /api/v1/users [get]
 // @Security BearerAuth
 func (h *Handler) ListUsers(c *gin.Context) {
 	var req dto.ListUsersRequest
@@ -264,7 +277,7 @@ func (h *Handler) ListUsers(c *gin.Context) {
 // @Failure 400 {object} utils.Response
 // @Failure 401 {object} utils.Response
 // @Failure 404 {object} utils.Response
-// @Router /admin/users/{id} [delete]
+// @Router /api/v1/users/{id} [delete]
 // @Security BearerAuth
 func (h *Handler) DeleteUser(c *gin.Context) {
 	var req dto.DeleteUserRequest
@@ -304,7 +317,7 @@ func (h *Handler) DeleteUser(c *gin.Context) {
 // @Failure 400 {object} utils.Response
 // @Failure 401 {object} utils.Response
 // @Failure 404 {object} utils.Response
-// @Router /admin/users/{id}/restore [post]
+// @Router /api/v1/users/{id}/restore [post]
 // @Security BearerAuth
 func (h *Handler) RestoreUser(c *gin.Context) {
 	var req dto.RestoreUserRequest

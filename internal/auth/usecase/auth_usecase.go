@@ -124,15 +124,18 @@ func (uc *authUseCase) Register(ctx context.Context, req *dto.RegisterRequest) (
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
+	sessionID := uuid.New().String()
+
 	// Generate tokens
 	var tokenPair *utils.TokenPair
-	tokenPair, err = uc.jwtManager.GenerateTokenPair(user.ID, user.Email, string(user.Role))
+	tokenPair, err = uc.jwtManager.GenerateTokenPairWithSession(user.ID, user.Email, string(user.Role), sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate tokens: %w", err)
 	}
 
 	// Create session (with Token field instead of RefreshToken)
 	session := &domain.Session{
+		ID:        sessionID,
 		UserID:    user.ID,
 		Token:     tokenPair.RefreshToken,
 		ExpiresAt: time.Now().UTC().Add(uc.config.RefreshExpiresIn),
@@ -143,13 +146,18 @@ func (uc *authUseCase) Register(ctx context.Context, req *dto.RegisterRequest) (
 
 	// Publish event
 	if uc.eventBus != nil {
-		uc.publishEvent(ctx, domain.NewUserCreatedEvent(user))
+		event := domain.NewUserCreatedEvent(user)
+		if actorUserID := strings.TrimSpace(utils.GetActorUserIDFromContext(ctx)); actorUserID != "" {
+			event.WithMetadata("actor_user_id", actorUserID)
+		}
+		uc.publishEvent(ctx, event)
 	}
 
 	return &dto.AuthResponse{
-		Token:     tokenPair.AccessToken,
-		ExpiresIn: tokenPair.ExpiresIn,
-		User:      dto.FromUser(user),
+		Token:        tokenPair.AccessToken,
+		RefreshToken: tokenPair.RefreshToken,
+		ExpiresIn:    tokenPair.ExpiresIn,
+		User:         dto.FromUser(user),
 	}, nil
 }
 
@@ -184,15 +192,18 @@ func (uc *authUseCase) Login(ctx context.Context, req *dto.LoginRequest, ipAddre
 		return nil, fmt.Errorf("failed to delete existing sessions: %w", err)
 	}
 
+	sessionID := uuid.New().String()
+
 	// Generate tokens
 	var tokenPair *utils.TokenPair
-	tokenPair, err = uc.jwtManager.GenerateTokenPair(user.ID, user.Email, string(user.Role))
+	tokenPair, err = uc.jwtManager.GenerateTokenPairWithSession(user.ID, user.Email, string(user.Role), sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate tokens: %w", err)
 	}
 
 	// Create session (with Token field instead of RefreshToken)
 	session := &domain.Session{
+		ID:         sessionID,
 		UserID:     user.ID,
 		Token:      tokenPair.RefreshToken,
 		ExpiresAt:  time.Now().UTC().Add(uc.config.RefreshExpiresIn),
@@ -214,14 +225,24 @@ func (uc *authUseCase) Login(ctx context.Context, req *dto.LoginRequest, ipAddre
 	}
 
 	return &dto.AuthResponse{
-		Token:     tokenPair.AccessToken,
-		ExpiresIn: tokenPair.ExpiresIn,
-		User:      dto.FromUser(user),
+		Token:        tokenPair.AccessToken,
+		RefreshToken: tokenPair.RefreshToken,
+		ExpiresIn:    tokenPair.ExpiresIn,
+		User:         dto.FromUser(user),
 	}, nil
 }
 
 // Logout logs out a user.
 func (uc *authUseCase) Logout(ctx context.Context, userID string) error {
+	// Require an active session so repeated logout with the same JWT is rejected.
+	sessions, err := uc.sessionRepo.FindByUserID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to validate active session: %w", err)
+	}
+	if len(sessions) == 0 {
+		return domain.ErrInvalidToken
+	}
+
 	if err := uc.sessionRepo.RevokeAllForUser(ctx, userID); err != nil {
 		return fmt.Errorf("failed to logout: %w", err)
 	}
@@ -264,17 +285,22 @@ func (uc *authUseCase) RefreshToken(ctx context.Context, req *dto.RefreshTokenRe
 		return nil, domain.ErrUserInactive
 	}
 
-	// Revoke old session
-	_ = uc.sessionRepo.Revoke(ctx, session.ID)
+	// Revoke all active sessions so every previous access token is invalid immediately.
+	if err := uc.sessionRepo.RevokeAllForUser(ctx, user.ID); err != nil {
+		return nil, fmt.Errorf("failed to revoke existing sessions: %w", err)
+	}
+
+	newSessionID := uuid.New().String()
 
 	// Generate new tokens
-	tokenPair, err := uc.jwtManager.GenerateTokenPair(user.ID, user.Email, string(user.Role))
+	tokenPair, err := uc.jwtManager.GenerateTokenPairWithSession(user.ID, user.Email, string(user.Role), newSessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate tokens: %w", err)
 	}
 
 	// Create new session
 	newSession := &domain.Session{
+		ID:        newSessionID,
 		UserID:    user.ID,
 		Token:     tokenPair.RefreshToken,
 		ExpiresAt: time.Now().UTC().Add(uc.config.RefreshExpiresIn),
@@ -289,9 +315,10 @@ func (uc *authUseCase) RefreshToken(ctx context.Context, req *dto.RefreshTokenRe
 	}
 
 	return &dto.AuthResponse{
-		Token:     tokenPair.AccessToken,
-		ExpiresIn: tokenPair.ExpiresIn,
-		User:      dto.FromUser(user),
+		Token:        tokenPair.AccessToken,
+		RefreshToken: tokenPair.RefreshToken,
+		ExpiresIn:    tokenPair.ExpiresIn,
+		User:         dto.FromUser(user),
 	}, nil
 }
 
@@ -457,11 +484,7 @@ func (uc *authUseCase) publishEvent(ctx context.Context, event *domain.UserEvent
 
 	// Create event bus event
 	ebEvent := eventbus.NewEvent(event.EventType, uc.config.ServiceName, event.ToMap())
-
-	// Add correlation ID from context if available
-	if correlationID, ok := ctx.Value("correlation_id").(string); ok && correlationID != "" {
-		ebEvent.WithCorrelationID(correlationID)
-	}
+	utils.ApplyRequestMetadataToEvent(ctx, ebEvent)
 
 	// Publish asynchronously
 	go func() {

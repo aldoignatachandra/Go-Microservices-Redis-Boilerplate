@@ -241,6 +241,7 @@ func TestRegister(t *testing.T) {
 			wantErr: false,
 			checkResp: func(t *testing.T, resp *dto.AuthResponse) {
 				assert.NotEmpty(t, resp.Token)
+				assert.NotEmpty(t, resp.RefreshToken)
 				assert.NotNil(t, resp.User)
 				assert.Equal(t, "test@example.com", resp.User.Email)
 			},
@@ -385,15 +386,23 @@ func TestLogin(t *testing.T) {
 // TestLogout tests the Logout use case.
 func TestLogout(t *testing.T) {
 	tests := []struct {
-		name       string
-		userID     string
-		setupMocks func(*MockSessionRepository, *MockEventPublisher)
-		wantErr    bool
+		name        string
+		userID      string
+		setupMocks  func(*MockSessionRepository, *MockEventPublisher)
+		wantErr     bool
+		expectedErr error
 	}{
 		{
 			name:   "successful logout",
 			userID: "test-user-id",
 			setupMocks: func(sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
+				sessionRepo.On("FindByUserID", mock.Anything, "test-user-id").Return([]*domain.Session{
+					{
+						ID:        "session-1",
+						UserID:    "test-user-id",
+						ExpiresAt: time.Now().Add(1 * time.Hour),
+					},
+				}, nil)
 				sessionRepo.On("RevokeAllForUser", mock.Anything, "test-user-id").Return(nil)
 				eventBus.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return("", nil).Maybe()
 			},
@@ -403,9 +412,25 @@ func TestLogout(t *testing.T) {
 			name:   "repository error",
 			userID: "test-user-id",
 			setupMocks: func(sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
+				sessionRepo.On("FindByUserID", mock.Anything, "test-user-id").Return([]*domain.Session{
+					{
+						ID:        "session-1",
+						UserID:    "test-user-id",
+						ExpiresAt: time.Now().Add(1 * time.Hour),
+					},
+				}, nil)
 				sessionRepo.On("RevokeAllForUser", mock.Anything, "test-user-id").Return(errors.New("database error"))
 			},
 			wantErr: true,
+		},
+		{
+			name:   "no active session should be invalid token",
+			userID: "test-user-id",
+			setupMocks: func(sessionRepo *MockSessionRepository, eventBus *MockEventPublisher) {
+				sessionRepo.On("FindByUserID", mock.Anything, "test-user-id").Return([]*domain.Session{}, nil)
+			},
+			wantErr:     true,
+			expectedErr: domain.ErrInvalidToken,
 		},
 	}
 
@@ -425,8 +450,16 @@ func TestLogout(t *testing.T) {
 			// Assert
 			if tt.wantErr {
 				require.Error(t, err)
+				if tt.expectedErr != nil {
+					assert.True(t, errors.Is(err, tt.expectedErr))
+				}
 			} else {
 				require.NoError(t, err)
+			}
+
+			if errors.Is(tt.expectedErr, domain.ErrInvalidToken) {
+				sessionRepo.AssertNotCalled(t, "RevokeAllForUser", mock.Anything, tt.userID)
+				eventBus.AssertNotCalled(t, "Publish", mock.Anything, mock.Anything, mock.Anything)
 			}
 
 			sessionRepo.AssertExpectations(t)
@@ -460,7 +493,7 @@ func TestRefreshToken(t *testing.T) {
 	authResp, err := uc.Register(context.Background(), registerReq)
 	require.NoError(t, err)
 	require.NotNil(t, authResp)
-	validRefreshToken := authResp.Token
+	validRefreshToken := authResp.RefreshToken
 
 	tests := []struct {
 		name        string
@@ -1091,7 +1124,7 @@ func TestLogin_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.NotEmpty(t, resp.Token)
-	assert.NotEmpty(t, resp.Token)
+	assert.NotEmpty(t, resp.RefreshToken)
 	assert.Equal(t, "login@example.com", resp.User.Email)
 
 	userRepo.AssertExpectations(t)
@@ -1155,7 +1188,7 @@ func TestRefreshToken_Success(t *testing.T) {
 
 	authResp, err := uc.Register(context.Background(), registerReq)
 	require.NoError(t, err)
-	validRefreshToken := authResp.Token
+	validRefreshToken := authResp.RefreshToken
 
 	// Setup mocks for refresh
 	user := buildTestUser(withID(authResp.User.ID), withEmail("refresh@example.com"))
@@ -1173,7 +1206,7 @@ func TestRefreshToken_Success(t *testing.T) {
 
 	sessionRepo.On("FindByRefreshToken", mock.Anything, validRefreshToken).Return(session, nil)
 	userRepo.On("FindByID", mock.Anything, authResp.User.ID, mock.AnythingOfType("*domain.ParanoidOptions")).Return(user, nil)
-	sessionRepo.On("Revoke", mock.Anything, "session-123").Return(nil)
+	sessionRepo.On("RevokeAllForUser", mock.Anything, authResp.User.ID).Return(nil)
 	sessionRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Session")).Return(nil)
 
 	// Act
@@ -1185,6 +1218,7 @@ func TestRefreshToken_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, refreshResp)
 	assert.NotEmpty(t, refreshResp.Token)
+	assert.NotEmpty(t, refreshResp.RefreshToken)
 	// Note: We don't check that tokens are different because the mock doesn't control token generation
 	// In a real scenario, each refresh should issue a new token for security
 
@@ -1397,6 +1431,13 @@ func TestLogout_Error(t *testing.T) {
 	eventBus := new(MockEventPublisher)
 	uc := newTestAuthUseCase(userRepo, sessionRepo, eventBus)
 
+	sessionRepo.On("FindByUserID", mock.Anything, "user-123").Return([]*domain.Session{
+		{
+			ID:        "session-1",
+			UserID:    "user-123",
+			ExpiresAt: time.Now().Add(1 * time.Hour),
+		},
+	}, nil)
 	sessionRepo.On("RevokeAllForUser", mock.Anything, "user-123").Return(errors.New("database error"))
 
 	// Act

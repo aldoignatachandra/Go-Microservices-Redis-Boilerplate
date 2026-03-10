@@ -9,6 +9,7 @@ import (
 	"github.com/ignata/go-microservices-boilerplate/internal/user/domain"
 	"github.com/ignata/go-microservices-boilerplate/internal/user/dto"
 	"github.com/ignata/go-microservices-boilerplate/internal/user/usecase"
+	"github.com/ignata/go-microservices-boilerplate/pkg/middleware"
 	"github.com/ignata/go-microservices-boilerplate/pkg/utils"
 )
 
@@ -47,6 +48,19 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 
 	if c.Query("include_deleted") == queryParamTrue {
 		req.IncludeDeleted = true
+	}
+
+	requesterID, hasRequesterID := middleware.GetUserID(c)
+	requesterRole, hasRequesterRole := middleware.GetUserRole(c)
+	if hasRequesterID || hasRequesterRole {
+		if !hasRequesterID || !hasRequesterRole {
+			utils.Unauthorized(c, "invalid authentication context")
+			return
+		}
+		if requesterRole != domain.RoleAdmin && requesterID != req.ID {
+			utils.Forbidden(c, "you can only access your own profile")
+			return
+		}
 	}
 
 	user, err := h.userUseCase.GetUser(c.Request.Context(), &req)
@@ -121,6 +135,10 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 // @Failure 500 {object} utils.Response
 // @Router /api/v1/users/{id}/activate [post]
 func (h *UserHandler) ActivateUser(c *gin.Context) {
+	if h.forbidSelfAdminAction(c) {
+		return
+	}
+
 	req := dto.ActivateUserRequest{
 		ID: c.Param("id"),
 	}
@@ -149,6 +167,10 @@ func (h *UserHandler) ActivateUser(c *gin.Context) {
 // @Failure 500 {object} utils.Response
 // @Router /api/v1/users/{id}/deactivate [post]
 func (h *UserHandler) DeactivateUser(c *gin.Context) {
+	if h.forbidSelfAdminAction(c) {
+		return
+	}
+
 	req := dto.DeactivateUserRequest{
 		ID: c.Param("id"),
 	}
@@ -177,6 +199,10 @@ func (h *UserHandler) DeactivateUser(c *gin.Context) {
 // @Failure 500 {object} utils.Response
 // @Router /api/v1/users/{id} [delete]
 func (h *UserHandler) DeleteUser(c *gin.Context) {
+	if h.forbidSelfAdminAction(c) {
+		return
+	}
+
 	req := dto.DeleteUserRequest{
 		ID: c.Param("id"),
 	}
@@ -209,6 +235,10 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 // @Failure 500 {object} utils.Response
 // @Router /api/v1/users/{id}/restore [post]
 func (h *UserHandler) RestoreUser(c *gin.Context) {
+	if h.forbidSelfAdminAction(c) {
+		return
+	}
+
 	req := dto.RestoreUserRequest{
 		ID: c.Param("id"),
 	}
@@ -259,4 +289,18 @@ func (h *UserHandler) GetActivityLogs(c *gin.Context) {
 	}
 
 	utils.OK(c, logs)
+}
+
+func (h *UserHandler) forbidSelfAdminAction(c *gin.Context) bool {
+	requesterID, hasRequesterID := middleware.GetUserID(c)
+	if !hasRequesterID || requesterID == "" {
+		return false
+	}
+
+	if requesterID == c.Param("id") {
+		utils.Forbidden(c, "you cannot modify your own account status")
+		return true
+	}
+
+	return false
 }
