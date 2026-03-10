@@ -6,19 +6,19 @@ tmp_dir = "tmp"
 
 [build]
 # Command to build your application
-cmd = "go build -o ./tmp/main ./cmd/auth-service"
+cmd = "go build -o ./tmp/main ./cmd/service-auth"
 
 # Binary file yields from `cmd`
 bin = "tmp/main"
 
 # Customize binary run command
-full_bin = "APP_ENV=development ./tmp/main"
+full_bin = "APP_ENV=local ./tmp/main"
 
 # Watch these filename extensions
 include_ext = ["go", "tpl", "tmpl", "html", "yaml", "yml", "json"]
 
 # Ignore these filename extensions or directories
-exclude_dir = ["assets", "tmp", "vendor", "node_modules", "docs", "deployments", "test"]
+exclude_dir = ["assets", "tmp", "vendor", "node_modules", "docs", "deployments", "tests"]
 
 # Watch these directories if you're specific
 include_dir = ["cmd", "internal", "pkg", "configs"]

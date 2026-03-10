@@ -1,0 +1,2 @@
+-- Optional Docker entrypoint init script.
+-- Schema setup is managed by migration commands (`make db-migrate`).

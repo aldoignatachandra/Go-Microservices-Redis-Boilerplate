@@ -377,7 +377,8 @@ func TestGetProduct_NotFoundError(t *testing.T) {
 	uc := newTestProductUseCase(repo)
 
 	req := &dto.GetProductRequest{ID: "prod-1"}
-	repo.On("FindByID", mock.Anything, req.ID, mock.Anything).Return(nil, errors.New("not found"))
+	repo.On("FindByIDWithDetails", mock.Anything, req.ID, mock.Anything).
+		Return(nil, nil, nil, errors.New("not found"))
 
 	response, err := uc.GetProduct(context.Background(), testUserID, testUserRole, req)
 
@@ -396,7 +397,8 @@ func TestGetProduct_AccessDenied(t *testing.T) {
 	}
 
 	req := &dto.GetProductRequest{ID: "prod-1"}
-	repo.On("FindByID", mock.Anything, req.ID, mock.Anything).Return(testProduct, nil)
+	repo.On("FindByIDWithDetails", mock.Anything, req.ID, mock.Anything).
+		Return(testProduct, nil, nil, nil)
 
 	response, err := uc.GetProduct(context.Background(), testUserID, testUserRole, req)
 
@@ -420,7 +422,8 @@ func TestGetProduct_AdminCanAccessAny(t *testing.T) {
 	}
 
 	req := &dto.GetProductRequest{ID: "prod-1"}
-	repo.On("FindByID", mock.Anything, req.ID, mock.Anything).Return(testProduct, nil)
+	repo.On("FindByIDWithDetails", mock.Anything, req.ID, mock.Anything).
+		Return(testProduct, nil, nil, nil)
 
 	response, err := uc.GetProduct(context.Background(), testAdminID, testAdminRole, req)
 

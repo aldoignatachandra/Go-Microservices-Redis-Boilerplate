@@ -31,7 +31,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err, "Failed to open test database")
 
 	// Migrate the schema
-	err = db.AutoMigrate(&domain.Product{})
+	err = db.AutoMigrate(&domain.Product{}, &domain.ProductVariant{}, &domain.ProductAttribute{})
 	require.NoError(t, err, "Failed to migrate test database")
 
 	return db
@@ -499,6 +499,116 @@ func TestFindAll(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, int64(0), result.Total)
 		assert.Empty(t, result.Products)
+	})
+
+	t.Run("find all attaches variant min/max price range", func(t *testing.T) {
+		product := createTestProduct(t, db)
+		product.HasVariant = true
+		product.Price = 89.99
+		require.NoError(t, db.Save(product).Error)
+
+		variants := []*domain.ProductVariant{
+			{
+				ID:            uuid.NewV4().String(),
+				ProductID:     product.ID,
+				Name:          "TKL / Brown Switch",
+				SKU:           "KEY-TKL-BROWN",
+				Price:         89.99,
+				StockQuantity: 20,
+				IsActive:      true,
+			},
+			{
+				ID:            uuid.NewV4().String(),
+				ProductID:     product.ID,
+				Name:          "Full / Red Switch",
+				SKU:           "KEY-FULL-RED",
+				Price:         99.99,
+				StockQuantity: 15,
+				IsActive:      true,
+			},
+		}
+		require.NoError(t, db.Create(&variants).Error)
+
+		result, err := repo.FindAll(ctx, &dto.ListProductsRequest{
+			Page:   1,
+			Limit:  20,
+			Search: product.Name,
+		})
+		require.NoError(t, err)
+		require.NotEmpty(t, result.Products)
+
+		var found *domain.Product
+		for _, p := range result.Products {
+			if p.ID == product.ID {
+				found = p
+				break
+			}
+		}
+		require.NotNil(t, found)
+		assert.True(t, found.HasVariant)
+		assert.Equal(t, 89.99, found.PriceMin)
+		assert.Equal(t, 99.99, found.PriceMax)
+	})
+}
+
+func TestFindByIDWithDetails(t *testing.T) {
+	db := setupTestDB(t)
+	defer teardownTestDB(t, db)
+
+	repo := repository.NewProductRepository(db)
+	ctx := context.Background()
+
+	t.Run("returns product with variants, attributes, and variant price range", func(t *testing.T) {
+		product := createTestProduct(t, db)
+		product.HasVariant = true
+		product.Price = 89.99
+		require.NoError(t, db.Save(product).Error)
+
+		attributes := []*domain.ProductAttribute{
+			{
+				ID:           uuid.NewV4().String(),
+				ProductID:    product.ID,
+				Name:         "Layout",
+				Values:       []string{"TKL", "Full"},
+				DisplayOrder: 0,
+			},
+		}
+		require.NoError(t, db.Create(&attributes).Error)
+
+		variants := []*domain.ProductVariant{
+			{
+				ID:            uuid.NewV4().String(),
+				ProductID:     product.ID,
+				Name:          "TKL / Brown Switch",
+				SKU:           "KEY-TKL-BROWN",
+				Price:         89.99,
+				StockQuantity: 20,
+				IsActive:      true,
+			},
+			{
+				ID:            uuid.NewV4().String(),
+				ProductID:     product.ID,
+				Name:          "Full / Red Switch",
+				SKU:           "KEY-FULL-RED",
+				Price:         99.99,
+				StockQuantity: 15,
+				IsActive:      true,
+			},
+		}
+		require.NoError(t, db.Create(&variants).Error)
+
+		found, foundVariants, foundAttributes, err := repo.FindByIDWithDetails(
+			ctx,
+			product.ID,
+			domain.DefaultParanoidOptions(),
+		)
+		require.NoError(t, err)
+		require.NotNil(t, found)
+		assert.Equal(t, product.ID, found.ID)
+		assert.Equal(t, 89.99, found.PriceMin)
+		assert.Equal(t, 99.99, found.PriceMax)
+		assert.Len(t, foundVariants, 2)
+		assert.Len(t, foundAttributes, 1)
 	})
 }
 

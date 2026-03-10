@@ -25,6 +25,12 @@ type ProductRepository interface {
 	Restore(ctx context.Context, id string) error
 	// FindByID finds a product by ID
 	FindByID(ctx context.Context, id string, opts *domain.ParanoidOptions) (*domain.Product, error)
+	// FindByIDWithDetails finds a product by ID and includes attributes + variants.
+	FindByIDWithDetails(
+		ctx context.Context,
+		id string,
+		opts *domain.ParanoidOptions,
+	) (*domain.Product, []*domain.ProductVariant, []*domain.ProductAttribute, error)
 	// FindAll finds all products with pagination
 	FindAll(ctx context.Context, req *dto.ListProductsRequest) (*domain.ProductList, error)
 	// ExistsByName checks if a product exists by name (global)
@@ -140,6 +146,65 @@ func (r *gormProductRepository) FindByID(ctx context.Context, id string, opts *d
 	return &product, nil
 }
 
+// FindByIDWithDetails finds a product by ID and loads active attributes + variants.
+func (r *gormProductRepository) FindByIDWithDetails(
+	ctx context.Context,
+	id string,
+	opts *domain.ParanoidOptions,
+) (*domain.Product, []*domain.ProductVariant, []*domain.ProductAttribute, error) {
+	product, err := r.FindByID(ctx, id, opts)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	var attributes []*domain.ProductAttribute
+	if err := r.db.WithContext(ctx).
+		Where("product_id = ? AND deleted_at IS NULL", product.ID).
+		Order("display_order ASC, created_at ASC").
+		Find(&attributes).Error; err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to find product attributes: %w", err)
+	}
+
+	var variants []*domain.ProductVariant
+	if err := r.db.WithContext(ctx).
+		Where("product_id = ? AND deleted_at IS NULL", product.ID).
+		Order("created_at ASC").
+		Find(&variants).Error; err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to find product variants: %w", err)
+	}
+
+	// Keep detail price consistent with list response:
+	// when variants exist, expose min/max from variant prices.
+	if product.HasVariant && len(variants) > 0 {
+		minPrice := product.Price
+		maxPrice := product.Price
+		hasValidVariantPrice := false
+		for _, v := range variants {
+			if v == nil || v.Price <= 0 {
+				continue
+			}
+			if !hasValidVariantPrice {
+				minPrice = v.Price
+				maxPrice = v.Price
+				hasValidVariantPrice = true
+				continue
+			}
+			if v.Price < minPrice {
+				minPrice = v.Price
+			}
+			if v.Price > maxPrice {
+				maxPrice = v.Price
+			}
+		}
+		if hasValidVariantPrice {
+			product.PriceMin = minPrice
+			product.PriceMax = maxPrice
+		}
+	}
+
+	return product, variants, attributes, nil
+}
+
 // FindAll finds all products with pagination.
 func (r *gormProductRepository) FindAll(ctx context.Context, req *dto.ListProductsRequest) (*domain.ProductList, error) {
 	if req == nil {
@@ -189,6 +254,10 @@ func (r *gormProductRepository) FindAll(ctx context.Context, req *dto.ListProduc
 		return nil, fmt.Errorf("failed to find products: %w", result.Error)
 	}
 
+	if err := r.attachVariantPriceRanges(ctx, products); err != nil {
+		return nil, err
+	}
+
 	return &domain.ProductList{
 		Products:   products,
 		Total:      total,
@@ -196,6 +265,56 @@ func (r *gormProductRepository) FindAll(ctx context.Context, req *dto.ListProduc
 		Limit:      limit,
 		TotalPages: totalPages,
 	}, nil
+}
+
+func (r *gormProductRepository) attachVariantPriceRanges(ctx context.Context, products []*domain.Product) error {
+	// Attach variant-based price ranges for list responses.
+	// For products with variants, list API should expose min/max variant price.
+	productIDs := make([]string, 0, len(products))
+	for _, product := range products {
+		if product != nil && product.HasVariant {
+			productIDs = append(productIDs, product.ID)
+		}
+	}
+
+	if len(productIDs) == 0 {
+		return nil
+	}
+
+	type variantPriceRangeRow struct {
+		ProductID string  `gorm:"column:product_id"`
+		MinPrice  float64 `gorm:"column:min_price"`
+		MaxPrice  float64 `gorm:"column:max_price"`
+	}
+
+	var rows []variantPriceRangeRow
+	err := r.db.WithContext(ctx).
+		Table("product_variants").
+		Select("product_id, MIN(price) AS min_price, MAX(price) AS max_price").
+		Where("product_id IN ?", productIDs).
+		Where("deleted_at IS NULL").
+		Group("product_id").
+		Scan(&rows).Error
+	if err != nil {
+		return fmt.Errorf("failed to load variant price ranges: %w", err)
+	}
+
+	priceRanges := make(map[string]variantPriceRangeRow, len(rows))
+	for _, row := range rows {
+		priceRanges[row.ProductID] = row
+	}
+
+	for _, product := range products {
+		if product == nil || !product.HasVariant {
+			continue
+		}
+		if row, ok := priceRanges[product.ID]; ok {
+			product.PriceMin = row.MinPrice
+			product.PriceMax = row.MaxPrice
+		}
+	}
+
+	return nil
 }
 
 // ExistsByName checks if a product exists by name.

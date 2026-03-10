@@ -270,35 +270,7 @@ paths:
       summary: Admin health check
       tags:
       - health
-  /health:
-    get:
-      description: Returns 200 if service is running (for load balancers)
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/pkg_server.HealthResponse'
-      summary: Public health check
-      tags:
-      - health
-  /live:
-    get:
-      description: Returns 200 if service is alive
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              type: boolean
-            type: object
-      summary: Liveness probe
-      tags:
-      - health
-  /products:
+  /api/v1/products:
     get:
       description: List products with pagination and filters
       parameters:
@@ -338,6 +310,8 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_internal_product_dto.ProductListResponse'
+      security:
+      - BearerAuth: []
       summary: List products
       tags:
       - products
@@ -367,10 +341,12 @@ paths:
           description: Conflict
           schema:
             $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      security:
+      - BearerAuth: []
       summary: Create a new product
       tags:
       - products
-  /products/{id}:
+  /api/v1/products/{id}:
     delete:
       description: Delete a product (soft delete by default)
       parameters:
@@ -398,6 +374,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      security:
+      - BearerAuth: []
       summary: Delete product
       tags:
       - products
@@ -428,6 +406,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      security:
+      - BearerAuth: []
       summary: Get product by ID
       tags:
       - products
@@ -462,10 +442,12 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      security:
+      - BearerAuth: []
       summary: Update product
       tags:
       - products
-  /products/{id}/restore:
+  /api/v1/products/{id}/restore:
     post:
       description: Restore a soft-deleted product
       parameters:
@@ -489,10 +471,12 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      security:
+      - BearerAuth: []
       summary: Restore product
       tags:
       - products
-  /products/{id}/stock:
+  /api/v1/products/{id}/stock:
     put:
       consumes:
       - application/json
@@ -524,9 +508,39 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response'
+      security:
+      - BearerAuth: []
       summary: Update product stock
       tags:
       - products
+  /health:
+    get:
+      description: Returns 200 if service is running (for load balancers)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/pkg_server.HealthResponse'
+      summary: Public health check
+      tags:
+      - health
+  /live:
+    get:
+      description: Returns 200 if service is alive
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+      summary: Liveness probe
+      tags:
+      - health
   /ready:
     get:
       description: Returns 200 if service is ready to accept traffic

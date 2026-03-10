@@ -102,7 +102,7 @@ var ErrAccessDenied = errors.New("access denied: you do not have permission to p
 
 // GetProduct gets a product by ID.
 func (uc *productUseCase) GetProduct(ctx context.Context, userID, userRole string, req *dto.GetProductRequest) (*dto.ProductResponse, error) {
-	product, err := uc.productRepo.FindByID(ctx, req.ID, req.GetParanoidOptions())
+	product, variants, attributes, err := uc.productRepo.FindByIDWithDetails(ctx, req.ID, req.GetParanoidOptions())
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +112,7 @@ func (uc *productUseCase) GetProduct(ctx context.Context, userID, userRole strin
 		return nil, ErrAccessDenied
 	}
 
-	return dto.FromProduct(product), nil
+	return dto.FromProductWithVariants(product, variants, attributes), nil
 }
 
 // ListProducts lists products with pagination.

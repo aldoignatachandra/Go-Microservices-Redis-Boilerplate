@@ -55,6 +55,27 @@ func (m *MockProductRepository) FindByID(ctx context.Context, id string, opts *d
 	return nil, args.Error(1)
 }
 
+func (m *MockProductRepository) FindByIDWithDetails(
+	ctx context.Context,
+	id string,
+	opts *domain.ParanoidOptions,
+) (*domain.Product, []*domain.ProductVariant, []*domain.ProductAttribute, error) {
+	args := m.Called(ctx, id, opts)
+	var product *domain.Product
+	if p, ok := args.Get(0).(*domain.Product); ok {
+		product = p
+	}
+	var variants []*domain.ProductVariant
+	if v, ok := args.Get(1).([]*domain.ProductVariant); ok {
+		variants = v
+	}
+	var attributes []*domain.ProductAttribute
+	if a, ok := args.Get(2).([]*domain.ProductAttribute); ok {
+		attributes = a
+	}
+	return product, variants, attributes, args.Error(3)
+}
+
 func (m *MockProductRepository) FindAll(ctx context.Context, req *dto.ListProductsRequest) (*domain.ProductList, error) {
 	args := m.Called(ctx, req)
 	if list, ok := args.Get(0).(*domain.ProductList); ok {
@@ -174,13 +195,24 @@ func TestGetProduct_Success(t *testing.T) {
 
 	req := &dto.GetProductRequest{ID: "prod-1"}
 
-	repo.On("FindByID", mock.Anything, req.ID, mock.Anything).Return(testProduct, nil)
+	variants := []*domain.ProductVariant{
+		{ID: "var-1", ProductID: "prod-1", SKU: "KEY-TKL-BROWN", Price: 89.99, StockQuantity: 20, IsActive: true},
+		{ID: "var-2", ProductID: "prod-1", SKU: "KEY-FULL-RED", Price: 99.99, StockQuantity: 15, IsActive: true},
+	}
+	attributes := []*domain.ProductAttribute{
+		{ID: "attr-1", ProductID: "prod-1", Name: "Layout", Values: []string{"TKL", "Full"}, DisplayOrder: 0},
+	}
+	repo.On("FindByIDWithDetails", mock.Anything, req.ID, mock.Anything).Return(testProduct, variants, attributes, nil)
 
 	response, err := uc.GetProduct(context.Background(), testUserID, testUserRole, req)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
 	assert.Equal(t, testProduct.Name, response.Name)
+	assert.Equal(t, 89.99, response.Price.Min)
+	assert.Equal(t, 99.99, response.Price.Max)
+	assert.Len(t, response.Variants, 2)
+	assert.Len(t, response.Attributes, 1)
 
 	repo.AssertExpectations(t)
 }

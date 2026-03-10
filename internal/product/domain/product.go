@@ -36,6 +36,8 @@ type Product struct {
 	OwnerID    string  `gorm:"type:uuid;not null;index" json:"owner_id"`
 	HasVariant bool    `gorm:"default:false" json:"has_variant"`
 	Images     string  `gorm:"type:text" json:"images"`
+	PriceMin   float64 `gorm:"-" json:"-"`
+	PriceMax   float64 `gorm:"-" json:"-"`
 }
 
 // TableName specifies the table name for Product.

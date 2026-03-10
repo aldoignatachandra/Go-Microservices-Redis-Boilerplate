@@ -42,15 +42,17 @@ func RegisterRoutes(
 		SessionValidator: sessionValidator,
 	})
 
-	products := r.Group("/products")
-	products.Use(authMiddleware)
-	products.GET("", handler.ListProducts)
-	products.GET("/:id", handler.GetProduct)
-	products.POST("", handler.CreateProduct)
-	products.PUT("/:id", handler.UpdateProduct)
-	products.DELETE("/:id", handler.DeleteProduct)
-	products.POST("/:id/restore", handler.RestoreProduct)
-	products.PUT("/:id/stock", handler.UpdateStock)
+	// Canonical API versioned routes.
+	v1Products := r.Group("/api/v1/products")
+	v1Products.Use(authMiddleware)
+	v1Products.GET("", handler.ListProducts)
+	v1Products.GET("/:id", handler.GetProduct)
+	v1Products.POST("", handler.CreateProduct)
+	v1Products.PUT("/:id", handler.UpdateProduct)
+	v1Products.DELETE("/:id", handler.DeleteProduct)
+	v1Products.POST("/:id/restore", handler.RestoreProduct)
+	v1Products.PUT("/:id/stock", handler.UpdateStock)
+
 }
 
 // RegisterRoutesWithRateLimit registers all product service routes with Redis-backed rate limiting.
@@ -72,17 +74,18 @@ func RegisterRoutesWithRateLimit(
 	// Rate limiting middleware with per-route configuration
 	rateLimitMiddleware := middleware.RedisRateLimitPerRoute(redisLimiter, limit, int(window.Seconds()))
 
-	// Authenticated product routes with rate limiting
-	products := r.Group("/products")
-	products.Use(authMiddleware)
-	products.Use(rateLimitMiddleware)
-	products.GET("", handler.ListProducts)
-	products.GET("/:id", handler.GetProduct)
-	products.POST("", handler.CreateProduct)
-	products.PUT("/:id", handler.UpdateProduct)
-	products.DELETE("/:id", handler.DeleteProduct)
-	products.POST("/:id/restore", handler.RestoreProduct)
-	products.PUT("/:id/stock", handler.UpdateStock)
+	// Canonical versioned routes with rate limiting.
+	v1Products := r.Group("/api/v1/products")
+	v1Products.Use(authMiddleware)
+	v1Products.Use(rateLimitMiddleware)
+	v1Products.GET("", handler.ListProducts)
+	v1Products.GET("/:id", handler.GetProduct)
+	v1Products.POST("", handler.CreateProduct)
+	v1Products.PUT("/:id", handler.UpdateProduct)
+	v1Products.DELETE("/:id", handler.DeleteProduct)
+	v1Products.POST("/:id/restore", handler.RestoreProduct)
+	v1Products.PUT("/:id/stock", handler.UpdateStock)
+
 }
 
 // PublicHealth is a public health check.

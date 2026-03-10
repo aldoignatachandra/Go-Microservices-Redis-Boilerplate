@@ -44,51 +44,13 @@ const docTemplate = `{
                 }
             }
         },
-        "/health": {
+        "/api/v1/products": {
             "get": {
-                "description": "Returns 200 if service is running (for load balancers)",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "health"
-                ],
-                "summary": "Public health check",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/pkg_server.HealthResponse"
-                        }
+                "security": [
+                    {
+                        "BearerAuth": []
                     }
-                }
-            }
-        },
-        "/live": {
-            "get": {
-                "description": "Returns 200 if service is alive",
-                "produces": [
-                    "application/json"
                 ],
-                "tags": [
-                    "health"
-                ],
-                "summary": "Liveness probe",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "boolean"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/products": {
-            "get": {
                 "description": "List products with pagination and filters",
                 "produces": [
                     "application/json"
@@ -151,6 +113,11 @@ const docTemplate = `{
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Create a new product with name, description, price, stock and category",
                 "consumes": [
                     "application/json"
@@ -195,8 +162,13 @@ const docTemplate = `{
                 }
             }
         },
-        "/products/{id}": {
+        "/api/v1/products/{id}": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Get a specific product by ID",
                 "produces": [
                     "application/json"
@@ -242,6 +214,11 @@ const docTemplate = `{
                 }
             },
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Update product details",
                 "consumes": [
                     "application/json"
@@ -293,6 +270,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Delete a product (soft delete by default)",
                 "produces": [
                     "application/json"
@@ -338,8 +320,13 @@ const docTemplate = `{
                 }
             }
         },
-        "/products/{id}/restore": {
+        "/api/v1/products/{id}/restore": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Restore a soft-deleted product",
                 "produces": [
                     "application/json"
@@ -379,8 +366,13 @@ const docTemplate = `{
                 }
             }
         },
-        "/products/{id}/stock": {
+        "/api/v1/products/{id}/stock": {
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Update product stock quantity",
                 "consumes": [
                     "application/json"
@@ -427,6 +419,49 @@ const docTemplate = `{
                         "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/github_com_ignata_go-microservices-boilerplate_pkg_utils.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "description": "Returns 200 if service is running (for load balancers)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Public health check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/pkg_server.HealthResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/live": {
+            "get": {
+                "description": "Returns 200 if service is alive",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Liveness probe",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "boolean"
+                            }
                         }
                     }
                 }

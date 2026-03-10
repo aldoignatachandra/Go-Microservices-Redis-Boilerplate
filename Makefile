@@ -106,10 +106,10 @@ test-%: ## Run tests for a specific package (e.g., make test-auth)
 	$(GO) test -v -race ./$*...
 
 test-integration: ## Run integration tests
-	$(GO) test -v -race -tags=integration ./test/integration/...
+	$(GO) test -v -race -tags=integration ./tests/integration/...
 
 test-e2e: ## Run e2e tests
-	$(GO) test -v -race -tags=e2e ./test/e2e/...
+	$(GO) test -v -race -tags=e2e ./tests/e2e/...
 
 # ═══════════════════════════════════════════════════════════════════════════
 # MOCKS
@@ -117,13 +117,13 @@ test-e2e: ## Run e2e tests
 
 mocks: ## Generate mock files using mockery
 	@which mockery > /dev/null || (echo "Installing mockery..." && $(GO) install github.com/vektra/mockery/v2@latest)
-	mockery --dir=internal/auth/repository --name=UserRepository --output=test/mocks --outpkg=mocks
-	mockery --dir=internal/auth/repository --name=SessionRepository --output=test/mocks --outpkg=mocks
+	mockery --dir=internal/auth/repository --name=UserRepository --output=tests/mocks --outpkg=mocks
+	mockery --dir=internal/auth/repository --name=SessionRepository --output=tests/mocks --outpkg=mocks
 	@echo "✅ Mocks generated successfully!"
 
 mock-clean: ## Remove generated mock files
 	@echo "Cleaning mock files..."
-	@find ./test -type d -name "mocks" -exec rm -rf {} + 2>/dev/null || true
+	@find ./tests -type d -name "mocks" -exec rm -rf {} + 2>/dev/null || true
 	@echo "✅ Mock files cleaned!"
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -179,18 +179,18 @@ install-hooks: ## Install Git hooks (pre-commit, commit-msg)
 # ═══════════════════════════════════════════════════════════════════════════
 
 docker-up: ## Start Docker containers
-	docker-compose -f deployments/docker-compose.yml up -d
+	docker compose -f deployments/docker-compose.yml up -d
 
 docker-down: ## Stop Docker containers
-	docker-compose -f deployments/docker-compose.yml down
+	docker compose -f deployments/docker-compose.yml down
 
 docker-restart: docker-down docker-up ## Restart all Docker containers
 
 docker-logs: ## Tail Docker container logs
-	docker-compose -f deployments/docker-compose.yml logs -f
+	docker compose -f deployments/docker-compose.yml logs -f
 
 docker-build: ## Build Docker images
-	docker-compose -f deployments/docker-compose.yml build
+	docker compose -f deployments/docker-compose.yml build
 
 docker-build-prod: ## Build production Docker images
 	@for service in $(DOCKER_SERVICES); do \

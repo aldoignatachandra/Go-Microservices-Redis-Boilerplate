@@ -35,7 +35,7 @@ func NewHandler(productUseCase usecase.ProductUseCase) *Handler {
 // @Success 201 {object} dto.ProductResponse
 // @Failure 400 {object} utils.Response
 // @Failure 409 {object} utils.Response
-// @Router /products [post]
+// @Router /api/v1/products [post]
 // @Security BearerAuth
 func (h *Handler) CreateProduct(c *gin.Context) {
 	var req dto.CreateProductRequest
@@ -64,7 +64,7 @@ func (h *Handler) CreateProduct(c *gin.Context) {
 // @Success 200 {object} dto.ProductResponse
 // @Failure 400 {object} utils.Response
 // @Failure 404 {object} utils.Response
-// @Router /products/{id} [get]
+// @Router /api/v1/products/{id} [get]
 // @Security BearerAuth
 func (h *Handler) GetProduct(c *gin.Context) {
 	var req dto.GetProductRequest
@@ -101,7 +101,7 @@ func (h *Handler) GetProduct(c *gin.Context) {
 // @Param include_deleted query bool false "Include deleted products"
 // @Param only_deleted query bool false "Only deleted products"
 // @Success 200 {object} dto.ProductListResponse
-// @Router /products [get]
+// @Router /api/v1/products [get]
 // @Security BearerAuth
 func (h *Handler) ListProducts(c *gin.Context) {
 	var req dto.ListProductsRequest
@@ -132,7 +132,7 @@ func (h *Handler) ListProducts(c *gin.Context) {
 // @Success 200 {object} dto.ProductResponse
 // @Failure 400 {object} utils.Response
 // @Failure 404 {object} utils.Response
-// @Router /products/{id} [put]
+// @Router /api/v1/products/{id} [put]
 // @Security BearerAuth
 func (h *Handler) UpdateProduct(c *gin.Context) {
 	var req dto.UpdateProductRequest
@@ -167,7 +167,7 @@ func (h *Handler) UpdateProduct(c *gin.Context) {
 // @Success 200 {object} dto.DeleteResponse
 // @Failure 400 {object} utils.Response
 // @Failure 404 {object} utils.Response
-// @Router /products/{id} [delete]
+// @Router /api/v1/products/{id} [delete]
 // @Security BearerAuth
 func (h *Handler) DeleteProduct(c *gin.Context) {
 	var req dto.DeleteProductRequest
@@ -201,7 +201,7 @@ func (h *Handler) DeleteProduct(c *gin.Context) {
 // @Success 200 {object} dto.ProductResponse
 // @Failure 400 {object} utils.Response
 // @Failure 404 {object} utils.Response
-// @Router /products/{id}/restore [post]
+// @Router /api/v1/products/{id}/restore [post]
 // @Security BearerAuth
 func (h *Handler) RestoreProduct(c *gin.Context) {
 	var req dto.RestoreProductRequest
@@ -232,7 +232,7 @@ func (h *Handler) RestoreProduct(c *gin.Context) {
 // @Success 200 {object} dto.UpdateStockResponse
 // @Failure 400 {object} utils.Response
 // @Failure 404 {object} utils.Response
-// @Router /products/{id}/stock [put]
+// @Router /api/v1/products/{id}/stock [put]
 // @Security BearerAuth
 func (h *Handler) UpdateStock(c *gin.Context) {
 	// Extract ID from URI params

@@ -63,10 +63,17 @@ type ProductListResponse struct {
 
 // FromProduct converts a domain Product to a ProductResponse.
 func FromProduct(product *domain.Product) *ProductResponse {
+	minPrice := product.Price
+	maxPrice := product.Price
+	if product.HasVariant && product.PriceMin > 0 && product.PriceMax > 0 {
+		minPrice = product.PriceMin
+		maxPrice = product.PriceMax
+	}
+
 	price := PriceRange{
-		Min:     product.Price,
-		Max:     product.Price,
-		Display: formatPrice(product.Price),
+		Min:     minPrice,
+		Max:     maxPrice,
+		Display: formatPriceRange(minPrice, maxPrice),
 	}
 
 	resp := &ProductResponse{
@@ -107,8 +114,9 @@ func FromProductWithVariants(product *domain.Product, variants []*domain.Product
 	// Convert variants
 	if len(variants) > 0 {
 		resp.Variants = make([]*VariantResponse, len(variants))
-		minPrice := product.Price
-		maxPrice := product.Price
+		minPrice := 0.0
+		maxPrice := 0.0
+		hasValidPrice := false
 
 		for i, v := range variants {
 			resp.Variants[i] = &VariantResponse{
@@ -122,7 +130,18 @@ func FromProductWithVariants(product *domain.Product, variants []*domain.Product
 				Images:          v.Images,
 			}
 
-			// Update price range
+			if v.Price <= 0 {
+				continue
+			}
+
+			if !hasValidPrice {
+				minPrice = v.Price
+				maxPrice = v.Price
+				hasValidPrice = true
+				continue
+			}
+
+			// Update price range strictly from variant prices.
 			if v.Price < minPrice {
 				minPrice = v.Price
 			}
@@ -131,11 +150,13 @@ func FromProductWithVariants(product *domain.Product, variants []*domain.Product
 			}
 		}
 
-		// Update price to PriceRange
-		resp.Price = PriceRange{
-			Min:     minPrice,
-			Max:     maxPrice,
-			Display: formatPriceRange(minPrice, maxPrice),
+		// Update price to PriceRange.
+		if hasValidPrice {
+			resp.Price = PriceRange{
+				Min:     minPrice,
+				Max:     maxPrice,
+				Display: formatPriceRange(minPrice, maxPrice),
+			}
 		}
 	}
 
@@ -158,11 +179,6 @@ func FromProductList(productList *domain.ProductList) *ProductListResponse {
 		HasNextPage:     productList.Page < productList.TotalPages,
 		HasPreviousPage: productList.Page > 1,
 	}
-}
-
-// formatPrice formats a single price for display.
-func formatPrice(price float64) string {
-	return formatPriceRange(price, price)
 }
 
 // formatPriceRange formats a price range for display.

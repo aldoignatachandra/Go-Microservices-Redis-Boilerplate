@@ -1,13 +1,13 @@
 # Go Microservices with Redis Pub/Sub Boilerplate
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?logo=go&logoColor=white)
+![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white)
 ![Gin](https://img.shields.io/badge/Gin-v1.10+-00ADD8?logo=gin&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-Streams-DC382D?logo=redis&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-GORM-4169E1?logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 
-A production-ready, high-performance microservices starter kit. Built with **Go 1.23+**, **Gin** web framework, **GORM** (PostgreSQL ORM), and **Redis Streams** for event-driven communication.
+A production-ready, high-performance microservices starter kit. Built with **Go 1.24+**, **Gin** web framework, **GORM** (PostgreSQL ORM), and **Redis Streams** for event-driven communication.
 
 This boilerplate implements the **Clean Architecture** pattern with strict layer separation (delivery → usecase → repository → domain), and uses **Redis Streams** for lightweight, high-performance asynchronous inter-service communication.
 
@@ -45,7 +45,7 @@ This boilerplate implements the **Clean Architecture** pattern with strict layer
 - **Clean Architecture**: Strict layer separation with dependency inversion.
 - **High Performance**: Built on Go with Gin (ultrafast HTTP framework).
 - **Type Safety**: Full Go type system with compile-time checks.
-- **Modern ORM**: GORM for type-safe SQL queries and auto-migrations.
+- **SQL Migration First**: File-based SQL migrations (`migrations/*.sql`) as the source of truth, with GORM for repository query ergonomics.
 - **Soft Delete**: Paranoid mode for safe data recovery.
 - **Authentication**: JWT (Stateless) for API access with bcrypt password hashing.
 - **Structured Logging**: Zap logger with context-aware logging.
@@ -109,7 +109,7 @@ sequenceDiagram
   participant AU as Auth Consumer
 
   Note over C,A: Command Side (Write)
-  C->>A: POST /auth/register
+  C->>A: POST /api/v1/auth/register
   A->>A: Hash password (bcrypt)
   A->>D: INSERT into users table
   A->>R: XADD "auth:events" user.created
@@ -177,15 +177,15 @@ sequenceDiagram
 ```bash
 go-microservices-redis-pubsub-boilerplate/
 ├── cmd/                              # Main entry points (one per service)
-│   ├── auth-service/
+│   ├── service-auth/
 │   │   ├── main.go                   # Entry point
 │   │   ├── wire.go                   # Wire dependency injection
 │   │   └── wire_gen.go               # Generated wire code
-│   ├── user-service/
+│   ├── service-user/
 │   │   ├── main.go
 │   │   ├── wire.go
 │   │   └── wire_gen.go
-│   └── product-service/
+│   └── service-product/
 │       ├── main.go
 │       ├── wire.go
 │       └── wire_gen.go
@@ -227,7 +227,7 @@ go-microservices-redis-pubsub-boilerplate/
 │   ├── eventbus/                     # Redis Streams abstraction
 │   │   ├── producer.go               # Stream producer (XADD)
 │   │   ├── consumer.go               # Stream consumer (XREADGROUP)
-│   │   └── event.go                  # Event structure
+│   │   └── eventbus.go               # Event structure + serialization
 │   ├── logger/                       # Structured logging (Zap)
 │   │   └── logger.go                 # Zap logger setup
 │   ├── metrics/                      # Prometheus metrics
@@ -250,24 +250,28 @@ go-microservices-redis-pubsub-boilerplate/
 │   │   ├── Dockerfile.user
 │   │   └── Dockerfile.product
 │   ├── docker-compose.yml            # Local development
-│   └── monitoring/                   # Prometheus/Grafana configs
-│       ├── prometheus.yml
-│       └── grafana/
+│   ├── monitoring/                   # Prometheus/Grafana configs
+│   │   ├── prometheus.yml
+│   │   ├── alertmanager.yml
+│   │   ├── alerts/
+│   │   └── grafana/
+│   └── scripts/                      # Container init assets
+│       └── init-db.sql               # Optional entrypoint script
 ├── configs/                          # Configuration files
 │   ├── local.yaml                    # Auth service config
 │   ├── user-local.yaml               # User service config
 │   └── product-local.yaml            # Product service config
 ├── scripts/                          # Build and utility scripts
-│   └── init-db.sql                   # Database initialization
-├── test/                             # Test utilities
-│   ├── mocks/                        # Generated mocks
-│   └── integration/                  # Integration tests
+│   └── install-hooks.sh
+├── tests/                            # Integration and e2e test suites
 ├── docs/                             # Documentation
+│   ├── plans/                        # Design/planning docs
 │   ├── standardization/              # Code style guides
 │   │   ├── CODE_STYLE.md
 │   │   ├── GORM_BEST_PRACTICES.md
 │   │   └── PARANOID_FUNCTIONALITY.md
-│   └── update-code-plan/             # Implementation plans
+│   ├── update-code-plan/             # Implementation plans
+│   └── walkthrough/                  # Local setup walkthroughs
 ├── go.mod                            # Go module definition
 ├── go.sum                            # Go module checksums
 ├── Makefile                          # Build automation
@@ -285,14 +289,14 @@ Before you begin, ensure you have the following installed:
 
 ### Required
 
-1. **Go** (v1.23 or later)
+1. **Go** (v1.24 or later)
    ```bash
    # macOS
    brew install go
 
    # Linux
-   wget https://go.dev/dl/go1.23.0.linux-amd64.tar.gz
-   sudo tar -C /usr/local -xzf go1.23.0.linux-amd64.tar.gz
+   wget https://go.dev/dl/go1.24.0.linux-amd64.tar.gz
+   sudo tar -C /usr/local -xzf go1.24.0.linux-amd64.tar.gz
 
    # Verify
    go version
@@ -305,7 +309,7 @@ Before you begin, ensure you have the following installed:
 
    # Verify
    docker --version
-   docker-compose --version
+   docker compose version
    ```
 
 3. **Make** (For running Makefile commands)
@@ -371,18 +375,18 @@ Copy the example environment file and configure:
 cp .env.example .env
 ```
 
-**Critical Variables Explained:**
+### Common environment overrides
 
 | Variable                | Description                           | Default                          |
 | :---------------------- | :------------------------------------ | :------------------------------- |
-| `APP_NAME`              | Application name                      | `auth-service`                   |
+| `APP_NAME`              | Application name                      | `service-auth`                   |
 | `APP_ENV`               | Environment (local, staging, prod)    | `local`                          |
 | `SERVER_PORT`           | HTTP server port                      | `3100` (auth), `3101` (user), `3102` (product) |
 | `DB_HOST`               | PostgreSQL host                       | `localhost`                      |
 | `DB_PORT`               | PostgreSQL port                       | `5432`                           |
 | `DB_USER`               | Database user                         | `postgres`                       |
 | `DB_PASSWORD`           | Database password                     | `postgres`                       |
-| `DB_NAME`               | Database name                         | `auth_db` / `user_db` / `product_db` |
+| `DB_NAME`               | Database name                         | `microservices_db` |
 | `REDIS_HOST`            | Redis host                            | `localhost`                      |
 | `REDIS_PORT`            | Redis port                            | `6379`                           |
 | `REDIS_PASSWORD`        | Redis password (if any)               | *(empty)*                        |
@@ -394,6 +398,10 @@ cp .env.example .env
 
 For local multi-service runs, keep `STREAMS_CONSUMER_GROUP` and `STREAMS_CONSUMER_NAME` service-specific in `configs/local.yaml`, `configs/user-local.yaml`, and `configs/product-local.yaml` to avoid consumer-group collisions.
 
+### Important `.env` note
+
+`pkg/utils/LoadEnv()` force-loads `.env` at startup. If `.env` contains service-scoped values (especially `APP_ENV`), they can override command-line env values.
+
 ### 3. Start Infrastructure (Redis & Postgres)
 
 Start the required infrastructure using Docker:
@@ -402,8 +410,8 @@ Start the required infrastructure using Docker:
 # Start PostgreSQL and Redis
 make docker-up
 
-# Or with docker-compose directly
-docker-compose -f deployments/docker-compose.yml up -d postgres redis
+# Or with docker compose directly
+docker compose -f deployments/docker-compose.yml up -d postgres redis
 ```
 
 **Verify services are running:**
@@ -425,42 +433,43 @@ docker exec -it go-microservices-redis redis-cli ping
 
 ### 4. Database Setup
 
-Create databases and run migrations:
+This repo currently uses a **single shared database** (`microservices_db`) and file migrations.
 
 ```bash
-# Create databases (PostgreSQL)
-docker exec -it go-microservices-postgres psql -U postgres -c "CREATE DATABASE auth_db;"
-docker exec -it go-microservices-postgres psql -U postgres -c "CREATE DATABASE user_db;"
-docker exec -it go-microservices-postgres psql -U postgres -c "CREATE DATABASE product_db;"
+# Create database if it does not exist
+make db-create
 
-# Or use the init script
-make db-init
+# Apply all migrations from migrations/*.sql
+make db-migrate
+
+# Seed starter data (admin + user + products)
+make db-seed
 ```
 
-**Note:** GORM auto-migration will create tables when each service starts for the first time.
+**Note:** SQL files in `migrations/` are the schema source of truth.
 
 ### 5. Run Services
 
 You can run services individually in separate terminals:
 
-**Terminal 1 - Auth Service:**
+**Terminal 1 - Auth Service (`configs/local.yaml`):**
 ```bash
-make run-auth-service
-# or: go run ./cmd/auth-service
+APP_ENV=local make run-service-auth
+# or: APP_ENV=local go run ./cmd/service-auth
 # Service runs at http://localhost:3100
 ```
 
-**Terminal 2 - User Service:**
+**Terminal 2 - User Service (`configs/user-local.yaml`):**
 ```bash
-make run-user-service
-# or: go run ./cmd/user-service
+APP_ENV=user-local make run-service-user
+# or: APP_ENV=user-local go run ./cmd/service-user
 # Service runs at http://localhost:3101
 ```
 
-**Terminal 3 - Product Service:**
+**Terminal 3 - Product Service (`configs/product-local.yaml`):**
 ```bash
-make run-product-service
-# or: go run ./cmd/product-service
+APP_ENV=product-local make run-service-product
+# or: APP_ENV=product-local go run ./cmd/service-product
 # Service runs at http://localhost:3102
 ```
 
@@ -482,65 +491,82 @@ make dev
 
 | Service     | Port | Base URL                | Health Check              |
 | :---------- | :--- | :---------------------- | :------------------------ |
-| **Auth**    | 3100 | `http://localhost:3100` | `/health`, `/ready`, `/live` |
-| **User**    | 3101 | `http://localhost:3101` | `/health`, `/ready`, `/live` |
-| **Product** | 3102 | `http://localhost:3102` | `/health`, `/ready`, `/live` |
+| **Auth**    | 3100 | `http://localhost:3100` | `/health`, `/ready`, `/live`, `/started` |
+| **User**    | 3101 | `http://localhost:3101` | `/health`, `/ready`, `/live`, `/started` |
+| **Product** | 3102 | `http://localhost:3102` | `/health`, `/ready`, `/live`, `/started` |
 
 ### Auth Service Endpoints
 
-| Method | Endpoint          | Description              | Auth Required |
-| :----- | :---------------- | :----------------------- | :------------ |
-| POST   | `/auth/register`  | Register new user        | No            |
-| POST   | `/auth/login`     | Login user               | No            |
-| POST   | `/auth/refresh`   | Refresh access token     | No            |
-| POST   | `/auth/logout`    | Logout user              | Yes           |
-| GET    | `/auth/me`        | Get current user         | Yes           |
-| GET    | `/health`         | Health check             | No            |
+| Method | Endpoint                    | Description                                      | Auth Required |
+| :----- | :-------------------------- | :----------------------------------------------- | :------------ |
+| POST   | `/api/v1/auth/login`        | Login user (email/username in `email` field)    | No            |
+| POST   | `/api/v1/auth/refresh`      | Refresh access token                             | No            |
+| POST   | `/api/v1/auth/logout`       | Logout user                                      | Yes           |
+| GET    | `/api/v1/auth/me`           | Get current user                                 | Yes           |
+| POST   | `/api/v1/auth/change-password` | Change current user password                 | Yes           |
+| POST   | `/api/v1/auth/register`     | Register USER account (admin only)               | Yes (Admin)   |
+| GET    | `/api/v1/users`             | Admin user list                                  | Yes (Admin)   |
+| GET    | `/api/v1/users/:id`         | Admin user detail                                | Yes (Admin)   |
+| DELETE | `/api/v1/users/:id`         | Admin user delete                                | Yes (Admin)   |
+| POST   | `/api/v1/users/:id/restore` | Admin user restore                               | Yes (Admin)   |
 
 ### User Service Endpoints
 
-| Method | Endpoint                | Description              | Auth Required |
-| :----- | :---------------------- | :----------------------- | :------------ |
-| GET    | `/api/v1/users`         | List users (paginated)   | Yes           |
-| GET    | `/api/v1/users/:id`     | Get user by ID           | Yes           |
-| PUT    | `/api/v1/users/:id`     | Update user              | Yes           |
-| DELETE | `/api/v1/users/:id`     | Delete user (soft)       | Yes           |
-| POST   | `/api/v1/users/:id/restore` | Restore deleted user | Yes           |
-| GET    | `/internal/v1/users/:id`| Internal user lookup     | Basic Auth    |
+| Method | Endpoint                     | Description                                      | Auth Required |
+| :----- | :--------------------------- | :----------------------------------------------- | :------------ |
+| GET    | `/api/v1/users/:id`          | Get user by ID (self or admin)                   | Yes           |
+| GET    | `/api/v1/users`              | List users (admin only)                          | Yes (Admin)   |
+| GET    | `/api/v1/activity-logs`      | List activity logs (admin only)                  | Yes (Admin)   |
+| POST   | `/api/v1/users/:id/activate` | Activate user (admin only)                       | Yes (Admin)   |
+| POST   | `/api/v1/users/:id/deactivate` | Deactivate user (admin only)                   | Yes (Admin)   |
+| DELETE | `/api/v1/users/:id`          | Delete user (admin only)                         | Yes (Admin)   |
+| POST   | `/api/v1/users/:id/restore`  | Restore user (admin only)                        | Yes (Admin)   |
 
 ### Product Service Endpoints
 
-| Method | Endpoint              | Description              | Auth Required |
-| :----- | :-------------------- | :----------------------- | :------------ |
-| GET    | `/products`           | List products            | No            |
-| GET    | `/products/:id`       | Get product by ID        | No            |
-| POST   | `/products`           | Create product           | Yes           |
-| PUT    | `/products/:id`       | Update product           | Yes           |
-| DELETE | `/products/:id`       | Delete product (soft)    | Yes           |
-| PUT    | `/products/:id/stock` | Update stock quantity    | Yes           |
+| Method | Endpoint                 | Description                                 | Auth Required |
+| :----- | :----------------------- | :------------------------------------------ | :------------ |
+| GET    | `/products`              | List products (non-admin sees own products) | Yes           |
+| GET    | `/products/:id`          | Get product (non-admin sees own products)   | Yes           |
+| POST   | `/products`              | Create product                              | Yes           |
+| PUT    | `/products/:id`          | Update product (owner only)                 | Yes           |
+| DELETE | `/products/:id`          | Delete product (owner only)                 | Yes           |
+| POST   | `/products/:id/restore`  | Restore product (owner only)                | Yes           |
+| PUT    | `/products/:id/stock`    | Reduce stock by quantity (owner only)       | Yes           |
 
 ### Quick API Testing
 
 ```bash
-# Register a new user
-curl -X POST http://localhost:3100/auth/register \
+# Login as seeded admin
+curl -X POST http://localhost:3100/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "user@example.com",
-    "password": "Password123!",
-    "name": "Test User"
+    "email": "admin@example.com",
+    "password": "Admin123!"
   }'
 
-# Login
-curl -X POST http://localhost:3100/auth/login \
+# Register a new user (admin-only route)
+curl -X POST http://localhost:3100/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -d '{
+    "email": "newuser@example.com",
+    "username": "newuser",
+    "name": "New User",
+    "password": "Password123!",
+    "confirmPassword": "Password123!"
+  }'
+
+# Login as the new user
+curl -X POST http://localhost:3100/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "user@example.com",
+    "email": "newuser@example.com",
     "password": "Password123!"
   }'
 
 # Get current user (replace TOKEN with actual JWT)
-curl http://localhost:3100/auth/me \
+curl http://localhost:3100/api/v1/auth/me \
   -H "Authorization: Bearer TOKEN"
 
 # Create a product
@@ -549,10 +575,10 @@ curl -X POST http://localhost:3102/products \
   -H "Authorization: Bearer TOKEN" \
   -d '{
     "name": "Product Name",
-    "description": "Product Description",
     "price": 99.99,
     "stock": 100,
-    "sku": "SKU-001"
+    "ownerId": "USER_ID",
+    "images": "https://example.com/product.jpg"
   }'
 ```
 
@@ -570,19 +596,20 @@ make help              # Show all available commands
 | :--------------------- | :--------------------------------------------- |
 | **Building**           |                                                |
 | `make build`           | Build all services                             |
-| `make build-auth-service` | Build auth service only                     |
-| `make build-user-service` | Build user service only                     |
-| `make build-product-service` | Build product service only               |
+| `make build-service-auth` | Build auth service only                     |
+| `make build-service-user` | Build user service only                     |
+| `make build-service-product` | Build product service only               |
 | `make build-prod`      | Build for production (optimized)               |
 | **Running**            |                                                |
-| `make run-auth-service` | Run auth service                              |
-| `make run-user-service` | Run user service                              |
-| `make run-product-service` | Run product service                         |
+| `make run-service-auth` | Run auth service (`APP_ENV=local`)            |
+| `make run-service-user` | Run user service (`APP_ENV=user-local`)       |
+| `make run-service-product` | Run product service (`APP_ENV=product-local`) |
 | `make dev`             | Run with hot reload (Air)                      |
 | **Testing**            |                                                |
 | `make test`            | Run all tests with race detector               |
 | `make test-coverage`   | Run tests with coverage report (business logic) |
 | `make test-integration`| Run integration tests                          |
+| `make test-e2e`        | Run e2e tests                                  |
 | **Code Quality**       |                                                |
 | `make fmt`             | Format Go code                                 |
 | `make vet`             | Run go vet                                     |
@@ -604,9 +631,16 @@ make help              # Show all available commands
 | `make docker-build-prod` | Build production Docker images               |
 | `make docker-logs`     | View Docker container logs                     |
 | **Database**           |                                                |
-| `make db-init`         | Initialize databases                           |
-| `make db-drop`         | Drop all databases                             |
-| `make db-reset`        | Reset all databases                            |
+| `make db-create`       | Create database if not exists                  |
+| `make db-migrate`      | Apply all SQL migrations                       |
+| `make db-migrate-up-one` | Apply one migration (up)                     |
+| `make db-migrate-down-one` | Roll back one migration                    |
+| `make db-migrate-down-all` | Roll back all migrations                   |
+| `make db-migrate-create name=...` | Create a new migration file         |
+| `make db-setup`        | Full setup (create + migrate)                  |
+| `make db-seed`         | Seed starter data                              |
+| `make db-drop`         | Drop configured database                       |
+| `make db-reset`        | Reset configured database                      |
 | **Cleanup**            |                                                |
 | `make clean`           | Clean build artifacts                          |
 | `make clean-coverage`  | Clean only coverage files                      |
@@ -681,9 +715,9 @@ make wire
 ```
 
 **Swagger Output:** Each service generates its own Swagger docs in `cmd/{service}/docs/`:
-- `cmd/auth-service/docs/` - Auth service API docs
-- `cmd/user-service/docs/` - User service API docs
-- `cmd/product-service/docs/` - Product service API docs
+- `cmd/service-auth/docs/` - Auth service API docs
+- `cmd/service-user/docs/` - User service API docs
+- `cmd/service-product/docs/` - Product service API docs
 
 Access via: `http://localhost:{port}/swagger/index.html`
 
@@ -911,7 +945,7 @@ internal/
 {
   "id": "6f7d9b0c-4d42-4b48-90d9-f58f329830d1",
   "type": "user.created",
-  "source": "auth-service",
+  "source": "service-auth",
   "timestamp": 1699999999000,
   "payload": {
     "user_id": "123",
@@ -947,13 +981,13 @@ internal/
 
 | Service | Write API | DB Mutation | Published Event |
 | :------ | :-------- | :---------- | :-------------- |
-| Auth | `POST /auth/register` | `users` + `user_sessions` insert | `user.created` -> `auth:events` |
-| Auth | `POST /auth/login` | `user_sessions` replace + `users.last_login_at` update | `user.logged_in` -> `auth:events` |
-| Auth | `POST /auth/logout` | `user_sessions` revoke | `user.logged_out` -> `auth:events` |
-| Auth | `POST /auth/refresh` | session rotate | `user.refreshed_token` -> `auth:events` |
-| Auth | `POST /auth/change-password` | `users.password_hash` update + sessions revoke | `user.updated` -> `auth:events` |
-| Auth | `DELETE /admin/users/:id` | user soft/hard delete | `user.deleted` -> `auth:events` |
-| Auth | `POST /admin/users/:id/restore` | user restore | `user.restored` -> `auth:events` |
+| Auth | `POST /api/v1/auth/register` | `users` + `user_sessions` insert | `user.created` -> `auth:events` |
+| Auth | `POST /api/v1/auth/login` | `user_sessions` replace + `users.last_login_at` update | `user.logged_in` -> `auth:events` |
+| Auth | `POST /api/v1/auth/logout` | `user_sessions` revoke | `user.logged_out` -> `auth:events` |
+| Auth | `POST /api/v1/auth/refresh` | session rotate | `user.refreshed_token` -> `auth:events` |
+| Auth | `POST /api/v1/auth/change-password` | `users.password_hash` update + sessions revoke | `user.updated` -> `auth:events` |
+| Auth | `DELETE /api/v1/users/:id` | user soft/hard delete | `user.deleted` -> `auth:events` |
+| Auth | `POST /api/v1/users/:id/restore` | user restore | `user.restored` -> `auth:events` |
 | User | `POST /api/v1/users/:id/activate` | user restore | `user.restored` -> `users:events` |
 | User | `POST /api/v1/users/:id/deactivate` | user soft delete | `user.deleted` -> `users:events` |
 | User | `DELETE /api/v1/users/:id` | user soft/hard delete | `user.deleted` -> `users:events` |
@@ -1019,16 +1053,16 @@ curl http://localhost:3100/metrics
 Start the monitoring stack:
 
 ```bash
-make docker-monitoring-up
+docker compose -f deployments/docker-compose.yml --profile monitoring up -d
 
 # Grafana available at http://localhost:3000
 # Default credentials: admin/admin
 ```
 
-Pre-configured dashboards:
-- **Service Overview**: Request rate, latency, error rate
-- **Redis Metrics**: Stream length, consumer lag, memory usage
-- **Database Metrics**: Connection pool, query performance
+Current dashboard artifact:
+- `deployments/monitoring/grafana/dashboards/services-dashboard.json`
+
+> **Note:** Grafana provisioning files are not present in the current tree, so import dashboard JSON manually after Grafana is up.
 
 ### Health Checks
 
@@ -1063,16 +1097,16 @@ make docker-build
 
 # Binary outputs in bin/
 ls bin/
-# auth-service
-# user-service
-# product-service
+# service-auth
+# service-user
+# service-product
 ```
 
 ### Docker Compose (Full Stack)
 
 ```bash
 # Start all services with Docker Compose
-docker-compose -f deployments/docker-compose.yml --profile full up -d
+docker compose -f deployments/docker-compose.yml --profile full up -d
 ```
 
 ### Production Checklist
@@ -1122,7 +1156,7 @@ APP_ENV=production
 | :---------------------------------- | :-------------------------------------- | :---------------------------------------------------- |
 | **Connection Refused (Redis)**      | Redis container not running             | Run `make docker-up` and check `docker ps`            |
 | **Connection Refused (PostgreSQL)** | PostgreSQL not running                  | Start PostgreSQL or run via Docker                    |
-| **Relation does not exist**         | Database not created                    | Run `make db-init` to create databases                |
+| **Relation does not exist**         | Migrations not applied                  | Run `make db-setup` (or `make db-create && make db-migrate`) |
 | **401 Unauthorized**                | Invalid or expired JWT token            | Refresh token or login again                          |
 | **Consumer group not found**        | Stream doesn't exist yet                | Publish first event or create group manually          |
 | **Slow API response**               | Database connection pool exhausted      | Increase `DB_MAX_OPEN_CONNS`                          |

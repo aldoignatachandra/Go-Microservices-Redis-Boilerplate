@@ -1481,19 +1481,27 @@ func TestRegisterRoutes(t *testing.T) {
 	assert.False(t, routePaths["/health"], "Health route should not be registered by delivery routes")
 	assert.False(t, routePaths["/ready"], "Ready route should not be registered by delivery routes")
 	assert.False(t, routePaths["/live"], "Live route should not be registered by delivery routes")
+	assert.True(t, routePaths["/api/v1/products"], "Versioned products route should be registered")
+	assert.False(t, routePaths["/products"], "Legacy products route should not be registered")
 
 	// Product routes require JWT.
 	w := httptest.NewRecorder()
-	reqUnauth, _ := http.NewRequest("GET", "/products", nil)
+	reqUnauth, _ := http.NewRequest("GET", "/api/v1/products", nil)
 	router.ServeHTTP(w, reqUnauth)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 	// Authenticated request can access list endpoint.
 	w = httptest.NewRecorder()
-	reqAuth, _ := http.NewRequest("GET", "/products", nil)
+	reqAuth, _ := http.NewRequest("GET", "/api/v1/products", nil)
 	reqAuth.Header.Set("Authorization", generateBearerToken(t, "user-123", "USER"))
 	router.ServeHTTP(w, reqAuth)
 	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Legacy endpoint should no longer exist.
+	w = httptest.NewRecorder()
+	reqLegacy, _ := http.NewRequest("GET", "/products", nil)
+	router.ServeHTTP(w, reqLegacy)
+	assert.Equal(t, http.StatusNotFound, w.Code)
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1921,7 +1929,8 @@ func TestRegisterRoutesWithRateLimit(t *testing.T) {
 	assert.False(t, routePaths["/health"], "Health route should not be registered by delivery routes")
 	assert.False(t, routePaths["/ready"], "Ready route should not be registered by delivery routes")
 	assert.False(t, routePaths["/live"], "Live route should not be registered by delivery routes")
-	assert.True(t, routePaths["/products"], "Products route should be registered")
+	assert.True(t, routePaths["/api/v1/products"], "Versioned products route should be registered")
+	assert.False(t, routePaths["/products"], "Legacy products route should not be registered")
 }
 
 // TestRegisterHealthRoutes tests health route registration.
