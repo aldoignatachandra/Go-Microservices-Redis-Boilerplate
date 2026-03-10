@@ -5,6 +5,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/driver/postgres"
@@ -187,6 +188,11 @@ func containsSubstring(s, substr string) bool {
 // EnsureDatabase creates the database if it doesn't exist.
 // It connects to the default 'postgres' database to check and create the target database.
 func EnsureDatabase(cfg *PostgresConfig) error {
+	dbName := strings.TrimSpace(cfg.Name)
+	if dbName == "" {
+		return fmt.Errorf("database name cannot be empty")
+	}
+
 	// Connect to the 'postgres' maintenance database to check/create target DB
 	maintenanceDSN := fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=postgres sslmode=%s",
@@ -200,34 +206,32 @@ func EnsureDatabase(cfg *PostgresConfig) error {
 		return fmt.Errorf("failed to connect to maintenance database: %w", err)
 	}
 
-	// Check if database exists
-	var count int64
-	db.Raw("SELECT COUNT(*) FROM pg_database WHERE datname = ?", cfg.Name).Scan(&count)
-
-	if count == 0 {
-		// Database doesn't exist, create it
-		db.Exec(fmt.Sprintf("CREATE DATABASE %s", cfg.Name))
-		if db.Error != nil {
-			return fmt.Errorf("failed to create database %s: %w", cfg.Name, db.Error)
-		}
-		fmt.Printf("✨ Database '%s' created successfully!\n", cfg.Name)
-	} else {
-		fmt.Printf("ℹ️  Database '%s' already exists. Skipping creation.\n", cfg.Name)
-	}
-
-	// Enable uuid-ossp extension
 	sqlDB, err := db.DB()
 	if err != nil {
 		return fmt.Errorf("failed to get sql.DB: %w", err)
 	}
-	if err := sqlDB.Close(); err != nil {
-		return fmt.Errorf("failed to close sql.DB: %w", err)
+	defer func() { _ = sqlDB.Close() }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	exists, err := databaseExists(ctx, db, dbName)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		if err := createDatabaseAndVerify(ctx, db, dbName); err != nil {
+			return err
+		}
+		fmt.Printf("✨ Database '%s' created successfully!\n", dbName)
+	} else {
+		fmt.Printf("ℹ️  Database '%s' already exists. Skipping creation.\n", dbName)
 	}
 
-	// Connect to the new database to enable extension
+	// Connect to the target database to enable extension
 	newDBDSN := fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Name, cfg.SSLMode,
+		cfg.Host, cfg.Port, cfg.User, cfg.Password, dbName, cfg.SSLMode,
 	)
 	newDB, err := gorm.Open(postgres.Open(newDBDSN), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
@@ -235,17 +239,35 @@ func EnsureDatabase(cfg *PostgresConfig) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to new database: %w", err)
 	}
-	newDB.Exec("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"")
-	if newDB.Error != nil {
-		fmt.Printf("⚠️  Warning: failed to enable uuid-ossp extension: %v\n", newDB.Error)
-	}
 
 	newSQLDB, err := newDB.DB()
 	if err != nil {
 		return fmt.Errorf("failed to get new sql.DB: %w", err)
 	}
-	if err := newSQLDB.Close(); err != nil {
-		return fmt.Errorf("failed to close new sql.DB: %w", err)
+	defer func() { _ = newSQLDB.Close() }()
+
+	extensionResult := newDB.WithContext(ctx).Exec("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"")
+	if extensionResult.Error != nil {
+		fmt.Printf("⚠️  Warning: failed to enable uuid-ossp extension: %v\n", extensionResult.Error)
+	}
+
+	return nil
+}
+
+// createDatabaseAndVerify creates a database and verifies it is accessible in pg_database.
+func createDatabaseAndVerify(ctx context.Context, db *gorm.DB, dbName string) error {
+	createSQL := fmt.Sprintf("CREATE DATABASE %s", quoteIdentifier(dbName))
+	createResult := db.WithContext(ctx).Exec(createSQL)
+	if createResult.Error != nil {
+		return fmt.Errorf("failed to create database %s: %w", dbName, createResult.Error)
+	}
+
+	exists, err := databaseExists(ctx, db, dbName)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("database %s still does not exist after create attempt", dbName)
 	}
 
 	return nil
@@ -254,6 +276,11 @@ func EnsureDatabase(cfg *PostgresConfig) error {
 // DropDatabase drops the database if it exists.
 // It connects to the default 'postgres' database to drop the target database.
 func DropDatabase(cfg *PostgresConfig) error {
+	dbName := strings.TrimSpace(cfg.Name)
+	if dbName == "" {
+		return fmt.Errorf("database name cannot be empty")
+	}
+
 	// Connect to the 'postgres' maintenance database to drop target DB
 	maintenanceDSN := fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=postgres sslmode=%s",
@@ -267,28 +294,73 @@ func DropDatabase(cfg *PostgresConfig) error {
 		return fmt.Errorf("failed to connect to maintenance database: %w", err)
 	}
 
-	// Check if database exists
-	var count int64
-	db.Raw("SELECT COUNT(*) FROM pg_database WHERE datname = ?", cfg.Name).Scan(&count)
-
-	if count > 0 {
-		// Database exists, drop it
-		db.Exec(fmt.Sprintf("DROP DATABASE %s", cfg.Name))
-		if db.Error != nil {
-			return fmt.Errorf("failed to drop database %s: %w", cfg.Name, db.Error)
-		}
-		fmt.Printf("✨ Database '%s' dropped successfully!\n", cfg.Name)
-	} else {
-		fmt.Printf("ℹ️  Database '%s' does not exist. Nothing to drop.\n", cfg.Name)
-	}
-
 	sqlDB, err := db.DB()
 	if err != nil {
 		return fmt.Errorf("failed to get sql.DB: %w", err)
 	}
-	if err := sqlDB.Close(); err != nil {
-		return fmt.Errorf("failed to close sql.DB: %w", err)
+	defer func() { _ = sqlDB.Close() }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	exists, err := databaseExists(ctx, db, dbName)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		fmt.Printf("ℹ️  Database '%s' does not exist. Nothing to drop.\n", dbName)
+		return nil
+	}
+
+	if err := dropDatabaseAndVerify(ctx, db, dbName); err != nil {
+		return err
+	}
+
+	fmt.Printf("✨ Database '%s' dropped successfully!\n", dbName)
+	return nil
+}
+
+// dropDatabaseAndVerify drops a database and verifies it is truly removed.
+func dropDatabaseAndVerify(ctx context.Context, db *gorm.DB, dbName string) error {
+	// Terminate active connections so DROP DATABASE can succeed.
+	terminateResult := db.WithContext(ctx).Exec(
+		"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = ? AND pid <> pg_backend_pid()",
+		dbName,
+	)
+	if terminateResult.Error != nil {
+		return fmt.Errorf("failed to terminate active connections for database %s: %w", dbName, terminateResult.Error)
+	}
+
+	dropSQL := fmt.Sprintf("DROP DATABASE %s", quoteIdentifier(dbName))
+	dropResult := db.WithContext(ctx).Exec(dropSQL)
+	if dropResult.Error != nil {
+		return fmt.Errorf("failed to drop database %s: %w", dbName, dropResult.Error)
+	}
+
+	exists, err := databaseExists(ctx, db, dbName)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return fmt.Errorf("database %s still exists after drop attempt", dbName)
 	}
 
 	return nil
+}
+
+// databaseExists checks if a PostgreSQL database exists by name.
+func databaseExists(ctx context.Context, db *gorm.DB, dbName string) (bool, error) {
+	var count int64
+	result := db.WithContext(ctx).
+		Raw("SELECT COUNT(*) FROM pg_database WHERE datname = ?", dbName).
+		Scan(&count)
+	if result.Error != nil {
+		return false, fmt.Errorf("failed to check database existence for %s: %w", dbName, result.Error)
+	}
+	return count > 0, nil
+}
+
+// quoteIdentifier safely quotes PostgreSQL identifiers (e.g. database names).
+func quoteIdentifier(identifier string) string {
+	return `"` + strings.ReplaceAll(identifier, `"`, `""`) + `"`
 }

@@ -13,7 +13,7 @@ type ProductAttribute struct {
 	ID           string         `gorm:"type:uuid;primary_key;" json:"id"`
 	ProductID    string         `gorm:"type:uuid;not null;index" json:"product_id"`
 	Name         string         `gorm:"type:varchar(100);not null" json:"name"`
-	Values       []string       `gorm:"type:jsonb" json:"values"`
+	Values       []string       `gorm:"type:jsonb;serializer:json" json:"values"`
 	DisplayOrder int            `gorm:"type:int;default:0" json:"display_order"`
 	CreatedAt    time.Time      `gorm:"not null" json:"created_at"`
 	UpdatedAt    time.Time      `gorm:"not null" json:"updated_at"`

@@ -18,7 +18,7 @@ type ProductVariant struct {
 	StockQuantity   int               `gorm:"type:int;not null;default:0" json:"stock_quantity"`
 	StockReserved   int               `gorm:"type:int;not null;default:0" json:"stock_reserved"`
 	IsActive        bool              `gorm:"default:true;not null" json:"is_active"`
-	AttributeValues map[string]string `gorm:"type:jsonb" json:"attribute_values"`
+	AttributeValues map[string]string `gorm:"type:jsonb;serializer:json" json:"attribute_values"`
 	Images          string            `gorm:"type:text" json:"images"`
 	CreatedAt       time.Time         `gorm:"not null" json:"created_at"`
 	UpdatedAt       time.Time         `gorm:"not null" json:"updated_at"`

@@ -55,15 +55,15 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON users(deleted_at)`).Error
 	require.NoError(t, err, "Failed to create index on deleted_at")
 
-	// Create sessions table
+	// Create user_sessions table
 	err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS sessions (
+		CREATE TABLE IF NOT EXISTS user_sessions (
 			id TEXT PRIMARY KEY,
 			user_id TEXT NOT NULL,
 			token TEXT NOT NULL,
 			expires_at DATETIME NOT NULL,
 			created_at DATETIME NOT NULL,
-			updated_at DATETIME,
+			updated_at DATETIME NOT NULL,
 			revoked_at DATETIME,
 			last_used_at DATETIME NOT NULL,
 			device_type VARCHAR(50),
@@ -72,15 +72,15 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			deleted_at DATETIME
 		)
 	`).Error
-	require.NoError(t, err, "Failed to create sessions table")
+	require.NoError(t, err, "Failed to create user_sessions table")
 
-	// Create index on user_id for sessions
-	err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`).Error
-	require.NoError(t, err, "Failed to create index on sessions user_id")
+	// Create index on user_id for user_sessions
+	err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id)`).Error
+	require.NoError(t, err, "Failed to create index on user_sessions user_id")
 
-	// Create index on deleted_at for sessions
-	err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_sessions_deleted_at ON sessions(deleted_at)`).Error
-	require.NoError(t, err, "Failed to create index on sessions deleted_at")
+	// Create index on deleted_at for user_sessions
+	err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_user_sessions_deleted_at ON user_sessions(deleted_at)`).Error
+	require.NoError(t, err, "Failed to create index on user_sessions deleted_at")
 
 	return db
 }

@@ -1,5 +1,5 @@
 .PHONY: all build test lint run clean deps docker-up docker-down wire swagger install-hooks \
-	db-init db-drop db-reset migrate-up migrate-down migrate-create seed \
+	db-create db-drop db-reset db-migrate db-migrate-up-one db-migrate-down-one db-migrate-down-all db-migrate-create db-setup db-seed \
 	mocks mock-clean docker-restart docker-logs docker-build docker-build-prod docker-push \
 	fmt vet lint-fix security update-deps verify-deps test-coverage test-race test-integration \
 	test-e2e clean-coverage deep-clean ci dev help
@@ -222,9 +222,25 @@ db-reset: ## Reset database (drop and create)
 	sleep 2
 	$(MAKE) db-create
 
-# Run database migrations (AutoMigrate)
-db-migrate: ## Run migrations (AutoMigrate)
-	$(GO) run ./cmd/db-migrate
+# Run all SQL file migrations
+db-migrate: ## Apply all SQL migrations from migrations/
+	$(GO) run ./cmd/db-migrate up-all
+
+# Apply one file migration (up)
+db-migrate-up-one: ## Apply exactly one SQL file migration (up)
+	$(GO) run ./cmd/db-migrate up-one
+
+# Roll back one file migration (down)
+db-migrate-down-one: ## Roll back exactly one SQL file migration (down)
+	$(GO) run ./cmd/db-migrate down-one
+
+# Roll back all file migrations
+db-migrate-down-all: ## Roll back all SQL file migrations (down all)
+	$(GO) run ./cmd/db-migrate down-all
+
+# Create a new sequential migration file (usage: make db-migrate-create name=add_column_to_users)
+db-migrate-create: ## Generate a new sequential migration SQL file
+	$(GO) run ./cmd/db-migrate-create "$(name)"
 
 # Full setup: create DB + run migrations
 db-setup: ## Full setup: create DB + run migrations

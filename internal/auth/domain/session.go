@@ -15,6 +15,7 @@ type Session struct {
 	Token      string         `gorm:"type:text;not null" json:"-"`
 	ExpiresAt  time.Time      `gorm:"not null" json:"expires_at"`
 	CreatedAt  time.Time      `gorm:"not null" json:"created_at"`
+	UpdatedAt  time.Time      `gorm:"not null" json:"updated_at"`
 	RevokedAt  *time.Time     `json:"revoked_at,omitempty"`
 	LastUsedAt time.Time      `gorm:"not null" json:"last_used_at"`
 	DeviceType string         `gorm:"type:varchar(50)" json:"device_type"`
@@ -25,7 +26,7 @@ type Session struct {
 
 // TableName specifies the table name for Session.
 func (Session) TableName() string {
-	return "sessions"
+	return "user_sessions"
 }
 
 // IsExpired checks if the session is expired.
@@ -61,7 +62,14 @@ func (s *Session) BeforeCreate(_ *gorm.DB) error {
 	}
 	now := time.Now().UTC()
 	s.CreatedAt = now
+	s.UpdatedAt = now
 	s.LastUsedAt = now
+	return nil
+}
+
+// BeforeUpdate is a GORM hook that runs before updating a session.
+func (s *Session) BeforeUpdate(_ *gorm.DB) error {
+	s.UpdatedAt = time.Now().UTC()
 	return nil
 }
 
