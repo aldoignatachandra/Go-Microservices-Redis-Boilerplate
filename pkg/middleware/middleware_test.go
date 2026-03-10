@@ -349,6 +349,35 @@ func TestRequireAdmin(t *testing.T) {
 	}
 }
 
+func TestRequireAdmin_ForbiddenMessageConsistency(t *testing.T) {
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set(UserRoleKey, string(domain.RoleUser))
+		c.Next()
+	})
+	router.Use(RequireAdmin())
+	router.GET("/admin", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest("GET", "/admin", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusForbidden, w.Code)
+
+	var body map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &body)
+	require.NoError(t, err)
+	assert.Equal(t, utils.AdminAccessRequiredMessage, body["message"])
+	if dataObj, ok := body["data"].(map[string]interface{}); ok {
+		assert.Equal(t, "FORBIDDEN", dataObj["code"])
+		assert.Equal(t, utils.AdminAccessRequiredMessage, dataObj["message"])
+	} else {
+		t.Fatalf("expected data object in forbidden response")
+	}
+}
+
 // TestOptionalAuth tests the optional authentication middleware.
 func TestOptionalAuth(t *testing.T) {
 	jwtSecret := []byte("test-secret-key-for-optional-auth")

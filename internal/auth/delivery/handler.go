@@ -2,6 +2,7 @@
 package delivery
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -344,12 +345,16 @@ func (h *Handler) handleError(c *gin.Context, err error) {
 	switch {
 	case domain.IsNotFoundError(err):
 		utils.NotFound(c, "User")
+	case errors.Is(err, domain.ErrInvalidPassword):
+		utils.Unauthorized(c, "invalid current password")
 	case domain.IsAuthError(err):
 		utils.Unauthorized(c, err.Error())
 	case domain.IsValidationError(err):
 		utils.ValidationError(c, err.Error())
-	case err == domain.ErrEmailAlreadyUsed:
+	case errors.Is(err, domain.ErrEmailAlreadyUsed):
 		utils.Conflict(c, "Email already in use")
+	case errors.Is(err, domain.ErrUsernameAlreadyUsed):
+		utils.Conflict(c, "Username already in use")
 	case err == domain.ErrUserDeleted:
 		utils.Gone(c, "User")
 	case err == domain.ErrUserInactive:

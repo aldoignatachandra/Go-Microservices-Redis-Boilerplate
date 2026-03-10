@@ -19,8 +19,10 @@ import (
 	"github.com/ignata/go-microservices-boilerplate/internal/product/delivery"
 	"github.com/ignata/go-microservices-boilerplate/internal/product/domain"
 	"github.com/ignata/go-microservices-boilerplate/internal/product/dto"
+	productusecase "github.com/ignata/go-microservices-boilerplate/internal/product/usecase"
 	productusecasemocks "github.com/ignata/go-microservices-boilerplate/internal/product/usecase/mocks"
 	"github.com/ignata/go-microservices-boilerplate/pkg/server"
+	"github.com/ignata/go-microservices-boilerplate/pkg/utils"
 )
 
 // setupTestRouter creates a test router with Gin in test mode.
@@ -28,6 +30,19 @@ func setupTestRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	return router
+}
+
+const routeTestJWTSecret = "test-secret-key-for-product-routes"
+
+func generateBearerToken(t *testing.T, userID, role string) string {
+	t.Helper()
+	manager := utils.NewJWTManager(utils.JWTConfig{
+		Secret:    routeTestJWTSecret,
+		ExpiresIn: time.Hour,
+	})
+	token, err := manager.GenerateToken(userID, "test@example.com", role)
+	require.NoError(t, err)
+	return "Bearer " + token
 }
 
 // TestCreateProduct_Success tests successful product creation.
@@ -214,6 +229,30 @@ func TestGetProduct_Success(t *testing.T) {
 	assert.True(t, response["success"].(bool))
 	data := response["data"].(map[string]interface{})
 	assert.Equal(t, "550e8400-e29b-41d4-a716-446655440001", data["id"])
+
+	mockUseCase.AssertExpectations(t)
+}
+
+func TestGetProduct_AccessDenied(t *testing.T) {
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	mockUseCase.On("GetProduct", mock.Anything, "", "", mock.AnythingOfType("*dto.GetProductRequest")).
+		Return(nil, productusecase.ErrAccessDenied)
+
+	req, _ := http.NewRequest("GET", "/products/550e8400-e29b-41d4-a716-446655440001", nil)
+	w := httptest.NewRecorder()
+
+	router.GET("/products/:id", handler.GetProduct)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Equal(t, "forbidden: product access denied", response["message"])
 
 	mockUseCase.AssertExpectations(t)
 }
@@ -1425,10 +1464,12 @@ func TestRegisterRoutes(t *testing.T) {
 	router := setupTestRouter()
 
 	// Set up mock expectations for all possible route calls
-	mockUseCase.On("ListProducts", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&dto.ProductListResponse{}, nil).Maybe()
+	mockUseCase.On("ListProducts", mock.Anything, "user-123", "USER", mock.AnythingOfType("*dto.ListProductsRequest")).
+		Return(&dto.ProductListResponse{}, nil).
+		Once()
 
 	// Act
-	delivery.RegisterRoutes(router, mockUseCase)
+	delivery.RegisterRoutes(router, mockUseCase, routeTestJWTSecret, nil)
 
 	// Assert - verify business routes are registered and health routes are not
 	routes := router.Routes()
@@ -1441,11 +1482,20 @@ func TestRegisterRoutes(t *testing.T) {
 	assert.False(t, routePaths["/ready"], "Ready route should not be registered by delivery routes")
 	assert.False(t, routePaths["/live"], "Live route should not be registered by delivery routes")
 
-	// Test public products list
+	// Product routes require JWT.
 	w := httptest.NewRecorder()
-	req4, _ := http.NewRequest("GET", "/products", nil)
-	router.ServeHTTP(w, req4)
+	reqUnauth, _ := http.NewRequest("GET", "/products", nil)
+	router.ServeHTTP(w, reqUnauth)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+	// Authenticated request can access list endpoint.
+	w = httptest.NewRecorder()
+	reqAuth, _ := http.NewRequest("GET", "/products", nil)
+	reqAuth.Header.Set("Authorization", generateBearerToken(t, "user-123", "USER"))
+	router.ServeHTTP(w, reqAuth)
 	assert.Equal(t, http.StatusOK, w.Code)
+
+	mockUseCase.AssertExpectations(t)
 }
 
 // TestGetProduct_Unauthorized tests GetProduct without user context.
@@ -1858,9 +1908,8 @@ func TestRegisterRoutesWithRateLimit(t *testing.T) {
 	// Set up mock expectations for all possible route calls
 	mockUseCase.On("ListProducts", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&dto.ProductListResponse{}, nil).Maybe()
 
-	// This should not panic - it will just register routes without rate limiting
-	// since we're passing nil for the limiter
-	delivery.RegisterRoutesWithRateLimit(router, mockUseCase, nil, 100, time.Second)
+	// This should not panic - it will just register routes.
+	delivery.RegisterRoutesWithRateLimit(router, mockUseCase, routeTestJWTSecret, nil, nil, 100, time.Second)
 
 	// Verify business routes are registered and health routes are not
 	routes := router.Routes()

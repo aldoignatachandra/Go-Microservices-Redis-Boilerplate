@@ -2,6 +2,8 @@
 package delivery
 
 import (
+	"errors"
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/ignata/go-microservices-boilerplate/internal/product/domain"
@@ -34,6 +36,7 @@ func NewHandler(productUseCase usecase.ProductUseCase) *Handler {
 // @Failure 400 {object} utils.Response
 // @Failure 409 {object} utils.Response
 // @Router /products [post]
+// @Security BearerAuth
 func (h *Handler) CreateProduct(c *gin.Context) {
 	var req dto.CreateProductRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -62,6 +65,7 @@ func (h *Handler) CreateProduct(c *gin.Context) {
 // @Failure 400 {object} utils.Response
 // @Failure 404 {object} utils.Response
 // @Router /products/{id} [get]
+// @Security BearerAuth
 func (h *Handler) GetProduct(c *gin.Context) {
 	var req dto.GetProductRequest
 	if err := c.ShouldBindUri(&req); err != nil {
@@ -98,6 +102,7 @@ func (h *Handler) GetProduct(c *gin.Context) {
 // @Param only_deleted query bool false "Only deleted products"
 // @Success 200 {object} dto.ProductListResponse
 // @Router /products [get]
+// @Security BearerAuth
 func (h *Handler) ListProducts(c *gin.Context) {
 	var req dto.ListProductsRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
@@ -128,6 +133,7 @@ func (h *Handler) ListProducts(c *gin.Context) {
 // @Failure 400 {object} utils.Response
 // @Failure 404 {object} utils.Response
 // @Router /products/{id} [put]
+// @Security BearerAuth
 func (h *Handler) UpdateProduct(c *gin.Context) {
 	var req dto.UpdateProductRequest
 	if err := c.ShouldBindUri(&req); err != nil {
@@ -162,6 +168,7 @@ func (h *Handler) UpdateProduct(c *gin.Context) {
 // @Failure 400 {object} utils.Response
 // @Failure 404 {object} utils.Response
 // @Router /products/{id} [delete]
+// @Security BearerAuth
 func (h *Handler) DeleteProduct(c *gin.Context) {
 	var req dto.DeleteProductRequest
 	if err := c.ShouldBindUri(&req); err != nil {
@@ -195,6 +202,7 @@ func (h *Handler) DeleteProduct(c *gin.Context) {
 // @Failure 400 {object} utils.Response
 // @Failure 404 {object} utils.Response
 // @Router /products/{id}/restore [post]
+// @Security BearerAuth
 func (h *Handler) RestoreProduct(c *gin.Context) {
 	var req dto.RestoreProductRequest
 	if err := c.ShouldBindUri(&req); err != nil {
@@ -225,6 +233,7 @@ func (h *Handler) RestoreProduct(c *gin.Context) {
 // @Failure 400 {object} utils.Response
 // @Failure 404 {object} utils.Response
 // @Router /products/{id}/stock [put]
+// @Security BearerAuth
 func (h *Handler) UpdateStock(c *gin.Context) {
 	// Extract ID from URI params
 	type URIParams struct {
@@ -266,6 +275,8 @@ func (h *Handler) UpdateStock(c *gin.Context) {
 // handleError handles errors and sends appropriate responses.
 func (h *Handler) handleError(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, usecase.ErrAccessDenied):
+		utils.Forbidden(c, "forbidden: product access denied")
 	case err == domain.ErrProductNameAlreadyUsed:
 		// Check for conflict first, before validation error
 		utils.Conflict(c, "Product name already in use")

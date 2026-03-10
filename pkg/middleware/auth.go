@@ -121,7 +121,11 @@ func RequireRole(roles ...domain.Role) gin.HandlerFunc {
 
 		// Check if role is allowed
 		if !allowedRoles[domain.Role(roleStr)] {
-			utils.ErrorResponse(c, http.StatusForbidden, "Insufficient permissions", nil)
+			message := "forbidden"
+			if len(allowedRoles) == 1 && allowedRoles[domain.RoleAdmin] {
+				message = utils.AdminAccessRequiredMessage
+			}
+			utils.Forbidden(c, message)
 			c.Abort()
 			return
 		}

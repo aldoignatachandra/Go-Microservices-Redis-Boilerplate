@@ -8,6 +8,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const (
+	// AdminAccessRequiredMessage is the canonical message for admin-only endpoint access denial.
+	AdminAccessRequiredMessage = "forbidden: admin access required"
+)
+
 // Response is the standard API response format (aligned with Bun-Hono).
 type Response struct {
 	Success bool        `json:"success"`

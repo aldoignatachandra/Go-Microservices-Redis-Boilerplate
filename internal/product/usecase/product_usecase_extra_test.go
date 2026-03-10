@@ -79,6 +79,35 @@ func TestListProducts_Error(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
+func TestListProducts_NonAdminOwnerFilterOverride(t *testing.T) {
+	repo := new(MockProductRepository)
+	uc := newTestProductUseCase(repo)
+
+	req := &dto.ListProductsRequest{
+		Page:    1,
+		Limit:   10,
+		OwnerID: "550e8400-e29b-41d4-a716-446655440999",
+	}
+
+	productList := &domain.ProductList{
+		Products:   []*domain.Product{},
+		Page:       1,
+		Limit:      10,
+		Total:      0,
+		TotalPages: 0,
+	}
+
+	repo.On("FindAll", mock.Anything, mock.MatchedBy(func(r *dto.ListProductsRequest) bool {
+		return r != nil && r.OwnerID == testUserID
+	})).Return(productList, nil)
+
+	resp, err := uc.ListProducts(context.Background(), testUserID, testUserRole, req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	repo.AssertExpectations(t)
+}
+
 func TestUpdateProduct_Success(t *testing.T) {
 	repo := new(MockProductRepository)
 	uc := newTestProductUseCase(repo)

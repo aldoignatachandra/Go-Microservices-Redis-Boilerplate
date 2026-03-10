@@ -30,48 +30,59 @@ func CORSMiddleware() gin.HandlerFunc {
 }
 
 // RegisterRoutes registers all product service routes.
-func RegisterRoutes(r *gin.Engine, productUseCase usecase.ProductUseCase) {
+func RegisterRoutes(
+	r *gin.Engine,
+	productUseCase usecase.ProductUseCase,
+	jwtSecret string,
+	sessionValidator middleware.SessionValidator,
+) {
 	handler := NewHandler(productUseCase)
+	authMiddleware := middleware.Auth(middleware.AuthConfig{
+		JWTSecret:        []byte(jwtSecret),
+		SessionValidator: sessionValidator,
+	})
 
-	// Public product routes
-	r.GET("/products", handler.ListProducts)
-	r.GET("/products/:id", handler.GetProduct)
-
-	// Protected product routes (require authentication)
-	r.POST("/products", handler.CreateProduct)
-	r.PUT("/products/:id", handler.UpdateProduct)
-	r.DELETE("/products/:id", handler.DeleteProduct)
-	r.POST("/products/:id/restore", handler.RestoreProduct)
-	r.PUT("/products/:id/stock", handler.UpdateStock)
+	products := r.Group("/products")
+	products.Use(authMiddleware)
+	products.GET("", handler.ListProducts)
+	products.GET("/:id", handler.GetProduct)
+	products.POST("", handler.CreateProduct)
+	products.PUT("/:id", handler.UpdateProduct)
+	products.DELETE("/:id", handler.DeleteProduct)
+	products.POST("/:id/restore", handler.RestoreProduct)
+	products.PUT("/:id/stock", handler.UpdateStock)
 }
 
 // RegisterRoutesWithRateLimit registers all product service routes with Redis-backed rate limiting.
 func RegisterRoutesWithRateLimit(
 	r *gin.Engine,
 	productUseCase usecase.ProductUseCase,
+	jwtSecret string,
+	sessionValidator middleware.SessionValidator,
 	redisLimiter *ratelimit.RouteRateLimiter,
 	limit int,
 	window time.Duration,
 ) {
 	handler := NewHandler(productUseCase)
+	authMiddleware := middleware.Auth(middleware.AuthConfig{
+		JWTSecret:        []byte(jwtSecret),
+		SessionValidator: sessionValidator,
+	})
 
 	// Rate limiting middleware with per-route configuration
 	rateLimitMiddleware := middleware.RedisRateLimitPerRoute(redisLimiter, limit, int(window.Seconds()))
 
-	// Public product routes with rate limiting
+	// Authenticated product routes with rate limiting
 	products := r.Group("/products")
+	products.Use(authMiddleware)
 	products.Use(rateLimitMiddleware)
 	products.GET("", handler.ListProducts)
 	products.GET("/:id", handler.GetProduct)
-
-	// Protected product routes with rate limiting
-	protected := r.Group("")
-	protected.Use(rateLimitMiddleware)
-	protected.POST("/products", handler.CreateProduct)
-	protected.PUT("/products/:id", handler.UpdateProduct)
-	protected.DELETE("/products/:id", handler.DeleteProduct)
-	protected.POST("/products/:id/restore", handler.RestoreProduct)
-	protected.PUT("/products/:id/stock", handler.UpdateStock)
+	products.POST("", handler.CreateProduct)
+	products.PUT("/:id", handler.UpdateProduct)
+	products.DELETE("/:id", handler.DeleteProduct)
+	products.POST("/:id/restore", handler.RestoreProduct)
+	products.PUT("/:id/stock", handler.UpdateStock)
 }
 
 // PublicHealth is a public health check.

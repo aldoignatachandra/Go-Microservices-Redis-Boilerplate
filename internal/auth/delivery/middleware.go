@@ -83,7 +83,7 @@ func AdminOnlyMiddleware() gin.HandlerFunc {
 		}
 
 		if role.(string) != string(domain.RoleAdmin) {
-			utils.Forbidden(c, "Admin privileges required")
+			utils.Forbidden(c, utils.AdminAccessRequiredMessage)
 			c.Abort()
 			return
 		}

@@ -117,8 +117,8 @@ func (uc *productUseCase) GetProduct(ctx context.Context, userID, userRole strin
 
 // ListProducts lists products with pagination.
 func (uc *productUseCase) ListProducts(ctx context.Context, userID, userRole string, req *dto.ListProductsRequest) (*dto.ProductListResponse, error) {
-	// For non-admin users, filter by their user ID (owned products only)
-	if userRole != constants.RoleAdmin && req.OwnerID == "" {
+	// For non-admin users, always filter by their own user ID, ignoring user-supplied owner_id.
+	if userRole != constants.RoleAdmin {
 		req.OwnerID = userID
 	}
 

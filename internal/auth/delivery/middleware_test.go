@@ -3,6 +3,7 @@ package delivery_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -287,6 +288,17 @@ func TestAdminOnlyMiddleware_NotAdmin(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	var body map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &body)
+	require.NoError(t, err)
+	assert.Equal(t, utils.AdminAccessRequiredMessage, body["message"])
+	if dataObj, ok := body["data"].(map[string]interface{}); ok {
+		assert.Equal(t, "FORBIDDEN", dataObj["code"])
+		assert.Equal(t, utils.AdminAccessRequiredMessage, dataObj["message"])
+	} else {
+		t.Fatalf("expected data object in forbidden response")
+	}
 }
 
 // TestAdminOnlyMiddleware_NoRole tests admin middleware with no role set.

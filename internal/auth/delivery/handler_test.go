@@ -212,6 +212,44 @@ func TestRegister_EmailAlreadyUsed(t *testing.T) {
 	mockUseCase.AssertExpectations(t)
 }
 
+func TestRegister_UsernameAlreadyUsed(t *testing.T) {
+	// Arrange
+	mockUseCase := new(authusecasemocks.AuthUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	mockUseCase.On("Register", mock.Anything, mock.AnythingOfType("*dto.RegisterRequest")).
+		Return(nil, domain.ErrUsernameAlreadyUsed)
+
+	// Act
+	reqBody := map[string]interface{}{
+		"email":           "test2@example.com",
+		"username":        "testuser",
+		"password":        "SecurePass123",
+		"confirmPassword": "SecurePass123",
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/auth/register", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.POST("/auth/register", handler.Register)
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusConflict, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response["success"].(bool))
+	errObj := response["data"].(map[string]interface{})
+	assert.Equal(t, "Username already in use", errObj["message"])
+
+	mockUseCase.AssertExpectations(t)
+}
+
 // TestRegister_WithRole tests registration with role specified.
 func TestRegister_WithRole(t *testing.T) {
 	// Arrange
@@ -704,13 +742,17 @@ func TestChangePassword_InvalidCurrentPassword(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	// Assert
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
 	assert.False(t, response["success"].(bool))
+	assert.Equal(t, "invalid current password", response["message"])
+	errObj := response["data"].(map[string]interface{})
+	assert.Equal(t, "UNAUTHORIZED", errObj["code"])
+	assert.Equal(t, "invalid current password", errObj["message"])
 
 	mockUseCase.AssertExpectations(t)
 }

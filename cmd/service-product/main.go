@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/gin-gonic/gin"
@@ -203,6 +204,8 @@ func setupHTTPServer(app *App) *gin.Engine {
 	// Swagger endpoint
 	engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
+	sessionValidator := buildSessionValidator(app)
+
 	// Register product routes with rate limiting
 	if app.Config.RateLimit.Enabled && app.Redis != nil {
 		redisLimiter := ratelimit.NewRedisRateLimiter(app.Redis, "ratelimit")
@@ -211,10 +214,31 @@ func setupHTTPServer(app *App) *gin.Engine {
 			"/products/:id":       {MaxRequests: 10, WindowSeconds: 60},
 			"/products/:id/stock": {MaxRequests: 30, WindowSeconds: 60},
 		})
-		delivery.RegisterRoutesWithRateLimit(engine, app.ProductUseCase, redisLimiter, app.Config.RateLimit.Requests, app.Config.RateLimit.Duration)
+		delivery.RegisterRoutesWithRateLimit(
+			engine,
+			app.ProductUseCase,
+			app.Config.Auth.JWT.Secret,
+			sessionValidator,
+			redisLimiter,
+			app.Config.RateLimit.Requests,
+			app.Config.RateLimit.Duration,
+		)
 	} else {
-		delivery.RegisterRoutes(engine, app.ProductUseCase)
+		delivery.RegisterRoutes(engine, app.ProductUseCase, app.Config.Auth.JWT.Secret, sessionValidator)
 	}
 
 	return engine
+}
+
+func buildSessionValidator(app *App) pkgmiddleware.SessionValidator {
+	if app == nil || app.Postgres == nil {
+		return nil
+	}
+
+	return func(ctx context.Context, userID, sessionID string) (bool, error) {
+		if strings.TrimSpace(sessionID) == "" {
+			return false, nil
+		}
+		return app.Postgres.HasActiveSessionByID(ctx, userID, sessionID)
+	}
 }
