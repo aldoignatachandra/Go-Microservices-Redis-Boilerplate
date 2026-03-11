@@ -91,6 +91,7 @@ func Auth(config AuthConfig) gin.HandlerFunc {
 		// Set user info in context
 		c.Set(UserIDKey, claims.UserID)
 		c.Set(UserRoleKey, claims.Role)
+		c.Request = c.Request.WithContext(utils.WithActorUserID(c.Request.Context(), claims.UserID))
 
 		c.Next()
 	}
@@ -173,6 +174,7 @@ func OptionalAuth(config AuthConfig) gin.HandlerFunc {
 			// Set user info in context if token is valid
 			c.Set(UserIDKey, claims.UserID)
 			c.Set(UserRoleKey, claims.Role)
+			c.Request = c.Request.WithContext(utils.WithActorUserID(c.Request.Context(), claims.UserID))
 		}
 
 		c.Next()

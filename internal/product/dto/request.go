@@ -7,11 +7,12 @@ import (
 
 // CreateVariantRequest represents a variant in create/update requests (aligned with Bun-Hono).
 type CreateVariantRequest struct {
-	Name            string            `json:"name" binding:"required,min=1,max=255"`
+	Name            string            `json:"name" binding:"omitempty,min=1,max=255"`
 	SKU             string            `json:"sku" binding:"required,min=1,max=100"`
 	Price           *float64          `json:"price" binding:"omitempty,gt=0"`
 	StockQuantity   int               `json:"stockQuantity" binding:"omitempty,gte=0"`
-	IsActive        bool              `json:"isActive" binding:"omitempty"`
+	Stock           int               `json:"stock" binding:"omitempty,gte=0"`
+	IsActive        *bool             `json:"isActive" binding:"omitempty"`
 	AttributeValues map[string]string `json:"attributeValues" binding:"omitempty"`
 	Images          string            `json:"images" binding:"omitempty"`
 }
@@ -39,7 +40,7 @@ type UpdateProductRequest struct {
 	ID         string                    `uri:"id" binding:"required,uuid"`
 	Name       string                    `json:"name" binding:"omitempty,min=2,max=255"`
 	Price      float64                   `json:"price" binding:"omitempty,gt=0"`
-	Stock      int                       `json:"stock" binding:"omitempty,gte=0"`
+	Stock      *int                      `json:"stock" binding:"omitempty,gte=0"`
 	Images     string                    `json:"images" binding:"omitempty"`
 	Attributes []*CreateAttributeRequest `json:"attributes" binding:"omitempty"`
 	Variants   []*CreateVariantRequest   `json:"variants" binding:"omitempty"`
@@ -111,6 +112,28 @@ type RestoreProductRequest struct {
 
 // UpdateStockRequest represents a request to update product stock.
 type UpdateStockRequest struct {
-	ID    string `uri:"id" binding:"required,uuid"`
-	Stock int    `json:"stock" binding:"required,min=0"`
+	ID        string `uri:"id" binding:"required,uuid"`
+	VariantID string `json:"id" binding:"omitempty,uuid"`
+	Stock     int    `json:"stock" binding:"required,min=0"`
+}
+
+// ResolveStockQuantity returns the effective stock quantity for a variant request.
+// `stockQuantity` is kept for backward compatibility while `stock` matches Bun-Hono payloads.
+func (r *CreateVariantRequest) ResolveStockQuantity() int {
+	if r.StockQuantity > 0 {
+		return r.StockQuantity
+	}
+	if r.Stock > 0 {
+		return r.Stock
+	}
+	return 0
+}
+
+// ResolveIsActive returns the effective active state for a variant request.
+// Defaults to true when omitted.
+func (r *CreateVariantRequest) ResolveIsActive() bool {
+	if r.IsActive == nil {
+		return true
+	}
+	return *r.IsActive
 }

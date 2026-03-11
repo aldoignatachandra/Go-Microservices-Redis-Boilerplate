@@ -57,10 +57,11 @@ func NewProductUpdatedEvent(product *Product) *ProductEvent {
 }
 
 // NewProductDeletedEvent creates a new product deleted event.
-func NewProductDeletedEvent(productID string) *ProductEvent {
+func NewProductDeletedEvent(productID, ownerID string) *ProductEvent {
 	return &ProductEvent{
 		EventType: EventProductDeleted,
 		ProductID: productID,
+		OwnerID:   ownerID,
 		Timestamp: time.Now().UTC(),
 		Metadata:  make(map[string]interface{}),
 	}

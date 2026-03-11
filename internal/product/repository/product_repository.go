@@ -15,8 +15,24 @@ import (
 type ProductRepository interface {
 	// Create creates a new product
 	Create(ctx context.Context, product *domain.Product) error
+	// CreateWithDetails creates a new product plus optional attributes/variants in one transaction.
+	CreateWithDetails(
+		ctx context.Context,
+		product *domain.Product,
+		attributes []*domain.ProductAttribute,
+		variants []*domain.ProductVariant,
+	) error
 	// Update updates an existing product
 	Update(ctx context.Context, product *domain.Product) error
+	// UpdateWithDetails updates product and optionally replaces attributes/variants atomically.
+	UpdateWithDetails(
+		ctx context.Context,
+		product *domain.Product,
+		attributes []*domain.ProductAttribute,
+		variants []*domain.ProductVariant,
+		replaceAttributes bool,
+		replaceVariants bool,
+	) error
 	// Delete soft deletes a product
 	Delete(ctx context.Context, id string) error
 	// HardDelete permanently deletes a product
@@ -39,6 +55,13 @@ type ProductRepository interface {
 	ExistsByNameAndOwner(ctx context.Context, name string, ownerID string) (bool, error)
 	// UpdateStock updates product stock
 	UpdateStock(ctx context.Context, id string, stock int) error
+	// UpdateVariantStockAndSyncProduct updates one variant stock and re-syncs parent product stock.
+	UpdateVariantStockAndSyncProduct(
+		ctx context.Context,
+		productID string,
+		variantID string,
+		stock int,
+	) (int, error)
 }
 
 // gormProductRepository implements ProductRepository using GORM.
@@ -63,6 +86,57 @@ func (r *gormProductRepository) Create(ctx context.Context, product *domain.Prod
 	return nil
 }
 
+// CreateWithDetails creates a product with attributes and variants atomically.
+func (r *gormProductRepository) CreateWithDetails(
+	ctx context.Context,
+	product *domain.Product,
+	attributes []*domain.ProductAttribute,
+	variants []*domain.ProductVariant,
+) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(product).Error; err != nil {
+			if errors.Is(err, gorm.ErrDuplicatedKey) {
+				return domain.ErrProductNameAlreadyUsed
+			}
+			return fmt.Errorf("failed to create product: %w", err)
+		}
+
+		if len(attributes) > 0 {
+			filteredAttributes := make([]*domain.ProductAttribute, 0, len(attributes))
+			for _, attr := range attributes {
+				if attr == nil {
+					continue
+				}
+				attr.ProductID = product.ID
+				filteredAttributes = append(filteredAttributes, attr)
+			}
+			if len(filteredAttributes) > 0 {
+				if err := tx.Create(&filteredAttributes).Error; err != nil {
+					return fmt.Errorf("failed to create product attributes: %w", err)
+				}
+			}
+		}
+
+		if len(variants) > 0 {
+			filteredVariants := make([]*domain.ProductVariant, 0, len(variants))
+			for _, variant := range variants {
+				if variant == nil {
+					continue
+				}
+				variant.ProductID = product.ID
+				filteredVariants = append(filteredVariants, variant)
+			}
+			if len(filteredVariants) > 0 {
+				if err := tx.Create(&filteredVariants).Error; err != nil {
+					return fmt.Errorf("failed to create product variants: %w", err)
+				}
+			}
+		}
+
+		return nil
+	})
+}
+
 // Update updates an existing product.
 func (r *gormProductRepository) Update(ctx context.Context, product *domain.Product) error {
 	result := r.db.WithContext(ctx).
@@ -76,6 +150,80 @@ func (r *gormProductRepository) Update(ctx context.Context, product *domain.Prod
 		return domain.ErrProductNotFound
 	}
 	return nil
+}
+
+// UpdateWithDetails updates product and optionally replaces attributes/variants atomically.
+func (r *gormProductRepository) UpdateWithDetails(
+	ctx context.Context,
+	product *domain.Product,
+	attributes []*domain.ProductAttribute,
+	variants []*domain.ProductVariant,
+	replaceAttributes bool,
+	replaceVariants bool,
+) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		productUpdate := tx.Model(&domain.Product{}).
+			Where("id = ?", product.ID).
+			Updates(map[string]interface{}{
+				"name":        product.Name,
+				"price":       product.Price,
+				"stock":       product.Stock,
+				"has_variant": product.HasVariant,
+				"images":      product.Images,
+			})
+		if productUpdate.Error != nil {
+			return fmt.Errorf("failed to update product: %w", productUpdate.Error)
+		}
+		if productUpdate.RowsAffected == 0 {
+			return domain.ErrProductNotFound
+		}
+
+		if replaceAttributes {
+			if err := tx.Unscoped().
+				Where("product_id = ?", product.ID).
+				Delete(&domain.ProductAttribute{}).Error; err != nil {
+				return fmt.Errorf("failed to replace product attributes: %w", err)
+			}
+
+			filteredAttributes := make([]*domain.ProductAttribute, 0, len(attributes))
+			for _, attr := range attributes {
+				if attr == nil {
+					continue
+				}
+				attr.ProductID = product.ID
+				filteredAttributes = append(filteredAttributes, attr)
+			}
+			if len(filteredAttributes) > 0 {
+				if err := tx.Create(&filteredAttributes).Error; err != nil {
+					return fmt.Errorf("failed to create replacement attributes: %w", err)
+				}
+			}
+		}
+
+		if replaceVariants {
+			if err := tx.Unscoped().
+				Where("product_id = ?", product.ID).
+				Delete(&domain.ProductVariant{}).Error; err != nil {
+				return fmt.Errorf("failed to replace product variants: %w", err)
+			}
+
+			filteredVariants := make([]*domain.ProductVariant, 0, len(variants))
+			for _, variant := range variants {
+				if variant == nil {
+					continue
+				}
+				variant.ProductID = product.ID
+				filteredVariants = append(filteredVariants, variant)
+			}
+			if len(filteredVariants) > 0 {
+				if err := tx.Create(&filteredVariants).Error; err != nil {
+					return fmt.Errorf("failed to create replacement variants: %w", err)
+				}
+			}
+		}
+
+		return nil
+	})
 }
 
 // Delete soft deletes a product.
@@ -361,4 +509,55 @@ func (r *gormProductRepository) UpdateStock(ctx context.Context, id string, stoc
 		return domain.ErrProductNotFound
 	}
 	return nil
+}
+
+// UpdateVariantStockAndSyncProduct updates a variant stock and syncs parent product stock in one transaction.
+func (r *gormProductRepository) UpdateVariantStockAndSyncProduct(
+	ctx context.Context,
+	productID string,
+	variantID string,
+	stock int,
+) (int, error) {
+	var updatedProductStock int
+
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		variantUpdate := tx.Model(&domain.ProductVariant{}).
+			Where("id = ? AND product_id = ? AND deleted_at IS NULL", variantID, productID).
+			Update("stock_quantity", stock)
+		if variantUpdate.Error != nil {
+			return fmt.Errorf("failed to update variant stock: %w", variantUpdate.Error)
+		}
+		if variantUpdate.RowsAffected == 0 {
+			return domain.ErrVariantNotInProduct
+		}
+
+		type stockRow struct {
+			Total int `gorm:"column:total_stock"`
+		}
+		var row stockRow
+		if err := tx.Model(&domain.ProductVariant{}).
+			Select("COALESCE(SUM(stock_quantity), 0) AS total_stock").
+			Where("product_id = ? AND deleted_at IS NULL", productID).
+			Scan(&row).Error; err != nil {
+			return fmt.Errorf("failed to calculate product stock from variants: %w", err)
+		}
+
+		productUpdate := tx.Model(&domain.Product{}).
+			Where("id = ?", productID).
+			Update("stock", row.Total)
+		if productUpdate.Error != nil {
+			return fmt.Errorf("failed to sync product stock: %w", productUpdate.Error)
+		}
+		if productUpdate.RowsAffected == 0 {
+			return domain.ErrProductNotFound
+		}
+
+		updatedProductStock = row.Total
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return updatedProductStock, nil
 }

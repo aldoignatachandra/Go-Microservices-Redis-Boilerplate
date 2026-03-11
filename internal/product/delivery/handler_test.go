@@ -782,6 +782,39 @@ func TestUpdateStock_Success(t *testing.T) {
 	mockUseCase.AssertExpectations(t)
 }
 
+func TestUpdateStock_Success_WithVariantIDInBody(t *testing.T) {
+	mockUseCase := new(productusecasemocks.ProductUseCase)
+	handler := delivery.NewHandler(mockUseCase)
+	router := setupTestRouter()
+
+	expectedResponse := &dto.UpdateStockResponse{
+		Success: true,
+		Message: "Stock updated successfully",
+		Stock:   35,
+	}
+
+	mockUseCase.On("UpdateStock", mock.Anything, mock.Anything, mock.Anything, mock.MatchedBy(func(r *dto.UpdateStockRequest) bool {
+		return r.ID == "550e8400-e29b-41d4-a716-446655440001" &&
+			r.VariantID == "550e8400-e29b-41d4-a716-446655440101" &&
+			r.Stock == 10
+	})).Return(expectedResponse, nil)
+
+	reqBody := map[string]interface{}{
+		"id":    "550e8400-e29b-41d4-a716-446655440101",
+		"stock": 10,
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("PUT", "/products/550e8400-e29b-41d4-a716-446655440001/stock", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.PUT("/products/:id/stock", handler.UpdateStock)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	mockUseCase.AssertExpectations(t)
+}
+
 // TestUpdateStock_NotFound tests updating stock for non-existent product.
 func TestUpdateStock_NotFound(t *testing.T) {
 	// Arrange

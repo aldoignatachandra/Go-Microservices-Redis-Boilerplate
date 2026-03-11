@@ -247,7 +247,8 @@ func (h *Handler) UpdateStock(c *gin.Context) {
 
 	// Bind JSON body - use a separate struct without ID for JSON binding
 	type JSONBody struct {
-		Stock int `json:"stock" binding:"required,gt=-1"`
+		ID    string `json:"id" binding:"omitempty,uuid"`
+		Stock int    `json:"stock" binding:"required,gt=-1"`
 	}
 	var jsonBody JSONBody
 	if err := c.ShouldBindJSON(&jsonBody); err != nil {
@@ -257,8 +258,9 @@ func (h *Handler) UpdateStock(c *gin.Context) {
 
 	// Create the request with both ID from URI and stock from JSON
 	req := dto.UpdateStockRequest{
-		ID:    uriParams.ID,
-		Stock: jsonBody.Stock,
+		ID:        uriParams.ID,
+		VariantID: jsonBody.ID,
+		Stock:     jsonBody.Stock,
 	}
 
 	userID, _ := middleware.GetUserID(c)

@@ -165,6 +165,10 @@ var (
 	ErrProductNameAlreadyUsed = errors.New("product name already used")
 	ErrInvalidStockReduction  = errors.New("invalid stock reduction amount")
 	ErrInsufficientStock      = errors.New("insufficient stock")
+	ErrVariantIDRequired      = errors.New("variant id is required for products with variants")
+	ErrVariantNotInProduct    = errors.New("variant id does not belong to the requested product")
+	ErrDirectStockUpdate      = errors.New("cannot update stock directly for products with variants")
+	ErrAttributesRequired     = errors.New("attributes are required when variants are provided")
 )
 
 // IsNotFoundError checks if the error is a not found error.
@@ -185,6 +189,12 @@ func IsValidationError(err error) bool {
 	}
 	// Check for "invalid stock" errors
 	if strings.Contains(errStr, "invalid stock reduction amount") || strings.Contains(errStr, "invalid stock increase amount") {
+		return true
+	}
+	if errors.Is(err, ErrVariantIDRequired) || errors.Is(err, ErrVariantNotInProduct) {
+		return true
+	}
+	if errors.Is(err, ErrDirectStockUpdate) || errors.Is(err, ErrAttributesRequired) {
 		return true
 	}
 	return false

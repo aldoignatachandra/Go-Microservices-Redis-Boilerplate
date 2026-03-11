@@ -723,6 +723,74 @@ func TestUpdateStock(t *testing.T) {
 	})
 }
 
+func TestUpdateVariantStockAndSyncProduct(t *testing.T) {
+	db := setupTestDB(t)
+	defer teardownTestDB(t, db)
+
+	repo := repository.NewProductRepository(db)
+	ctx := context.Background()
+
+	t.Run("successful update variant stock and sync parent stock", func(t *testing.T) {
+		product := createTestProduct(t, db)
+		product.HasVariant = true
+		product.Stock = 45
+		require.NoError(t, db.Model(&domain.Product{}).Where("id = ?", product.ID).Updates(map[string]interface{}{
+			"has_variant": true,
+			"stock":       45,
+		}).Error)
+
+		variant1 := &domain.ProductVariant{
+			ProductID:     product.ID,
+			Name:          "Black / S-M",
+			SKU:           fmt.Sprintf("SKU_%s", uuid.NewV4().String()),
+			Price:         100,
+			StockQuantity: 30,
+			IsActive:      true,
+		}
+		variant2 := &domain.ProductVariant{
+			ProductID:     product.ID,
+			Name:          "Black / M-L",
+			SKU:           fmt.Sprintf("SKU_%s", uuid.NewV4().String()),
+			Price:         120,
+			StockQuantity: 15,
+			IsActive:      true,
+		}
+		require.NoError(t, db.Create(variant1).Error)
+		require.NoError(t, db.Create(variant2).Error)
+
+		newProductStock, err := repo.UpdateVariantStockAndSyncProduct(ctx, product.ID, variant1.ID, 20)
+		require.NoError(t, err)
+		assert.Equal(t, 35, newProductStock)
+
+		var updatedProduct domain.Product
+		require.NoError(t, db.Where("id = ?", product.ID).First(&updatedProduct).Error)
+		assert.Equal(t, 35, updatedProduct.Stock)
+
+		var updatedVariant domain.ProductVariant
+		require.NoError(t, db.Where("id = ?", variant1.ID).First(&updatedVariant).Error)
+		assert.Equal(t, 20, updatedVariant.StockQuantity)
+	})
+
+	t.Run("fails when variant does not belong to requested product", func(t *testing.T) {
+		productA := createTestProduct(t, db)
+		productB := createTestProduct(t, db)
+
+		variant := &domain.ProductVariant{
+			ProductID:     productA.ID,
+			Name:          "Color / Black",
+			SKU:           fmt.Sprintf("SKU_%s", uuid.NewV4().String()),
+			Price:         50,
+			StockQuantity: 5,
+			IsActive:      true,
+		}
+		require.NoError(t, db.Create(variant).Error)
+
+		_, err := repo.UpdateVariantStockAndSyncProduct(ctx, productB.ID, variant.ID, 1)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrVariantNotInProduct)
+	})
+}
+
 // TestProductRepositoryIntegration tests the repository with multiple operations.
 func TestProductRepositoryIntegration(t *testing.T) {
 	db := setupTestDB(t)

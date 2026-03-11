@@ -2,7 +2,7 @@
 	db-create db-drop db-reset db-migrate db-migrate-up-one db-migrate-down-one db-migrate-down-all db-migrate-create db-setup db-seed \
 	mocks mock-clean docker-restart docker-logs docker-build docker-build-prod docker-push \
 	fmt vet lint-fix security update-deps verify-deps test-coverage test-race test-integration \
-	test-e2e clean-coverage deep-clean ci dev help
+	test-e2e clean-coverage deep-clean ci dev dev-auth dev-user dev-product help
 
 # ═══════════════════════════════════════════════════════════════════════════
 # VARIABLES
@@ -63,6 +63,18 @@ run-%: ## Run a specific service (e.g., make run-service-user)
 dev: ## Run with hot reload (requires air)
 	@which air > /dev/null || (echo "Installing air..." && $(GO) install github.com/air-verse/air@latest)
 	air -c .air.toml
+
+dev-auth: ## Run auth service with hot reload (Air)
+	@which air > /dev/null || (echo "Installing air..." && $(GO) install github.com/air-verse/air@latest)
+	APP_ENV=$${APP_ENV:-local} air -c .air.auth.toml
+
+dev-user: ## Run user service with hot reload (Air)
+	@which air > /dev/null || (echo "Installing air..." && $(GO) install github.com/air-verse/air@latest)
+	APP_ENV=$${APP_ENV:-user-local} air -c .air.user.toml
+
+dev-product: ## Run product service with hot reload (Air)
+	@which air > /dev/null || (echo "Installing air..." && $(GO) install github.com/air-verse/air@latest)
+	APP_ENV=$${APP_ENV:-product-local} air -c .air.product.toml
 
 # ═══════════════════════════════════════════════════════════════════════════
 # WIRE (Dependency Injection)

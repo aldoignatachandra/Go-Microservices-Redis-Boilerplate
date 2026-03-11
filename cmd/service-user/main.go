@@ -106,9 +106,13 @@ func main() {
 	// Setup HTTP server
 	engine := setupHTTPServer(app)
 
-	// Start auth events consumer for activity logs
-	consumerCtx, stopConsumer := context.WithCancel(context.Background())
-	authEventConsumer := startAuthEventConsumer(consumerCtx, app)
+	// Start stream consumers for activity logs
+	consumerCtx, stopConsumers := context.WithCancel(context.Background())
+	streamConsumers := []*eventbus.Consumer{
+		startEventConsumer(consumerCtx, app, eventbus.StreamAuthEvents, "auth"),
+		startEventConsumer(consumerCtx, app, eventbus.StreamUserEvents, "user"),
+		startEventConsumer(consumerCtx, app, eventbus.StreamProductEvents, "product"),
+	}
 
 	// Create HTTP server
 	srv := &http.Server{
@@ -141,10 +145,12 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
 	defer cancel()
 
-	// Stop consumer loop before closing dependencies
-	stopConsumer()
-	if authEventConsumer != nil {
-		authEventConsumer.Stop()
+	// Stop consumer loops before closing dependencies
+	stopConsumers()
+	for _, consumer := range streamConsumers {
+		if consumer != nil {
+			consumer.Stop()
+		}
 	}
 
 	// Shutdown HTTP server
@@ -260,11 +266,11 @@ func buildSessionValidator(app *App) pkgmiddleware.SessionValidator {
 	}
 }
 
-func startAuthEventConsumer(ctx context.Context, app *App) *eventbus.Consumer {
-	consumerGroup, consumerName := resolveConsumerIdentity(app)
+func startEventConsumer(ctx context.Context, app *App, stream string, resource string) *eventbus.Consumer {
+	consumerGroup, consumerName := resolveConsumerIdentity(app, stream)
 
 	consumer := eventbus.NewConsumer(app.Redis.Client, eventbus.ConsumerConfig{
-		Stream:     eventbus.StreamAuthEvents,
+		Stream:     stream,
 		Group:      consumerGroup,
 		Consumer:   consumerName,
 		BatchSize:  app.Config.Streams.BatchSize,
@@ -273,19 +279,21 @@ func startAuthEventConsumer(ctx context.Context, app *App) *eventbus.Consumer {
 	})
 
 	go func() {
-		app.Logger.Info("Starting auth events consumer",
-			zap.String("stream", eventbus.StreamAuthEvents),
+		app.Logger.Info("Starting stream consumer for activity logs",
+			zap.String("stream", stream),
 			zap.String("group", consumerGroup),
 			zap.String("consumer", consumerName),
+			zap.String("resource", resource),
 		)
 
 		err := consumer.Consume(ctx, func(handlerCtx context.Context, event *eventbus.Event) error {
 			actorUserID := resolveEventActorUserID(event)
 			targetUserID, _ := event.Payload["user_id"].(string)
 			if actorUserID == "" {
-				app.Logger.Warn("Skipping auth event without user_id",
+				app.Logger.Warn("Skipping stream event without actor user ID",
 					zap.String("event_type", event.Type),
 					zap.String("event_id", event.ID),
+					zap.String("stream", stream),
 				)
 				return nil
 			}
@@ -298,7 +306,7 @@ func startAuthEventConsumer(ctx context.Context, app *App) *eventbus.Consumer {
 				"metadata":   event.Metadata,
 			})
 			if marshalErr != nil {
-				return fmt.Errorf("failed to marshal auth event details: %w", marshalErr)
+				return fmt.Errorf("failed to marshal stream event details: %w", marshalErr)
 			}
 
 			ipAddress, userAgent := extractRequestInfo(event)
@@ -306,7 +314,7 @@ func startAuthEventConsumer(ctx context.Context, app *App) *eventbus.Consumer {
 			if err := app.UserUseCase.LogActivity(handlerCtx, &dto.LogActivityRequest{
 				UserID:    actorUserID,
 				Action:    event.Type,
-				Resource:  "auth",
+				Resource:  resource,
 				IPAddress: ipAddress,
 				UserAgent: userAgent,
 				Details:   string(details),
@@ -314,12 +322,13 @@ func startAuthEventConsumer(ctx context.Context, app *App) *eventbus.Consumer {
 				return fmt.Errorf("failed to create activity log: %w", err)
 			}
 
-			app.Logger.Info("Consumed auth event",
-				zap.String("stream", eventbus.StreamAuthEvents),
+			app.Logger.Info("Consumed stream event for activity logs",
+				zap.String("stream", stream),
 				zap.String("event_id", event.ID),
 				zap.String("event_type", event.Type),
 				zap.String("actor_user_id", actorUserID),
 				zap.String("target_user_id", targetUserID),
+				zap.String("resource", resource),
 			)
 			return nil
 		}, func(_ context.Context, event *eventbus.Event, err error) {
@@ -330,8 +339,8 @@ func startAuthEventConsumer(ctx context.Context, app *App) *eventbus.Consumer {
 				eventID = event.ID
 			}
 
-			app.Logger.Error("Auth events consumer error",
-				zap.String("stream", eventbus.StreamAuthEvents),
+			app.Logger.Error("Stream consumer error",
+				zap.String("stream", stream),
 				zap.String("event_id", eventID),
 				zap.String("event_type", eventType),
 				zap.Error(err),
@@ -339,11 +348,14 @@ func startAuthEventConsumer(ctx context.Context, app *App) *eventbus.Consumer {
 		})
 
 		if err != nil && !errors.Is(err, context.Canceled) {
-			app.Logger.Error("Auth events consumer stopped with error", zap.Error(err))
+			app.Logger.Error("Stream consumer stopped with error",
+				zap.String("stream", stream),
+				zap.Error(err),
+			)
 			return
 		}
 
-		app.Logger.Info("Auth events consumer stopped")
+		app.Logger.Info("Stream consumer stopped", zap.String("stream", stream))
 	}()
 
 	return consumer
@@ -419,11 +431,15 @@ func resolveEventActorUserID(event *eventbus.Event) string {
 		}
 	}
 
+	if ownerID, ok := event.Payload["owner_id"].(string); ok && strings.TrimSpace(ownerID) != "" {
+		return strings.TrimSpace(ownerID)
+	}
+
 	fallbackUserID, _ := event.Payload["user_id"].(string)
 	return strings.TrimSpace(fallbackUserID)
 }
 
-func resolveConsumerIdentity(app *App) (string, string) {
+func resolveConsumerIdentity(app *App, stream string) (string, string) {
 	configuredGroup := strings.TrimSpace(app.Config.Streams.ConsumerGroup)
 	configuredName := strings.TrimSpace(app.Config.Streams.ConsumerName)
 
@@ -439,9 +455,9 @@ func resolveConsumerIdentity(app *App) (string, string) {
 		consumerGroup = defaultGroup
 	}
 
-	consumerName := configuredName
-	if consumerName == "" {
-		consumerName = defaultName
+	baseConsumerName := configuredName
+	if baseConsumerName == "" {
+		baseConsumerName = defaultName
 	}
 
 	// Guard against shared auth identity in non-auth service.
@@ -454,14 +470,29 @@ func resolveConsumerIdentity(app *App) (string, string) {
 			)
 			consumerGroup = defaultGroup
 		}
-		if consumerName == "auth-1" {
+		if baseConsumerName == "auth-1" {
 			app.Logger.Warn("Detected shared auth consumer name in non-auth service; overriding to service-specific consumer",
 				zap.String("configured_consumer", configuredName),
 				zap.String("effective_consumer", defaultName),
 			)
-			consumerName = defaultName
+			baseConsumerName = defaultName
 		}
 	}
 
+	consumerName := fmt.Sprintf("%s-%s", baseConsumerName, streamConsumerSuffix(stream))
+
 	return consumerGroup, consumerName
+}
+
+func streamConsumerSuffix(stream string) string {
+	switch stream {
+	case eventbus.StreamAuthEvents:
+		return "auth"
+	case eventbus.StreamUserEvents:
+		return "users"
+	case eventbus.StreamProductEvents:
+		return "products"
+	default:
+		return "events"
+	}
 }

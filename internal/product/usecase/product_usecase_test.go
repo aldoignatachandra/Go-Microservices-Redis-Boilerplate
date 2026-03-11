@@ -27,8 +27,30 @@ func (m *MockProductRepository) Create(ctx context.Context, product *domain.Prod
 	return args.Error(0)
 }
 
+func (m *MockProductRepository) CreateWithDetails(
+	ctx context.Context,
+	product *domain.Product,
+	attributes []*domain.ProductAttribute,
+	variants []*domain.ProductVariant,
+) error {
+	args := m.Called(ctx, product, attributes, variants)
+	return args.Error(0)
+}
+
 func (m *MockProductRepository) Update(ctx context.Context, product *domain.Product) error {
 	args := m.Called(ctx, product)
+	return args.Error(0)
+}
+
+func (m *MockProductRepository) UpdateWithDetails(
+	ctx context.Context,
+	product *domain.Product,
+	attributes []*domain.ProductAttribute,
+	variants []*domain.ProductVariant,
+	replaceAttributes bool,
+	replaceVariants bool,
+) error {
+	args := m.Called(ctx, product, attributes, variants, replaceAttributes, replaceVariants)
 	return args.Error(0)
 }
 
@@ -99,6 +121,16 @@ func (m *MockProductRepository) UpdateStock(ctx context.Context, id string, stoc
 	return args.Error(0)
 }
 
+func (m *MockProductRepository) UpdateVariantStockAndSyncProduct(
+	ctx context.Context,
+	productID string,
+	variantID string,
+	stock int,
+) (int, error) {
+	args := m.Called(ctx, productID, variantID, stock)
+	return args.Int(0), args.Error(1)
+}
+
 // --- Mock Event Publisher ---
 
 type MockEventPublisher struct {
@@ -145,7 +177,20 @@ func TestCreateProduct_Success(t *testing.T) {
 	}
 
 	repo.On("ExistsByNameAndOwner", mock.Anything, req.Name, testUserID).Return(false, nil)
-	repo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Product")).Return(nil)
+	repo.On(
+		"CreateWithDetails",
+		mock.Anything,
+		mock.AnythingOfType("*domain.Product"),
+		mock.AnythingOfType("[]*domain.ProductAttribute"),
+		mock.AnythingOfType("[]*domain.ProductVariant"),
+	).Return(nil)
+	repo.On("FindByIDWithDetails", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("*domain.ParanoidOptions")).
+		Return(&domain.Product{
+			Model: domain.Model{ID: "prod-1"},
+			Name:  req.Name,
+			Price: req.Price,
+			Stock: req.Stock,
+		}, []*domain.ProductVariant{}, []*domain.ProductAttribute{}, nil)
 
 	response, err := uc.CreateProduct(context.Background(), testUserID, req)
 

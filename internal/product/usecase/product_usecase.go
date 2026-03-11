@@ -65,17 +65,14 @@ func NewProductUseCase(
 
 // CreateProduct creates a new product.
 func (uc *productUseCase) CreateProduct(ctx context.Context, ownerID string, req *dto.CreateProductRequest) (*dto.ProductResponse, error) {
-	// Check if product already exists for this owner
-	exists, err := uc.productRepo.ExistsByNameAndOwner(ctx, req.Name, ownerID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check product existence: %w", err)
-	}
-	if exists {
-		return nil, domain.ErrProductNameAlreadyUsed
+	if err := uc.ensureProductNameAvailable(ctx, ownerID, req.Name); err != nil {
+		return nil, err
 	}
 
-	// Create product
-	hasVariant := len(req.Variants) > 0
+	attributes := buildAttributes(req.Attributes)
+	variants, totalVariantStock := buildVariants(req.Variants, req.Price)
+	hasVariant := len(variants) > 0
+
 	product := &domain.Product{
 		Name:       req.Name,
 		Price:      req.Price,
@@ -85,8 +82,19 @@ func (uc *productUseCase) CreateProduct(ctx context.Context, ownerID string, req
 		Images:     req.Images,
 	}
 
-	if err := uc.productRepo.Create(ctx, product); err != nil {
+	// Keep product stock consistent with variant stocks.
+	// When product has variants, root stock is derived from variant stock sum.
+	if hasVariant {
+		product.Stock = totalVariantStock
+	}
+
+	if err := uc.productRepo.CreateWithDetails(ctx, product, attributes, variants); err != nil {
 		return nil, fmt.Errorf("failed to create product: %w", err)
+	}
+
+	product, variants, attributes, err := uc.productRepo.FindByIDWithDetails(ctx, product.ID, domain.DefaultParanoidOptions())
+	if err != nil {
+		return nil, fmt.Errorf("failed to load created product details: %w", err)
 	}
 
 	// Publish event
@@ -94,7 +102,7 @@ func (uc *productUseCase) CreateProduct(ctx context.Context, ownerID string, req
 		uc.publishEvent(ctx, domain.NewProductCreatedEvent(product))
 	}
 
-	return dto.FromProduct(product), nil
+	return dto.FromProductWithVariants(product, variants, attributes), nil
 }
 
 // ErrAccessDenied is returned when a user tries to access a resource they don't own.
@@ -141,40 +149,34 @@ func (uc *productUseCase) UpdateProduct(ctx context.Context, userID, _ string, p
 		return nil, ErrAccessDenied
 	}
 
-	// Update fields
-	if req.Name != "" {
-		// Check if name is already used by another product of same owner
-		if req.Name != product.Name {
-			exists, err := uc.productRepo.ExistsByNameAndOwner(ctx, req.Name, product.OwnerID)
-			if err == nil && exists {
-				return nil, domain.ErrProductNameAlreadyUsed
-			}
-		}
-		product.Name = req.Name
+	if err := uc.applyUpdateBaseFields(ctx, product, req); err != nil {
+		return nil, err
 	}
 
-	if req.Price > 0 {
-		product.Price = req.Price
+	details, err := prepareUpdateProductDetails(product.Price, req)
+	if err != nil {
+		return nil, err
 	}
 
-	if req.Stock >= 0 {
-		product.Stock = req.Stock
+	if err := applyUpdateProductStockRules(product, req, details); err != nil {
+		return nil, err
 	}
 
-	if req.Images != "" {
-		product.Images = req.Images
+	if err := uc.persistUpdatedProduct(ctx, product, details); err != nil {
+		return nil, err
 	}
 
-	if err := uc.productRepo.Update(ctx, product); err != nil {
+	updatedProduct, updatedVariants, updatedAttributes, err := uc.productRepo.FindByIDWithDetails(ctx, productID, domain.DefaultParanoidOptions())
+	if err != nil {
 		return nil, err
 	}
 
 	// Publish event
 	if uc.eventBus != nil {
-		uc.publishEvent(ctx, domain.NewProductUpdatedEvent(product))
+		uc.publishEvent(ctx, domain.NewProductUpdatedEvent(updatedProduct))
 	}
 
-	return dto.FromProduct(product), nil
+	return dto.FromProductWithVariants(updatedProduct, updatedVariants, updatedAttributes), nil
 }
 
 // DeleteProduct deletes a product.
@@ -204,7 +206,7 @@ func (uc *productUseCase) DeleteProduct(ctx context.Context, userID, _ string, r
 
 	// Publish event
 	if uc.eventBus != nil {
-		uc.publishEvent(ctx, domain.NewProductDeletedEvent(product.ID))
+		uc.publishEvent(ctx, domain.NewProductDeletedEvent(product.ID, product.OwnerID))
 	}
 
 	message := "Product deleted successfully"
@@ -263,24 +265,236 @@ func (uc *productUseCase) UpdateStock(ctx context.Context, userID, _ string, req
 		return nil, ErrAccessDenied
 	}
 
-	if err := product.ReduceStock(req.Stock); err != nil {
+	if product.HasVariant {
+		return uc.updateVariantProductStock(ctx, req)
+	}
+
+	return uc.updateSimpleProductStock(ctx, req, product)
+}
+
+type updateProductDetails struct {
+	attributes        []*domain.ProductAttribute
+	variants          []*domain.ProductVariant
+	replaceAttributes bool
+	replaceVariants   bool
+	totalVariantStock int
+}
+
+func (uc *productUseCase) ensureProductNameAvailable(ctx context.Context, ownerID, name string) error {
+	exists, err := uc.productRepo.ExistsByNameAndOwner(ctx, name, ownerID)
+	if err != nil {
+		return fmt.Errorf("failed to check product existence: %w", err)
+	}
+	if exists {
+		return domain.ErrProductNameAlreadyUsed
+	}
+	return nil
+}
+
+func buildAttributes(reqs []*dto.CreateAttributeRequest) []*domain.ProductAttribute {
+	attributes := make([]*domain.ProductAttribute, 0, len(reqs))
+	for i, attrReq := range reqs {
+		if attrReq == nil {
+			continue
+		}
+		displayOrder := attrReq.DisplayOrder
+		if displayOrder == 0 && i > 0 {
+			displayOrder = i
+		}
+		attributes = append(attributes, &domain.ProductAttribute{
+			Name:         attrReq.Name,
+			Values:       attrReq.Values,
+			DisplayOrder: displayOrder,
+		})
+	}
+	return attributes
+}
+
+func buildVariants(reqs []*dto.CreateVariantRequest, defaultPrice float64) ([]*domain.ProductVariant, int) {
+	variants := make([]*domain.ProductVariant, 0, len(reqs))
+	totalStock := 0
+
+	for _, variantReq := range reqs {
+		if variantReq == nil {
+			continue
+		}
+
+		variantName := variantReq.Name
+		if variantName == "" {
+			variantName = variantReq.SKU
+		}
+
+		variantPrice := defaultPrice
+		if variantReq.Price != nil && *variantReq.Price > 0 {
+			variantPrice = *variantReq.Price
+		}
+
+		stockQty := variantReq.ResolveStockQuantity()
+		variants = append(variants, &domain.ProductVariant{
+			Name:            variantName,
+			SKU:             variantReq.SKU,
+			Price:           variantPrice,
+			StockQuantity:   stockQty,
+			IsActive:        variantReq.ResolveIsActive(),
+			AttributeValues: variantReq.AttributeValues,
+			Images:          variantReq.Images,
+		})
+		totalStock += stockQty
+	}
+
+	return variants, totalStock
+}
+
+func (uc *productUseCase) applyUpdateBaseFields(ctx context.Context, product *domain.Product, req *dto.UpdateProductRequest) error {
+	if req.Name != "" {
+		if req.Name != product.Name {
+			if err := uc.ensureProductNameAvailable(ctx, product.OwnerID, req.Name); err != nil {
+				return err
+			}
+		}
+		product.Name = req.Name
+	}
+
+	if req.Price > 0 {
+		product.Price = req.Price
+	}
+
+	if req.Images != "" {
+		product.Images = req.Images
+	}
+
+	return nil
+}
+
+func prepareUpdateProductDetails(basePrice float64, req *dto.UpdateProductRequest) (*updateProductDetails, error) {
+	details := &updateProductDetails{
+		replaceAttributes: req.Attributes != nil,
+		replaceVariants:   req.Variants != nil,
+	}
+
+	if details.replaceVariants && len(req.Variants) > 0 && !details.replaceAttributes {
+		return nil, domain.ErrAttributesRequired
+	}
+
+	if details.replaceAttributes {
+		details.attributes = buildAttributes(req.Attributes)
+	}
+	if details.replaceVariants {
+		details.variants, details.totalVariantStock = buildVariants(req.Variants, basePrice)
+	}
+
+	return details, nil
+}
+
+func applyUpdateProductStockRules(product *domain.Product, req *dto.UpdateProductRequest, details *updateProductDetails) error {
+	if details.replaceVariants {
+		if len(details.variants) > 0 {
+			product.HasVariant = true
+			product.Stock = details.totalVariantStock
+			return nil
+		}
+
+		product.HasVariant = false
+		if req.Stock != nil {
+			product.Stock = *req.Stock
+		} else {
+			product.Stock = 0
+		}
+		return nil
+	}
+
+	if req.Stock != nil {
+		if product.HasVariant {
+			return domain.ErrDirectStockUpdate
+		}
+		product.Stock = *req.Stock
+	}
+
+	return nil
+}
+
+func (uc *productUseCase) persistUpdatedProduct(ctx context.Context, product *domain.Product, details *updateProductDetails) error {
+	if details.replaceAttributes || details.replaceVariants {
+		return uc.productRepo.UpdateWithDetails(
+			ctx,
+			product,
+			details.attributes,
+			details.variants,
+			details.replaceAttributes,
+			details.replaceVariants,
+		)
+	}
+	return uc.productRepo.Update(ctx, product)
+}
+
+func (uc *productUseCase) updateVariantProductStock(ctx context.Context, req *dto.UpdateStockRequest) (*dto.UpdateStockResponse, error) {
+	if req.VariantID == "" || req.VariantID == req.ID {
+		return nil, domain.ErrVariantIDRequired
+	}
+
+	_, variants, _, err := uc.productRepo.FindByIDWithDetails(ctx, req.ID, domain.DefaultParanoidOptions())
+	if err != nil {
 		return nil, err
 	}
 
+	targetVariant := findVariantByID(variants, req.VariantID)
+	if targetVariant == nil {
+		return nil, domain.ErrVariantNotInProduct
+	}
+	if err := targetVariant.ReduceStock(req.Stock); err != nil {
+		return nil, err
+	}
+
+	updatedProductStock, err := uc.productRepo.UpdateVariantStockAndSyncProduct(ctx, req.ID, req.VariantID, targetVariant.StockQuantity)
+	if err != nil {
+		return nil, err
+	}
+
+	uc.publishStockUpdatedEvent(ctx, req.ID, updatedProductStock)
+	return &dto.UpdateStockResponse{
+		Success: true,
+		Message: "Stock updated successfully",
+		Stock:   updatedProductStock,
+	}, nil
+}
+
+func (uc *productUseCase) updateSimpleProductStock(
+	ctx context.Context,
+	req *dto.UpdateStockRequest,
+	product *domain.Product,
+) (*dto.UpdateStockResponse, error) {
+	if err := product.ReduceStock(req.Stock); err != nil {
+		return nil, err
+	}
 	if err := uc.productRepo.UpdateStock(ctx, req.ID, product.Stock); err != nil {
 		return nil, err
 	}
 
-	// Publish event
-	if uc.eventBus != nil {
-		uc.publishEvent(ctx, domain.NewProductStockUpdatedEvent(req.ID, product.Stock))
-	}
-
+	uc.publishStockUpdatedEvent(ctx, req.ID, product.Stock)
 	return &dto.UpdateStockResponse{
 		Success: true,
 		Message: "Stock updated successfully",
 		Stock:   product.Stock,
 	}, nil
+}
+
+func findVariantByID(variants []*domain.ProductVariant, variantID string) *domain.ProductVariant {
+	for _, variant := range variants {
+		if variant == nil {
+			continue
+		}
+		if variant.ID == variantID {
+			return variant
+		}
+	}
+	return nil
+}
+
+func (uc *productUseCase) publishStockUpdatedEvent(ctx context.Context, productID string, stock int) {
+	if uc.eventBus == nil {
+		return
+	}
+	uc.publishEvent(ctx, domain.NewProductStockUpdatedEvent(productID, stock))
 }
 
 // publishEvent publishes an event to the event bus.

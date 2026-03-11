@@ -24,6 +24,9 @@ func ApplyRequestMetadataToEvent(ctx context.Context, event *eventbus.Event) {
 	if requestID := GetRequestIDFromContext(ctx); requestID != "" {
 		event.WithMetadata("request_id", requestID)
 	}
+	if actorUserID := GetActorUserIDFromContext(ctx); actorUserID != "" {
+		event.WithMetadata("actor_user_id", actorUserID)
+	}
 	if ipAddress := GetIPAddressFromContext(ctx); ipAddress != "" {
 		event.WithMetadata("ip_address", ipAddress)
 	}

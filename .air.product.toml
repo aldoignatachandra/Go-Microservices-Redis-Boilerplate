@@ -1,0 +1,40 @@
+root = "."
+tmp_dir = "tmp-product"
+
+[build]
+cmd = "go build -o ./tmp-product/main ./cmd/service-product"
+bin = "tmp-product/main"
+full_bin = "./tmp-product/main"
+include_ext = ["go", "tpl", "tmpl", "html", "yaml", "yml", "json"]
+exclude_dir = ["assets", "tmp", "tmp-auth", "tmp-user", "tmp-product", "vendor", "node_modules", "docs", "deployments", "tests"]
+include_dir = ["cmd", "internal", "pkg", "configs"]
+exclude_file = []
+exclude_regex = ["_test\\.go$", "_gen\\.go$"]
+exclude_unchanged = true
+follow_symlink = true
+log = "tmp-product/air.log"
+poll = false
+poll_interval = 500
+delay = 1000
+stop_on_error = true
+send_interrupt = true
+kill_delay = 500
+rerun = false
+rerun_delay = 500
+args_bin = []
+
+[log]
+time = true
+main_only = false
+
+[color]
+main = "green"
+watcher = "cyan"
+build = "yellow"
+runner = "magenta"
+
+[misc]
+clean_on_exit = true
+
+[screen]
+clear_on_rebuild = true
