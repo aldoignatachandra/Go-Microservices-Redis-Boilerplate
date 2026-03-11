@@ -4,7 +4,7 @@ Product service is responsible for product CRUD and stock operations.
 
 It owns:
 - product create/read/update/delete/restore
-- stock update endpoint
+- variant-aware stock update endpoint
 - owner-aware access control for product resources
 - product event publishing to Redis Streams
 
@@ -56,12 +56,14 @@ Behavioral highlights from current code:
 - Read path (`GetProduct`, `ListProducts`) applies owner scoping for non-admins.
 - Mutation paths (`Update/Delete/Restore/UpdateStock`) are owner-only.
 - Admin can read other users' products, but cannot mutate them.
+- Create/update with variants syncs parent product stock from total variant stock.
+- Stock update endpoint supports variant-level reduction for variant products (`id` in body = variant id).
 
 ---
 
 ## Access Control Model
 
-All `/products/*` routes require valid Bearer JWT.
+All `/api/v1/products/*` routes require valid Bearer JWT.
 
 ### Read access
 - Admin: can read all products.
@@ -69,10 +71,10 @@ All `/products/*` routes require valid Bearer JWT.
 
 ### Mutation access
 - Owner-only for:
-  - `PUT /products/:id`
-  - `DELETE /products/:id`
-  - `POST /products/:id/restore`
-  - `PUT /products/:id/stock`
+  - `PUT /api/v1/products/:id`
+  - `DELETE /api/v1/products/:id`
+  - `POST /api/v1/products/:id/restore`
+  - `PUT /api/v1/products/:id/stock`
 
 ---
 
@@ -129,13 +131,18 @@ make db-seed
 
 | Method | Endpoint | Description | Auth |
 |---|---|---|---|
-| GET | `/products` | List products (owner-scoped for non-admin) | Bearer |
-| GET | `/products/:id` | Get product by id (owner-scoped for non-admin) | Bearer |
-| POST | `/products` | Create product | Bearer |
-| PUT | `/products/:id` | Update product (owner only) | Bearer |
-| DELETE | `/products/:id` | Delete product (owner only) | Bearer |
-| POST | `/products/:id/restore` | Restore product (owner only) | Bearer |
-| PUT | `/products/:id/stock` | Reduce stock by quantity (owner only) | Bearer |
+| GET | `/api/v1/products` | List products (owner-scoped for non-admin) | Bearer |
+| GET | `/api/v1/products/:id` | Get product by id (owner-scoped for non-admin) | Bearer |
+| POST | `/api/v1/products` | Create product | Bearer |
+| PUT | `/api/v1/products/:id` | Update product (owner only) | Bearer |
+| DELETE | `/api/v1/products/:id` | Delete product (owner only) | Bearer |
+| POST | `/api/v1/products/:id/restore` | Restore product (owner only) | Bearer |
+| PUT | `/api/v1/products/:id/stock` | Reduce stock (variant-aware, owner only) | Bearer |
+
+Stock endpoint behavior:
+- For simple products: body `{ "stock": <quantity_to_reduce> }`.
+- For variant products: body `{ "id": "<variant_id>", "stock": <quantity_to_reduce> }`.
+- Variant id must belong to the parent product id in path.
 
 ### Health endpoints
 
@@ -163,7 +170,7 @@ curl -X POST http://localhost:3100/api/v1/auth/login \
 ### 2. Create product
 
 ```bash
-curl -X POST http://localhost:3102/products \
+curl -X POST http://localhost:3102/api/v1/products \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -d '{
@@ -178,16 +185,25 @@ curl -X POST http://localhost:3102/products \
 ### 3. Reduce stock quantity
 
 ```bash
-curl -X PUT http://localhost:3102/products/PRODUCT_ID/stock \
+curl -X PUT http://localhost:3102/api/v1/products/PRODUCT_ID/stock \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -d '{"stock":3}'
 ```
 
-### 4. List own products
+### 4. Reduce variant product stock
 
 ```bash
-curl http://localhost:3102/products?page=1&limit=10 \
+curl -X PUT http://localhost:3102/api/v1/products/PRODUCT_ID/stock \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -d '{"id":"VARIANT_ID","stock":3}'
+```
+
+### 5. List own products
+
+```bash
+curl http://localhost:3102/api/v1/products?page=1&limit=10 \
   -H "Authorization: Bearer ACCESS_TOKEN"
 ```
 
@@ -215,9 +231,10 @@ Metadata such as correlation/request identifiers is attached when available.
 ## Rate Limiting
 
 When Redis rate limiting is enabled, route-level limits are configured in `cmd/service-product/main.go`:
-- `/products` -> 120 req / 60s
-- `/products/:id` -> 10 req / 60s
-- `/products/:id/stock` -> 30 req / 60s
+- `/api/v1/products` -> 120 req / 60s
+- `/api/v1/products/:id` -> 10 req / 60s
+- `/api/v1/products/:id/restore` -> 10 req / 60s
+- `/api/v1/products/:id/stock` -> 30 req / 60s
 
 A fallback global limit from config is also applied by middleware.
 
@@ -250,6 +267,11 @@ curl http://localhost:3102/metrics
 
 ### List endpoint returns fewer products than expected
 - For non-admin users, `owner_id` is forced to caller id in usecase.
+
+### Stock update fails on variant product
+- Ensure path id is the parent product id.
+- Provide variant id in request body field `id`.
+- Ensure variant id belongs to that parent product.
 
 ### No product events seen in Redis
 - Verify Redis connectivity and check `products:events` stream:

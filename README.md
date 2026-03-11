@@ -7,7 +7,7 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-GORM-4169E1?logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 
-A production-ready, high-performance microservices starter kit. Built with **Go 1.24+**, **Gin** web framework, **GORM** (PostgreSQL ORM), and **Redis Streams** for event-driven communication.
+High-performance microservices starter kit. Built with **Go 1.24+**, **Gin** web framework, **GORM** (PostgreSQL ORM), and **Redis Streams** for event-driven communication.
 
 This boilerplate implements the **Clean Architecture** pattern with strict layer separation (delivery → usecase → repository → domain), and uses **Redis Streams** for lightweight, high-performance asynchronous inter-service communication.
 
@@ -52,7 +52,7 @@ This boilerplate implements the **Clean Architecture** pattern with strict layer
 - **Graceful Shutdown**: Zero-downtime deployments with signal handling.
 - **Health Checks**: Kubernetes-ready liveness and readiness probes.
 - **Metrics**: Prometheus metrics for monitoring.
-- **Rate Limiting**: Redis-backed distributed rate limiting.
+- **Rate Limiting**: Redis-backed distributed rate limiting with environment/service-scoped and identity-aware keys (user-first, IP fallback, method+route buckets).
 - **Circuit Breaker**: Sony gobreaker for resilience.
 - **Hot Reload**: Air for development with live reload.
 - **Wire DI**: Google Wire for compile-time dependency injection.
@@ -116,18 +116,18 @@ sequenceDiagram
   A-->>C: 201 Created
 
   Note over C,P: Another Write API
-  C->>P: PUT /products/{id}
+  C->>P: PUT /api/v1/products/{id}
   P->>D: UPDATE products
   P->>R: XADD "products:events" product.updated
   P-->>C: 200 OK
 
   Note over R,US: Async Consumption
-  R->>US: XREADGROUP "auth:events"
+  R->>US: XREADGROUP auth/users/products events
   US->>D: INSERT user_activity_logs
   US->>R: XACK
 
   Note over R,AU: Auth Observability Consumer
-  R->>AU: XREADGROUP users/products/auth events
+  R->>AU: XREADGROUP auth/users/products events
   AU->>R: XACK
 ```
 
@@ -137,7 +137,7 @@ sequenceDiagram
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                      DELIVERY LAYER (HTTP)                              │
 │  Gin handlers, middleware, routes, request/response binding             │
-│  Files: delivery/handler.go, delivery/routes.go                        │
+│  Files: delivery/handler.go, delivery/routes.go                         │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                      USECASE LAYER (Business Logic)                     │
 │  Application services, orchestration, domain events                     │
@@ -234,7 +234,7 @@ go-microservices-redis-pubsub-boilerplate/
 │   │   └── metrics.go                # Metrics definitions
 │   ├── middleware/                   # HTTP middleware
 │   │   ├── auth.go                   # JWT middleware
-│   │   ├── ratelimit.go              # Rate limiting (Redis)
+│   │   ├── rate_limit.go             # Rate limiting (Redis)
 │   │   ├── logging.go                # Request logging
 │   │   └── cors.go                   # CORS handling
 │   ├── resilience/                   # Circuit breaker, retry
@@ -275,7 +275,10 @@ go-microservices-redis-pubsub-boilerplate/
 ├── go.mod                            # Go module definition
 ├── go.sum                            # Go module checksums
 ├── Makefile                          # Build automation
-├── .air.toml                         # Hot reload config
+├── .air.toml                         # Hot reload config (default auth profile)
+├── .air.auth.toml                    # Hot reload config (auth service)
+├── .air.user.toml                    # Hot reload config (user service)
+├── .air.product.toml                 # Hot reload config (product service)
 ├── .golangci.yml                     # Linter config
 ├── .mockery.yaml                     # Mock generation config
 └── .env.example                      # Environment template
@@ -479,8 +482,17 @@ APP_ENV=product-local make run-service-product
 # Install Air first (if not already)
 go install github.com/air-verse/air@latest
 
-# Run with hot reload
+# Run Auth service hot reload (default profile)
 make dev
+
+# Run Auth service hot reload (explicit profile)
+make dev-auth
+
+# Run User service hot reload
+make dev-user
+
+# Run Product service hot reload
+make dev-product
 ```
 
 ---
@@ -526,13 +538,20 @@ make dev
 
 | Method | Endpoint                 | Description                                 | Auth Required |
 | :----- | :----------------------- | :------------------------------------------ | :------------ |
-| GET    | `/products`              | List products (non-admin sees own products) | Yes           |
-| GET    | `/products/:id`          | Get product (non-admin sees own products)   | Yes           |
-| POST   | `/products`              | Create product                              | Yes           |
-| PUT    | `/products/:id`          | Update product (owner only)                 | Yes           |
-| DELETE | `/products/:id`          | Delete product (owner only)                 | Yes           |
-| POST   | `/products/:id/restore`  | Restore product (owner only)                | Yes           |
-| PUT    | `/products/:id/stock`    | Reduce stock by quantity (owner only)       | Yes           |
+| GET    | `/api/v1/products`              | List products (non-admin sees own products) | Yes           |
+| GET    | `/api/v1/products/:id`          | Get product (non-admin sees own products)   | Yes           |
+| POST   | `/api/v1/products`              | Create product                              | Yes           |
+| PUT    | `/api/v1/products/:id`          | Update product (owner only)                 | Yes           |
+| DELETE | `/api/v1/products/:id`          | Delete product (owner only)                 | Yes           |
+| POST   | `/api/v1/products/:id/restore`  | Restore product (owner only)                | Yes           |
+| PUT    | `/api/v1/products/:id/stock`    | Reduce stock by quantity (variant-aware, owner only) | Yes     |
+
+**Product stock and variant rules**
+- `PUT /api/v1/products/:id/stock` always uses the path `:id` as the parent product ID.
+- For products **without variants**, send `{ "stock": <quantity_to_reduce> }`.
+- For products **with variants**, send `{ "id": "<variant_id>", "stock": <quantity_to_reduce> }`; the variant ID must belong to that product (IDOR protection).
+- For variant products, parent stock is auto-synced from the sum of variant stocks.
+- On create/update, when variants are provided, parent `stock` is derived from variant totals.
 
 ### Quick API Testing
 
@@ -570,7 +589,7 @@ curl http://localhost:3100/api/v1/auth/me \
   -H "Authorization: Bearer TOKEN"
 
 # Create a product
-curl -X POST http://localhost:3102/products \
+curl -X POST http://localhost:3102/api/v1/products \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer TOKEN" \
   -d '{
@@ -604,10 +623,14 @@ make help              # Show all available commands
 | `make run-service-auth` | Run auth service (`APP_ENV=local`)            |
 | `make run-service-user` | Run user service (`APP_ENV=user-local`)       |
 | `make run-service-product` | Run product service (`APP_ENV=product-local`) |
-| `make dev`             | Run with hot reload (Air)                      |
+| `make dev`             | Run auth service with hot reload (Air default) |
+| `make dev-auth`        | Run auth service with hot reload (`.air.auth.toml`) |
+| `make dev-user`        | Run user service with hot reload (`.air.user.toml`) |
+| `make dev-product`     | Run product service with hot reload (`.air.product.toml`) |
 | **Testing**            |                                                |
 | `make test`            | Run all tests with race detector               |
 | `make test-coverage`   | Run tests with coverage report (business logic) |
+| `make test-race`       | Run all tests with race detector only          |
 | `make test-integration`| Run integration tests                          |
 | `make test-e2e`        | Run e2e tests                                  |
 | **Code Quality**       |                                                |
@@ -650,19 +673,23 @@ make help              # Show all available commands
 
 ### Hot Reload with Air
 
-The project includes Air configuration (`.air.toml`) for development:
+The project includes multiple Air profiles for development:
+- `.air.toml` (default auth profile)
+- `.air.auth.toml`
+- `.air.user.toml`
+- `.air.product.toml`
 
 ```bash
 # Install Air
 go install github.com/air-verse/air@latest
 
-# Run with hot reload
+# Run Auth hot reload (default)
 make dev
 
-# Air will:
-# - Watch for file changes
-# - Rebuild on changes
-# - Restart the service automatically
+# Run explicit per-service profiles
+make dev-auth
+make dev-user
+make dev-product
 ```
 
 ### Wire Dependency Injection
@@ -913,16 +940,31 @@ func TestAuthService_Register(t *testing.T) {
 ```
 internal/
 ├── auth/
+│   ├── delivery/
+│   │   ├── handler_test.go
+│   │   ├── middleware_test.go
+│   │   └── routes_test.go
 │   ├── repository/
-│   │   ├── user_repository_test.go
-│   │   └── mocks/
-│   │       └── UserRepository.go
+│   │   └── user_repository_test.go
 │   └── usecase/
 │       └── auth_usecase_test.go
 ├── user/
+│   ├── delivery/
+│   │   ├── handler_test.go
+│   │   └── routes_test.go
+│   ├── repository/
+│   │   ├── user_repository_test.go
+│   │   ├── activity_repository_test.go
+│   │   └── integration_test.go
 │   └── usecase/
 │       └── user_usecase_test.go
 └── product/
+    ├── delivery/
+    │   └── handler_test.go
+    ├── repository/
+    │   └── product_repository_test.go
+    ├── dto/
+    │   └── response_test.go
     └── usecase/
         └── product_usecase_test.go
 ```
@@ -936,8 +978,8 @@ internal/
 | Stream             | Description                          | Producer      | Consumer      |
 | :----------------- | :----------------------------------- | :------------ | :------------ |
 | `auth:events`      | Auth + user lifecycle events from auth APIs | Auth Service | User Service, Auth Service |
-| `users:events`     | User lifecycle events from user APIs | User Service | Auth Service |
-| `products:events`  | Product lifecycle events             | Product Service | Auth Service |
+| `users:events`     | User lifecycle events from user APIs | User Service | User Service, Auth Service |
+| `products:events`  | Product lifecycle events             | Product Service | User Service, Auth Service |
 
 ### Event Structure
 
@@ -992,11 +1034,11 @@ internal/
 | User | `POST /api/v1/users/:id/deactivate` | user soft delete | `user.deleted` -> `users:events` |
 | User | `DELETE /api/v1/users/:id` | user soft/hard delete | `user.deleted` -> `users:events` |
 | User | `POST /api/v1/users/:id/restore` | user restore | `user.restored` -> `users:events` |
-| Product | `POST /products` | product insert | `product.created` -> `products:events` |
-| Product | `PUT /products/:id` | product update | `product.updated` -> `products:events` |
-| Product | `DELETE /products/:id` | product soft/hard delete | `product.deleted` -> `products:events` |
-| Product | `POST /products/:id/restore` | product restore | `product.restored` -> `products:events` |
-| Product | `PUT /products/:id/stock` | product stock update | `product.stock_updated` -> `products:events` |
+| Product | `POST /api/v1/products` | product insert + optional attributes/variants insert (variant stock sync) | `product.created` -> `products:events` |
+| Product | `PUT /api/v1/products/:id` | product update + optional attributes/variants replace (variant stock sync) | `product.updated` -> `products:events` |
+| Product | `DELETE /api/v1/products/:id` | product soft/hard delete | `product.deleted` -> `products:events` |
+| Product | `POST /api/v1/products/:id/restore` | product restore | `product.restored` -> `products:events` |
+| Product | `PUT /api/v1/products/:id/stock` | simple product stock reduce OR variant stock reduce + parent stock sync | `product.stock_updated` -> `products:events` |
 
 ### Redis Streams Commands
 

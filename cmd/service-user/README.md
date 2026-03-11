@@ -5,7 +5,7 @@ User service is responsible for user administration and activity log querying/in
 It owns:
 - user read/list/admin lifecycle operations
 - activity log retrieval endpoint
-- auth-event consumption and activity log persistence
+- auth/user/product event consumption and activity log persistence
 - publishing user lifecycle events to `users:events`
 
 ---
@@ -34,7 +34,10 @@ It owns:
 - Default local port: `3101`
 - Default DB name: `microservices_db`
 - Swagger UI: `http://localhost:3101/swagger/index.html`
-- Consumes stream: `auth:events`
+- Active consumers at startup:
+  - `auth:events`
+  - `users:events`
+  - `products:events`
 - Publishes stream: `users:events`
 
 ---
@@ -187,9 +190,11 @@ curl "http://localhost:3101/api/v1/activity-logs?page=1&limit=20&action=user.log
 
 ### Consumed streams
 - `auth:events`
+- `users:events`
+- `products:events`
 
 Current behavior:
-- auth events are translated into activity logs via `LogActivity` use case.
+- stream events are translated into activity logs via `LogActivity` use case.
 - event metadata and request context are persisted in `user_activity_logs` details.
 
 ### Published streams
@@ -235,7 +240,7 @@ curl http://localhost:3101/metrics
 ### 403 when non-admin reads other user
 - Expected: only own profile (or admin) can access `/api/v1/users/:id`.
 
-### No activity logs created from auth events
+### No activity logs created from stream events
 - Verify Redis connectivity.
-- Confirm auth service publishes to `auth:events`.
+- Confirm publisher services emit to `auth:events`, `users:events`, and `products:events`.
 - Check user service startup logs for consumer group creation and consumption errors.
